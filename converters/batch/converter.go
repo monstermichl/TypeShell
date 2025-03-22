@@ -1,0 +1,464 @@
+package batch
+
+import (
+	"errors"
+	"fmt"
+	"slices"
+	"strings"
+
+	"github.com/monstermichl/typeshell/parser"
+	"github.com/monstermichl/typeshell/transpiler"
+)
+
+type funcInfo struct {
+	name string
+}
+
+type forInfo struct {
+	label string
+}
+
+type ifInfo struct {
+	label string
+}
+
+type converter struct {
+	code         []string
+	varCounter   int
+	ifCounter    int
+	whileCounter int
+	endLabels    []string
+	funcs        []funcInfo
+	fors         []forInfo
+	ifs          []ifInfo
+	lfSet        bool
+}
+
+func varAssignmentString(name string, value string) string {
+	return fmt.Sprintf("set %s=%s", name, value)
+}
+
+func varEvaluationString(name string) string {
+	return fmt.Sprintf("!%s!", name)
+}
+
+func New() *converter {
+	return &converter{
+		code: []string{},
+	}
+}
+
+func (c *converter) BoolToString(value bool) string {
+	if value {
+		return "1"
+	}
+	return "0"
+}
+
+func (c *converter) IntToString(value int) string {
+	return fmt.Sprintf("%d", value)
+}
+
+func (c *converter) StringToString(value string) string {
+	return value
+}
+
+func (c *converter) Dump() (string, error) {
+	return strings.Join(c.code, "\n"), nil
+}
+
+func (c *converter) ProgramStart() error {
+	c.addLine("@echo off")
+	c.addLine("setlocal EnableDelayedExpansion")
+	c.addLine("setlocal")
+	return nil
+}
+
+func (c *converter) ProgramEnd() error {
+	c.addLine(":exit")
+	c.addLine("endlocal")
+	return nil
+}
+
+func (c *converter) VarDefinition(name string, value string) error {
+	c.addLine(varAssignmentString(name, value))
+	return nil
+}
+
+func (c *converter) VarAssignment(name string, value string) error {
+	c.addLine(varAssignmentString(name, value))
+	return nil
+}
+
+func (c *converter) FuncStart(name string, params []string) error {
+	c.funcs = append(c.funcs, funcInfo{
+		name: name,
+	})
+	c.addLine(fmt.Sprintf("goto :_eo%s", name))
+	c.addLine(fmt.Sprintf(":%s", name))
+
+	for i, param := range params {
+		c.addLine(varAssignmentString(param, fmt.Sprintf("%%~%d", i+1)))
+	}
+	return nil
+}
+
+func (c *converter) FuncEnd(name string) error {
+	c.addLine("exit /B 0")
+	c.addLine(fmt.Sprintf(":_eo%s", name))
+
+	lastIndex := len(c.funcs) - 1
+	c.funcs = slices.Delete(c.funcs, lastIndex, lastIndex+1)
+	return nil
+}
+
+func (c *converter) Return(value string, valueType parser.ValueType) error {
+	if valueType != parser.VALUE_TYPE_VOID {
+		funcVar, err := c.funcVar(c.funcs[len(c.funcs)-1].name)
+
+		if err != nil {
+			return err
+		}
+		c.VarDefinition(funcVar, value)
+	}
+	c.addLine("exit /B 0")
+	return nil
+}
+
+func (c *converter) IfStart(condition string) error {
+	c.ifs = append(c.ifs, ifInfo{
+		label: c.nextIfLabel(),
+	})
+	return c.ifStart(condition, "")
+}
+
+func (c *converter) IfEnd() error {
+	label := c.currentIfInfo().label
+
+	c.addLine(fmt.Sprintf("goto %s", label))
+	c.addLine(")")
+	c.addLine(label)
+
+	lastIndex := len(c.ifs) - 1
+	c.ifs = slices.Delete(c.ifs, lastIndex, lastIndex+1)
+
+	return nil
+}
+
+func (c *converter) ElseIfStart(condition string) error {
+	c.addLine(fmt.Sprintf("goto %s", c.currentIfInfo().label))
+	return c.ifStart(condition, ") else ")
+}
+
+func (c *converter) ElseIfEnd() error {
+	return nil
+}
+
+func (c *converter) ElseStart() error {
+	c.addLine(fmt.Sprintf("goto %s", c.currentIfInfo().label))
+	c.addLine(") else (")
+	return nil
+}
+
+func (c *converter) ElseEnd() error {
+	return nil
+}
+
+func (c *converter) ForStart() error {
+	label := c.nextWhileLabel()
+	c.nextEndLabel()
+	c.fors = append(c.fors, forInfo{
+		label: label,
+	})
+	c.addLine(label)
+	return nil
+}
+
+func (c *converter) ForCondition(condition string) error {
+	c.addLine(fmt.Sprintf("if \"%s\" equ \"%s\" (", condition, c.BoolToString(true)))
+	return nil
+}
+
+func (c *converter) ForEnd() error {
+	w := c.fors[len(c.fors)-1]
+
+	c.addLine(fmt.Sprintf("goto %s", w.label))
+	c.addLine(")")
+
+	endLabel := c.popEndLabel()
+	lastIndex := len(c.fors) - 1
+	c.fors = slices.Delete(c.fors, lastIndex, lastIndex+1)
+
+	c.addLine(endLabel)
+
+	return nil
+}
+
+func (c *converter) Break() error {
+	c.addLine(fmt.Sprintf("goto %s", c.currentEndLabel()))
+	return nil
+}
+
+func (c *converter) Continue() error {
+	return errors.New("continue has not been implemented yet")
+}
+
+func (c *converter) Print(values []string) error {
+	c.addLine(fmt.Sprintf("echo %s", strings.Join(values, " ")))
+	return nil
+}
+
+func (c *converter) Nop() error {
+	c.addLine("rem No operation")
+	return nil
+}
+
+func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
+	helper := c.nextHelperVar()
+	notAllowedError := func() (string, error) {
+		return "", fmt.Errorf("binary operation %s is not allowed on type %s", operator, valueType)
+	}
+
+	switch valueType {
+	case parser.VALUE_TYPE_INTEGER:
+		switch operator {
+		case parser.BINARY_OPERATOR_MULTIPLICATION,
+			parser.BINARY_OPERATOR_DIVISION,
+			parser.BINARY_OPERATOR_MODULO,
+			parser.BINARY_OPERATOR_ADDITION,
+			parser.BINARY_OPERATOR_SUBTRACTION:
+			// These operations are fine.
+		default:
+			return notAllowedError()
+		}
+		c.addLine(fmt.Sprintf("set /A %s= %s %s %s", helper, left, operator, right))
+	case parser.VALUE_TYPE_STRING:
+		switch operator {
+		case parser.BINARY_OPERATOR_ADDITION:
+			c.VarAssignment(helper, fmt.Sprintf("%s%s", left, right))
+		default:
+			return notAllowedError()
+		}
+	default:
+		return notAllowedError()
+	}
+	return c.VarEvaluation(helper, valueUsed)
+}
+
+func (c *converter) Comparison(left string, operator parser.CompareOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
+	EQUAL_OPERATOR := "equ"
+	NOT_EQUAL_OPERATOR := "neq"
+
+	var operatorString string
+
+	switch valueType {
+	case parser.VALUE_TYPE_BOOLEAN:
+		switch operator {
+		case parser.COMPARE_OPERATOR_EQUAL:
+			operatorString = EQUAL_OPERATOR
+		case parser.COMPARE_OPERATOR_NOT_EQUAL:
+			operatorString = NOT_EQUAL_OPERATOR
+		}
+	case parser.VALUE_TYPE_INTEGER:
+		switch operator {
+		case parser.COMPARE_OPERATOR_EQUAL:
+			operatorString = EQUAL_OPERATOR
+		case parser.COMPARE_OPERATOR_NOT_EQUAL:
+			operatorString = NOT_EQUAL_OPERATOR
+		case parser.COMPARE_OPERATOR_GREATER:
+			operatorString = "gtr"
+		case parser.COMPARE_OPERATOR_GREATER_OR_EQUAL:
+			operatorString = "geq"
+		case parser.COMPARE_OPERATOR_LESS:
+			operatorString = "lss"
+		case parser.COMPARE_OPERATOR_LESS_OR_EQUAL:
+			operatorString = "leq"
+		}
+	case parser.VALUE_TYPE_STRING:
+		switch operator {
+		case parser.COMPARE_OPERATOR_EQUAL:
+			operatorString = EQUAL_OPERATOR
+		case parser.COMPARE_OPERATOR_NOT_EQUAL:
+			operatorString = NOT_EQUAL_OPERATOR
+		}
+	}
+
+	if len(operatorString) == 0 {
+		return "", fmt.Errorf("comparison %s is not allowed on type %s", operator, valueType)
+	}
+	helper := c.nextHelperVar()
+	c.addLine(
+		fmt.Sprintf("if \"%s\" %s \"%s\" (%s) else %s",
+			left,
+			operatorString,
+			right,
+			varAssignmentString(helper, c.BoolToString(true)),
+			varAssignmentString(helper, c.BoolToString(false)),
+		),
+	)
+	return c.VarEvaluation(helper, valueUsed)
+}
+
+func (c *converter) LogicalOperation(left string, operator parser.LogicalOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
+	var line string
+	trueString := c.BoolToString(true)
+	falseString := c.BoolToString(false)
+	helper := c.nextHelperVar()
+	trueAssignment := varAssignmentString(helper, trueString)
+	falseAssignment := varAssignmentString(helper, falseString)
+
+	switch operator {
+	case parser.LOGICAL_OPERATOR_AND:
+		line = fmt.Sprintf("if \"%s\" equ \"%s\" if \"%s\" equ \"%s\" (%s) else %s",
+			left,
+			trueString,
+			right,
+			trueString,
+			trueAssignment,
+			falseAssignment,
+		)
+	case parser.LOGICAL_OPERATOR_OR:
+		line = fmt.Sprintf("if \"%s\" equ \"%s\" (%s) else if \"%s\" equ \"%s\" (%s) else %s",
+			left,
+			trueString,
+			trueAssignment,
+			right,
+			trueString,
+			trueAssignment,
+			falseAssignment,
+		)
+	default:
+		return "", fmt.Errorf("unknown logical operator \"%s\"", operator)
+	}
+
+	c.addLine(line)
+	return c.VarEvaluation(helper, valueUsed)
+}
+
+func (c *converter) VarEvaluation(name string, valueUsed bool) (string, error) {
+	return varEvaluationString(name), nil
+}
+
+func (c *converter) Group(value string, valueUsed bool) (string, error) {
+	return fmt.Sprintf("(%s)", value), nil
+}
+
+func (c *converter) FuncCall(name string, args []string, valueType parser.ValueType, valueUsed bool) (string, error) {
+	if valueType != parser.VALUE_TYPE_VOID {
+		c.addLine(fmt.Sprintf("call :%s %s", name, fmt.Sprintf("\"%s\"", strings.Join(args, "\" \""))))
+		funcVar, err := c.funcVar(name)
+
+		if err != nil {
+			return "", err
+		}
+
+		if valueUsed {
+			helper := c.nextHelperVar()
+			c.VarDefinition(helper, varEvaluationString(funcVar))
+			return c.VarEvaluation(helper, valueUsed)
+		}
+		return "", nil
+	}
+	return "", nil
+}
+
+func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) (string, error) {
+	callsCopy := calls
+	helper := c.nextHelperVar()
+	callStrings := []string{}
+
+	for _, call := range callsCopy {
+		argsCopy := call.Args()
+
+		for j, arg := range argsCopy {
+			argsCopy[j] = fmt.Sprintf("\"%s\"", arg)
+		}
+		space := ""
+
+		if len(argsCopy) > 0 {
+			space = " "
+		}
+		callStrings = append(callStrings, fmt.Sprintf("%s%s%s", call.Name(), space, strings.Join(argsCopy, " ")))
+	}
+
+	if valueUsed {
+		if !c.lfSet {
+			c.addLine("(set LF=^") // https://stackoverflow.com/a/60389149
+			c.addLine("")
+			c.addLine(")")
+
+			c.lfSet = true
+		}
+		c.addLine(fmt.Sprintf("for /f \"delims=\" %%%%i in ('call %s') do (", strings.Join(callStrings, " ^| ")))
+		c.addLine(fmt.Sprintf("if defined %s set \"%s=!%s!!LF!\"", helper, helper, helper))
+		c.addLine(fmt.Sprintf("set \"%s=!%s!%%%%i\"", helper, helper))
+		c.addLine(")")
+		return c.VarEvaluation(helper, valueUsed)
+	}
+	c.addLine(fmt.Sprintf("call %s", strings.Join(callStrings, " | ")))
+	return "", nil
+}
+
+func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
+	helper := c.nextHelperVar()
+	c.addLine(fmt.Sprintf("set /p %s=%s", helper, prompt))
+	return c.VarEvaluation(helper, valueUsed)
+}
+
+func (c *converter) funcVar(funcName string) (string, error) {
+	if len(funcName) == 0 {
+		return "", errors.New("no function name to return value for")
+	}
+	return fmt.Sprintf("_ret%s", funcName), nil
+}
+
+func (c *converter) ifStart(condition string, startAddition string) error {
+	c.addLine(fmt.Sprintf("%sif \"%s\" equ \"%s\" (", startAddition, condition, c.BoolToString(true)))
+	return nil
+}
+
+func (c *converter) addLine(line string) {
+	c.code = append(c.code, line)
+}
+
+func (c *converter) nextWhileLabel() string {
+	label := fmt.Sprintf(":_w%d", c.whileCounter)
+	c.whileCounter++
+
+	return label
+}
+
+func (c *converter) nextIfLabel() string {
+	label := fmt.Sprintf(":_i%d", c.ifCounter)
+	c.ifCounter++
+
+	return label
+}
+
+func (c *converter) currentIfInfo() ifInfo {
+	return c.ifs[len(c.ifs)-1]
+}
+
+func (c *converter) currentEndLabel() string {
+	return c.endLabels[len(c.endLabels)-1]
+}
+
+func (c *converter) popEndLabel() string {
+	lastIndex := len(c.endLabels) - 1
+	label := c.currentEndLabel()
+	c.endLabels = slices.Delete(c.endLabels, lastIndex, lastIndex+1)
+
+	return label
+}
+
+func (c *converter) nextEndLabel() string {
+	c.endLabels = append(c.endLabels, fmt.Sprintf(":_e%d", len(c.endLabels)))
+	return c.currentEndLabel()
+}
+
+func (c *converter) nextHelperVar() string {
+	helperVar := fmt.Sprintf("_h%d", c.varCounter)
+	c.varCounter++
+
+	return helperVar
+}
