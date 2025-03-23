@@ -35,7 +35,15 @@ func (vt ValueType) Equals(valueType ValueType) bool {
 }
 
 func (vt ValueType) IsBool() bool {
-	return vt.DataType() == DATA_TYPE_BOOLEAN && !vt.IsSlice()
+	return vt.isNonSliceType(DATA_TYPE_BOOLEAN)
+}
+
+func (vt ValueType) IsInt() bool {
+	return vt.isNonSliceType(DATA_TYPE_INTEGER)
+}
+
+func (vt ValueType) isNonSliceType(dataType DataType) bool {
+	return vt.DataType() == dataType && !vt.IsSlice()
 }
 
 const (

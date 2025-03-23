@@ -244,7 +244,19 @@ func (p *Parser) evaluateBlockContent(terminationTokenType lexer.TokenType, call
 			if p.isShortVarInit() {
 				stmt, err = handleVarDefinition()
 			} else {
-				stmt, err = p.evaluateExpression(ctx)
+				// If token is identifier it could be a slice assignment.
+				if token.Type() == lexer.IDENTIFIER {
+					variable, exists := ctx.variables[token.Value()]
+
+					// If variable has been defined and is a slice, handles slice assignment.
+					if exists && variable.ValueType().IsSlice() {
+						stmt, err = p.evaluateSliceAssignment(ctx)
+					}
+				}
+
+				if err == nil && stmt == nil {
+					stmt, err = p.evaluateExpression(ctx)
+				}
 			}
 		}
 
@@ -453,7 +465,7 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Expression, error) {
 
 	// Check assign token.
 	if p.eat().Type() != lexer.ASSIGN_OPERATOR {
-		return nil, expectedError("equal operator", nameToken)
+		return nil, expectedError("\"=\"", nameToken)
 	}
 	valueToken := p.peek()
 	value, err := p.evaluateExpression(ctx)
@@ -890,6 +902,8 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 			expr, err = p.evaluateVarAssignment(ctx)
 		case lexer.OPENING_CURLY_BRACKET:
 			expr, err = p.evaluateAppCall(ctx)
+		case lexer.OPENING_SQUARE_BRACKET:
+			expr, err = p.evaluateSliceEvaluation(ctx)
 		default:
 			p.eat() // Eat identifier token.
 			name := token.Value()
@@ -1296,6 +1310,109 @@ func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
 	return SliceInstantiation{
 		dataType: sliceValueType.DataType(),
 		values:   values,
+	}, nil
+}
+
+func (p *Parser) evaluateSliceEvaluation(ctx context) (Expression, error) {
+	nameToken := p.eat()
+
+	if nameToken.Type() != lexer.IDENTIFIER {
+		return nil, expectedError("slice variable", nameToken)
+	}
+	name := nameToken.Value()
+	variable, exists := ctx.variables[name]
+
+	if !exists {
+		return nil, fmt.Errorf("variable %s has not been defined at row %d, column %d", name, nameToken.Row(), nameToken.Column())
+	}
+	if !variable.ValueType().IsSlice() {
+		return nil, expectedError(fmt.Sprintf("slice but variable is of type %s", variable.ValueType().ToString()), nameToken)
+	}
+	nextToken := p.eat()
+
+	if nextToken.Type() != lexer.OPENING_SQUARE_BRACKET {
+		return nil, expectedError("\"[\"", nextToken)
+	}
+	nextToken = p.peek()
+	index, err := p.evaluateExpression(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	indexValueType := index.ValueType()
+
+	if !indexValueType.IsInt() {
+		return nil, expectedError(fmt.Sprintf("%s as index but got %s", DATA_TYPE_INTEGER, indexValueType.ToString()), nextToken)
+	}
+	nextToken = p.eat()
+
+	if nextToken.Type() != lexer.CLOSING_SQUARE_BRACKET {
+		return nil, expectedError("\"]\"", nextToken)
+	}
+	return SliceEvaluation{
+		dataType: variable.ValueType().DataType(),
+		index:    index,
+	}, nil
+}
+
+func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
+	nameToken := p.eat()
+
+	if nameToken.Type() != lexer.IDENTIFIER {
+		return nil, expectedError("slice variable", nameToken)
+	}
+	name := nameToken.Value()
+	variable, exists := ctx.variables[name]
+
+	if !exists {
+		return nil, fmt.Errorf("variable %s has not been defined at row %d, column %d", name, nameToken.Row(), nameToken.Column())
+	}
+	variableValueType := variable.ValueType()
+
+	if !variableValueType.IsSlice() {
+		return nil, expectedError(fmt.Sprintf("slice but variable is of type %s", variable.ValueType().ToString()), nameToken)
+	}
+	nextToken := p.eat()
+
+	if nextToken.Type() != lexer.OPENING_SQUARE_BRACKET {
+		return nil, expectedError("\"[\"", nextToken)
+	}
+	nextToken = p.peek()
+	index, err := p.evaluateExpression(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	indexValueType := index.ValueType()
+
+	if !indexValueType.IsInt() {
+		return nil, expectedError(fmt.Sprintf("%s as index but got %s", DATA_TYPE_INTEGER, indexValueType.ToString()), nextToken)
+	}
+	nextToken = p.eat()
+
+	if nextToken.Type() != lexer.CLOSING_SQUARE_BRACKET {
+		return nil, expectedError("\"]\"", nextToken)
+	}
+	nextToken = p.eat()
+
+	if nextToken.Type() != lexer.ASSIGN_OPERATOR {
+		return nil, expectedError("\"=\"", nameToken)
+	}
+	valueToken := p.peek()
+	value, err := p.evaluateExpression(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	variableDataType := variableValueType.DataType()
+	assignedDataType := value.ValueType().DataType()
+
+	if variableDataType != assignedDataType {
+		return nil, expectedError(fmt.Sprintf("%s value but got %s", variableDataType, assignedDataType), valueToken)
+	}
+	return SliceAssignment{
+		index: index,
+		value: value,
 	}, nil
 }
 
