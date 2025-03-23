@@ -78,7 +78,7 @@ func (c *converter) FuncEnd(name string) error {
 }
 
 func (c *converter) Return(value string, valueType parser.ValueType) error {
-	if valueType != parser.VALUE_TYPE_VOID {
+	if valueType.DataType() != parser.DATA_TYPE_VOID {
 		c.Print([]string{value})
 	}
 	c.addLine("return")
@@ -149,11 +149,15 @@ func (c *converter) Nop() error {
 func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	notAllowedError := func() (string, error) {
-		return "", fmt.Errorf("binary operation %s is not allowed on type %s", operator, valueType)
+		return "", fmt.Errorf("binary operation %s is not allowed on type %s", operator, valueType.ToString())
 	}
 
-	switch valueType {
-	case parser.VALUE_TYPE_INTEGER:
+	if valueType.IsSlice() {
+		return notAllowedError()
+	}
+
+	switch valueType.DataType() {
+	case parser.DATA_TYPE_INTEGER:
 		switch operator {
 		case parser.BINARY_OPERATOR_MULTIPLICATION,
 			parser.BINARY_OPERATOR_DIVISION,
@@ -165,7 +169,7 @@ func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator,
 			return notAllowedError()
 		}
 		c.VarAssignment(helper, fmt.Sprintf("$(expr %s %s %s)", left, operator, right))
-	case parser.VALUE_TYPE_STRING:
+	case parser.DATA_TYPE_STRING:
 		switch operator {
 		case parser.BINARY_OPERATOR_ADDITION:
 			c.VarAssignment(helper, fmt.Sprintf("\"%s%s\"", left, right))
@@ -181,40 +185,42 @@ func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator,
 func (c *converter) Comparison(left string, operator parser.CompareOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
 	var operatorString string
 
-	switch valueType {
-	case parser.VALUE_TYPE_BOOLEAN:
-		switch operator {
-		case parser.COMPARE_OPERATOR_EQUAL:
-			operatorString = "-eq"
-		case parser.COMPARE_OPERATOR_NOT_EQUAL:
-			operatorString = "-ne"
-		}
-	case parser.VALUE_TYPE_INTEGER:
-		switch operator {
-		case parser.COMPARE_OPERATOR_EQUAL:
-			operatorString = "-eq"
-		case parser.COMPARE_OPERATOR_NOT_EQUAL:
-			operatorString = "-ne"
-		case parser.COMPARE_OPERATOR_GREATER:
-			operatorString = "-gt"
-		case parser.COMPARE_OPERATOR_GREATER_OR_EQUAL:
-			operatorString = "-ge"
-		case parser.COMPARE_OPERATOR_LESS:
-			operatorString = "-lt"
-		case parser.COMPARE_OPERATOR_LESS_OR_EQUAL:
-			operatorString = "-le"
-		}
-	case parser.VALUE_TYPE_STRING:
-		switch operator {
-		case parser.COMPARE_OPERATOR_EQUAL:
-			operatorString = "=="
-		case parser.COMPARE_OPERATOR_NOT_EQUAL:
-			operatorString = "!="
+	if !valueType.IsSlice() {
+		switch valueType.DataType() {
+		case parser.DATA_TYPE_BOOLEAN:
+			switch operator {
+			case parser.COMPARE_OPERATOR_EQUAL:
+				operatorString = "-eq"
+			case parser.COMPARE_OPERATOR_NOT_EQUAL:
+				operatorString = "-ne"
+			}
+		case parser.DATA_TYPE_INTEGER:
+			switch operator {
+			case parser.COMPARE_OPERATOR_EQUAL:
+				operatorString = "-eq"
+			case parser.COMPARE_OPERATOR_NOT_EQUAL:
+				operatorString = "-ne"
+			case parser.COMPARE_OPERATOR_GREATER:
+				operatorString = "-gt"
+			case parser.COMPARE_OPERATOR_GREATER_OR_EQUAL:
+				operatorString = "-ge"
+			case parser.COMPARE_OPERATOR_LESS:
+				operatorString = "-lt"
+			case parser.COMPARE_OPERATOR_LESS_OR_EQUAL:
+				operatorString = "-le"
+			}
+		case parser.DATA_TYPE_STRING:
+			switch operator {
+			case parser.COMPARE_OPERATOR_EQUAL:
+				operatorString = "=="
+			case parser.COMPARE_OPERATOR_NOT_EQUAL:
+				operatorString = "!="
+			}
 		}
 	}
 
 	if len(operatorString) == 0 {
-		return "", fmt.Errorf("comparison %s is not allowed on type %s", operator, valueType)
+		return "", fmt.Errorf("comparison %s is not allowed on type %s", operator, valueType.ToString())
 	}
 	helper := c.nextHelperVar()
 
@@ -249,7 +255,7 @@ func (c *converter) Group(value string, valueUsed bool) (string, error) {
 }
 
 func (c *converter) FuncCall(name string, args []string, valueType parser.ValueType, valueUsed bool) (string, error) {
-	returnsValue := valueType != parser.VALUE_TYPE_VOID
+	returnsValue := valueType.DataType() != parser.DATA_TYPE_VOID
 	argsCopy := args
 
 	for i, arg := range argsCopy {

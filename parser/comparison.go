@@ -11,7 +11,7 @@ func (c Comparison) StatementType() StatementType {
 }
 
 func (c Comparison) ValueType() ValueType {
-	return VALUE_TYPE_BOOLEAN
+	return ValueType{dataType: DATA_TYPE_BOOLEAN}
 }
 
 func (c Comparison) Left() Expression {

@@ -11,7 +11,7 @@ func (a AppCall) StatementType() StatementType {
 }
 
 func (a AppCall) ValueType() ValueType {
-	return VALUE_TYPE_STRING
+	return ValueType{dataType: DATA_TYPE_STRING}
 }
 
 func (a AppCall) Name() string {

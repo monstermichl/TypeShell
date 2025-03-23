@@ -11,7 +11,7 @@ func (l LogicalOperation) StatementType() StatementType {
 }
 
 func (l LogicalOperation) ValueType() ValueType {
-	return VALUE_TYPE_BOOLEAN
+	return ValueType{dataType: DATA_TYPE_BOOLEAN}
 }
 
 func (l LogicalOperation) Left() Expression {

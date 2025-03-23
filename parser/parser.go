@@ -10,10 +10,10 @@ import (
 	"github.com/monstermichl/typeshell/lexer"
 )
 
-var typeMapping = map[lexer.VarType]ValueType{
-	lexer.DATA_TYPE_BOOLEAN: VALUE_TYPE_BOOLEAN,
-	lexer.DATA_TYPE_INTEGER: VALUE_TYPE_INTEGER,
-	lexer.DATA_TYPE_STRING:  VALUE_TYPE_STRING,
+var typeMapping = map[lexer.VarType]DataType{
+	lexer.DATA_TYPE_BOOLEAN: DATA_TYPE_BOOLEAN,
+	lexer.DATA_TYPE_INTEGER: DATA_TYPE_INTEGER,
+	lexer.DATA_TYPE_STRING:  DATA_TYPE_STRING,
 }
 
 type scope string
@@ -74,13 +74,15 @@ func expectedError(what string, token lexer.Token) error {
 func allowedBinaryOperators(t ValueType) []BinaryOperator {
 	operators := []BinaryOperator{}
 
-	switch t {
-	case VALUE_TYPE_INTEGER:
-		operators = []BinaryOperator{BINARY_OPERATOR_MULTIPLICATION, BINARY_OPERATOR_DIVISION, BINARY_OPERATOR_MODULO, BINARY_OPERATOR_ADDITION, BINARY_OPERATOR_SUBTRACTION}
-	case VALUE_TYPE_STRING:
-		operators = []BinaryOperator{BINARY_OPERATOR_ADDITION}
-	default:
-		// For other types no operations are permitted.
+	if !t.IsSlice() {
+		switch t.DataType() {
+		case DATA_TYPE_INTEGER:
+			operators = []BinaryOperator{BINARY_OPERATOR_MULTIPLICATION, BINARY_OPERATOR_DIVISION, BINARY_OPERATOR_MODULO, BINARY_OPERATOR_ADDITION, BINARY_OPERATOR_SUBTRACTION}
+		case DATA_TYPE_STRING:
+			operators = []BinaryOperator{BINARY_OPERATOR_ADDITION}
+		default:
+			// For other types no operations are permitted.
+		}
 	}
 	return operators
 }
@@ -88,30 +90,37 @@ func allowedBinaryOperators(t ValueType) []BinaryOperator {
 func allowedCompareOperators(t ValueType) []CompareOperator {
 	operators := []CompareOperator{}
 
-	switch t {
-	case VALUE_TYPE_BOOLEAN:
-		operators = []CompareOperator{COMPARE_OPERATOR_EQUAL, COMPARE_OPERATOR_NOT_EQUAL}
-	case VALUE_TYPE_INTEGER:
-		operators = []CompareOperator{COMPARE_OPERATOR_EQUAL, COMPARE_OPERATOR_NOT_EQUAL, COMPARE_OPERATOR_LESS, COMPARE_OPERATOR_LESS_OR_EQUAL, COMPARE_OPERATOR_GREATER, COMPARE_OPERATOR_GREATER_OR_EQUAL}
-	case VALUE_TYPE_STRING:
-		operators = []CompareOperator{COMPARE_OPERATOR_EQUAL, COMPARE_OPERATOR_NOT_EQUAL, COMPARE_OPERATOR_LESS, COMPARE_OPERATOR_LESS_OR_EQUAL, COMPARE_OPERATOR_GREATER, COMPARE_OPERATOR_GREATER_OR_EQUAL}
-	default:
-		// For other types no operations are permitted.
+	if !t.IsSlice() {
+		switch t.DataType() {
+		case DATA_TYPE_BOOLEAN:
+			operators = []CompareOperator{COMPARE_OPERATOR_EQUAL, COMPARE_OPERATOR_NOT_EQUAL}
+		case DATA_TYPE_INTEGER:
+			operators = []CompareOperator{COMPARE_OPERATOR_EQUAL, COMPARE_OPERATOR_NOT_EQUAL, COMPARE_OPERATOR_LESS, COMPARE_OPERATOR_LESS_OR_EQUAL, COMPARE_OPERATOR_GREATER, COMPARE_OPERATOR_GREATER_OR_EQUAL}
+		case DATA_TYPE_STRING:
+			operators = []CompareOperator{COMPARE_OPERATOR_EQUAL, COMPARE_OPERATOR_NOT_EQUAL, COMPARE_OPERATOR_LESS, COMPARE_OPERATOR_LESS_OR_EQUAL, COMPARE_OPERATOR_GREATER, COMPARE_OPERATOR_GREATER_OR_EQUAL}
+		default:
+			// For other types no operations are permitted.
+		}
 	}
 	return operators
 }
 
 func defaultVarValue(valueType ValueType) (Expression, error) {
-	switch valueType {
-	case VALUE_TYPE_BOOLEAN:
-		return BooleanLiteral{}, nil
-	case VALUE_TYPE_INTEGER:
-		return IntegerLiteral{}, nil
-	case VALUE_TYPE_STRING:
-		return StringLiteral{}, nil
-	default:
-		return nil, fmt.Errorf("no default value found for type %s", valueType)
+	dataType := valueType.DataType()
+
+	if !valueType.IsSlice() {
+		switch dataType {
+		case DATA_TYPE_BOOLEAN:
+			return BooleanLiteral{}, nil
+		case DATA_TYPE_INTEGER:
+			return IntegerLiteral{}, nil
+		case DATA_TYPE_STRING:
+			return StringLiteral{}, nil
+		}
+	} else {
+		return SliceInstantiation{dataType: dataType}, nil
 	}
+	return nil, fmt.Errorf("no default value found for type %s", valueType.ToString())
 }
 
 func (p Parser) peek() lexer.Token {
@@ -297,6 +306,36 @@ func (p *Parser) evaluateBlock(callback blockCallback, ctx context, scope scope)
 	return statements, nil
 }
 
+func (p *Parser) evaluateValueType(ctx context) (ValueType, error) {
+	nextToken := p.peek()
+	evaluatedType := ValueType{dataType: DATA_TYPE_UNKNOWN}
+
+	// Evaluate if value type is a slice type.
+	if nextToken.Type() == lexer.OPENING_SQUARE_BRACKET {
+		p.eat()             // Eat opening square bracket.
+		nextToken = p.eat() // Eat closing square bracket.
+
+		if nextToken.Type() != lexer.CLOSING_SQUARE_BRACKET {
+			return evaluatedType, expectedError("\"]\"", nextToken)
+		}
+		nextToken = p.peek()
+		evaluatedType.isSlice = true
+	}
+
+	// Evaluate data type.
+	if nextToken.Type() != lexer.DATA_TYPE {
+		return evaluatedType, expectedError("data type", nextToken)
+	}
+	p.eat() // Eat data type token.
+	dataType, exists := typeMapping[nextToken.Value()]
+
+	if !exists {
+		return evaluatedType, expectedError("valid data type", nextToken)
+	}
+	evaluatedType.dataType = dataType
+	return evaluatedType, nil
+}
+
 func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 	// Possible variable declarations/definitions:
 	// var v int
@@ -322,40 +361,44 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 	_, exists := ctx.variables[name]
 
 	if exists {
-		return nil, fmt.Errorf("variable %s has already been defined", name)
+		return nil, fmt.Errorf("variable %s has already been defined at row %d, column %d", name, nameToken.Row(), nameToken.Column())
 	}
-	nextToken := p.eat()
-	specifiedType := VALUE_TYPE_UNKNOWN
+	specifiedType := ValueType{dataType: DATA_TYPE_UNKNOWN}
 
 	if isShortVarInit {
+		nextToken := p.eat() // Eat short init operator.
+
 		if nextToken.Type() != lexer.SHORT_INIT_OPERATOR {
 			return nil, expectedError("short initialization operator", nextToken)
 		}
 	} else {
-		if nextToken.Type() == lexer.DATA_TYPE {
-			specifiedTypeTemp, exists := typeMapping[nextToken.Value()]
+		nextToken := p.peek()
 
-			if !exists {
-				return nil, expectedError("valid data type", nextToken)
+		// If next token starts a type definition, evaluate value type.
+		if slices.Contains([]lexer.TokenType{lexer.DATA_TYPE, lexer.OPENING_SQUARE_BRACKET}, nextToken.Type()) {
+			specifiedTypeTemp, err := p.evaluateValueType(ctx)
+
+			if err != nil {
+				return nil, err
 			}
 			specifiedType = specifiedTypeTemp
 			nextToken = p.peek()
 		}
 		nextTokenType := nextToken.Type()
+		dataType := specifiedType.DataType()
 
-		if specifiedType == VALUE_TYPE_UNKNOWN && nextTokenType != lexer.ASSIGN_OPERATOR {
+		// If no data type has been specified and no value is being assigned, return an error.
+		if dataType == DATA_TYPE_UNKNOWN && nextTokenType != lexer.ASSIGN_OPERATOR {
 			return nil, expectedError("data type or value assignment", nextToken)
 		} else if nextTokenType == lexer.ASSIGN_OPERATOR {
-			if specifiedType != VALUE_TYPE_UNKNOWN {
-				p.eat()
-			}
-			nextToken = p.peek()
+			p.eat()
 		}
 	}
+	nextToken := p.peek()
+	nextTokenType := nextToken.Type()
 
 	var err error
 	var value Expression
-	nextTokenType := nextToken.Type()
 
 	// TODO: Improve check.
 	if nextTokenType != lexer.NEWLINE && nextTokenType != lexer.EOF {
@@ -366,9 +409,9 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 		}
 		valueType := value.ValueType()
 
-		if specifiedType != VALUE_TYPE_UNKNOWN {
-			if valueType != specifiedType {
-				return nil, expectedError(fmt.Sprintf("%s but got %s", specifiedType, valueType), nextToken)
+		if specifiedType.DataType() != DATA_TYPE_UNKNOWN {
+			if !valueType.Equals(specifiedType) {
+				return nil, expectedError(fmt.Sprintf("%s but got %s", specifiedType.ToString(), valueType.ToString()), nextToken)
 			}
 		} else {
 			specifiedType = valueType
@@ -422,7 +465,7 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Expression, error) {
 	expectedValueType := definedVariable.ValueType()
 
 	if assignedValueType != expectedValueType {
-		return nil, expectedError(fmt.Sprintf("%s but got %s", expectedValueType, assignedValueType), valueToken)
+		return nil, expectedError(fmt.Sprintf("%s but got %s", expectedValueType.ToString(), assignedValueType.ToString()), valueToken)
 	}
 	return VariableAssignment{
 		variable: definedVariable,
@@ -452,24 +495,22 @@ func (p *Parser) evaluateParams(ctx context) ([]Variable, error) {
 		if exists {
 			return params, fmt.Errorf("scope already contains a variable with the name %s", name)
 		}
-		typeToken := p.eat()
-		typeTokenType := typeToken.Type()
+		valueType, err := p.evaluateValueType(ctx)
 
-		// Check parameter type.
-		if typeTokenType != lexer.DATA_TYPE {
-			return params, expectedError("valid parameter type", typeToken)
+		if err != nil {
+			return nil, err
 		}
 		nextToken := p.peek()
 		nextTokenType := nextToken.Type()
 
 		if nextTokenType != lexer.COMMA && nextTokenType != lexer.CLOSING_ROUND_BRACKET {
-			return params, expectedError("comma or closing bracket", nextToken)
+			return params, expectedError("\",\" or \")\"", nextToken)
 		} else if nextTokenType == lexer.COMMA {
 			p.eat()
 		}
 		params = append(params, Variable{
 			name:      name,
-			valueType: typeMapping[typeToken.Value()],
+			valueType: valueType,
 		})
 	}
 	return params, nil
@@ -517,12 +558,16 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 		}
 	}
 	returnTypeToken := p.peek()
-	returnType := VALUE_TYPE_VOID
+	returnType := ValueType{dataType: DATA_TYPE_VOID}
 
 	// Check if a return type has been specified.
 	if returnTypeToken.Type() == lexer.DATA_TYPE {
-		p.eat()
-		returnType = typeMapping[returnTypeToken.Value()]
+		returnTypeTemp, err := p.evaluateValueType(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+		returnType = returnTypeTemp
 	}
 
 	// Create ctx copy and add params as variables.
@@ -540,13 +585,13 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 			lastStatement = statements[length-1]
 		}
 
-		if returnType != VALUE_TYPE_VOID {
+		if returnType.DataType() != DATA_TYPE_VOID {
 			// If a return value is required, the last statement must be a return statement.
 			if last {
 				if lastStatement == nil || lastStatement.StatementType() != STATEMENT_TYPE_RETURN {
 					errTemp = fmt.Errorf("function %s requires a return statement at the end of the block", name)
-				} else if returnedType := lastStatement.(Return).value.ValueType(); returnedType != returnType {
-					errTemp = fmt.Errorf("function %s returns %s but expects %s", name, returnedType, returnType)
+				} else if returnedType := lastStatement.(Return).value.ValueType(); !returnedType.Equals(returnType) {
+					errTemp = fmt.Errorf("function %s returns %s but expects %s", name, returnedType.ToString(), returnType.ToString())
 				}
 			}
 		} else if lastStatement != nil && lastStatement.StatementType() == STATEMENT_TYPE_RETURN {
@@ -657,7 +702,7 @@ func (p *Parser) evaluateIf(ctx context) (Statement, error) {
 			if err != nil {
 				return nil, err
 			}
-			if expr.ValueType() != VALUE_TYPE_BOOLEAN {
+			if !expr.ValueType().IsBool() {
 				return nil, expectedError("boolean expression", conditionToken)
 			}
 			condition = expr
@@ -705,7 +750,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 	if err != nil {
 		return nil, err
 	}
-	if expr.ValueType() != VALUE_TYPE_BOOLEAN {
+	if !expr.ValueType().IsBool() {
 		return nil, expectedError("boolean expression", conditionToken)
 	}
 	statements, err := p.evaluateBlock(nil, ctx, SCOPE_FOR)
@@ -822,6 +867,10 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 			return nil, expectedError("closing bracket", closingToken)
 		}
 
+	// Handle slice instantiation.
+	case lexer.OPENING_SQUARE_BRACKET:
+		expr, err = p.evaluateSliceInstantiation(ctx)
+
 	// Handle input.
 	case lexer.INPUT:
 		expr, err = p.evaluateInput(ctx)
@@ -918,13 +967,13 @@ func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperators []BinaryO
 		leftType := leftExpression.ValueType()
 		rightType := rightExpression.ValueType()
 
-		if leftType != rightType {
-			return nil, expectedError(fmt.Sprintf("same binary operation types but got %s and %s", leftType, rightType), operatorToken)
+		if !leftType.Equals(rightType) {
+			return nil, expectedError(fmt.Sprintf("same binary operation types but got %s and %s", leftType.ToString(), rightType.ToString()), operatorToken)
 		}
 		allowedOperators = allowedBinaryOperators(leftType)
 
 		if !slices.Contains(allowedOperators, operator) {
-			return nil, expectedError(fmt.Sprintf("valid %s operator but got \"%s\"", leftType, operator), operatorToken)
+			return nil, expectedError(fmt.Sprintf("valid %s operator but got \"%s\"", leftType.ToString(), operator), operatorToken)
 		}
 		return BinaryOperation{
 			left:      leftExpression,
@@ -958,13 +1007,13 @@ func (p *Parser) evaluateComparison(ctx context) (Expression, error) {
 		leftType := leftExpression.ValueType()
 		rightType := rightExpression.ValueType()
 
-		if leftType != rightType {
-			return nil, expectedError(fmt.Sprintf("same comparison types but got %s and %s", leftType, rightType), operatorToken)
+		if !leftType.Equals(rightType) {
+			return nil, expectedError(fmt.Sprintf("same comparison types but got %s and %s", leftType.DataType(), rightType.ToString()), operatorToken)
 		}
 		allowedOperators := allowedCompareOperators(leftType)
 
 		if !slices.Contains(allowedOperators, operator) {
-			return nil, expectedError(fmt.Sprintf("valid %s operator but got \"%s\"", leftType, operator), operatorToken)
+			return nil, expectedError(fmt.Sprintf("valid %s operator but got \"%s\"", leftType.ToString(), operator), operatorToken)
 		}
 		return Comparison{
 			left:     leftExpression,
@@ -985,7 +1034,7 @@ func (p *Parser) evaluateLogicalOperation(ctx context, operator LogicalOperator,
 	operatorToken := p.peek()
 
 	if operatorToken.Type() == lexer.LOGICAL_OPERATOR && operatorToken.Value() == operator {
-		if leftExpression.ValueType() != VALUE_TYPE_BOOLEAN {
+		if !leftExpression.ValueType().IsBool() {
 			return nil, expectedError("boolean value", conditionToken)
 		}
 		p.eat() // Eat operator token.
@@ -1041,8 +1090,8 @@ func (p *Parser) evaluateArguments(typeName string, name string, params []Variab
 		lastParamType := param.ValueType()
 		lastArgType := expr.ValueType()
 
-		if lastParamType != lastArgType {
-			return nil, expectedError(fmt.Sprintf("parameter %s (%s) but got %s", lastParamType, param.Name(), lastArgType), argToken)
+		if !lastParamType.Equals(lastArgType) {
+			return nil, expectedError(fmt.Sprintf("parameter %s (%s) but got %s", lastParamType.ToString(), param.Name(), lastArgType.ToString()), argToken)
 		}
 		nextToken = p.peek()
 		tokenType := nextToken.Type()
@@ -1190,6 +1239,63 @@ func (p *Parser) evaluateInput(ctx context) (Expression, error) {
 	}
 	return Input{
 		prompt: expr,
+	}, nil
+}
+
+func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
+	nextToken := p.peek()
+	sliceValueType, err := p.evaluateValueType(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	if !sliceValueType.IsSlice() {
+		return nil, expectedError(fmt.Sprintf("slice type but got %s", sliceValueType.ToString()), nextToken)
+	}
+	nextToken = p.eat()
+
+	if nextToken.Type() != lexer.OPENING_CURLY_BRACKET {
+		return nil, expectedError("\"{\"", nextToken)
+	}
+	nextToken = p.peek()
+	values := []Expression{}
+
+	// Evaluate slice initialization values.
+	if nextToken.Type() != lexer.CLOSING_CURLY_BRACKET {
+		for {
+			valueToken := p.peek()
+			expr, err := p.evaluateExpression(ctx)
+
+			if err != nil {
+				return nil, err
+			}
+			valueDataType := expr.ValueType()
+
+			if !valueDataType.Equals(sliceValueType) {
+				return nil, fmt.Errorf("%s cannot not be added to %s at row %d, column %d", valueDataType.ToString(), sliceValueType.ToString(), valueToken.Row(), valueToken.Column())
+			}
+			values = append(values, expr)
+			nextToken = p.peek()
+			nextTokenType := nextToken.Type()
+
+			if nextTokenType == lexer.COMMA {
+				p.eat()
+			} else if nextTokenType == lexer.CLOSING_CURLY_BRACKET {
+				break
+			} else {
+				fmt.Println(nextToken)
+				return nil, expectedError("\",\" or \"}\"", nextToken)
+			}
+		}
+	}
+	nextToken = p.eat()
+
+	if nextToken.Type() != lexer.CLOSING_CURLY_BRACKET {
+		return nil, expectedError("\"}\"", nextToken)
+	}
+	return SliceInstantiation{
+		dataType: sliceValueType.DataType(),
+		values:   values,
 	}, nil
 }
 

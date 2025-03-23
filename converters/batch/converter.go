@@ -113,7 +113,7 @@ func (c *converter) FuncEnd(name string) error {
 }
 
 func (c *converter) Return(value string, valueType parser.ValueType) error {
-	if valueType != parser.VALUE_TYPE_VOID {
+	if valueType.DataType() != parser.DATA_TYPE_VOID {
 		funcVar, err := c.funcVar(c.funcs[len(c.funcs)-1].name)
 
 		if err != nil {
@@ -216,11 +216,15 @@ func (c *converter) Nop() error {
 func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	notAllowedError := func() (string, error) {
-		return "", fmt.Errorf("binary operation %s is not allowed on type %s", operator, valueType)
+		return "", fmt.Errorf("binary operation %s is not allowed on type %s", operator, valueType.ToString())
 	}
 
-	switch valueType {
-	case parser.VALUE_TYPE_INTEGER:
+	if valueType.IsSlice() {
+		return notAllowedError()
+	}
+
+	switch valueType.DataType() {
+	case parser.DATA_TYPE_INTEGER:
 		switch operator {
 		case parser.BINARY_OPERATOR_MULTIPLICATION,
 			parser.BINARY_OPERATOR_DIVISION,
@@ -232,7 +236,7 @@ func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator,
 			return notAllowedError()
 		}
 		c.addLine(fmt.Sprintf("set /A %s= %s %s %s", helper, left, operator, right))
-	case parser.VALUE_TYPE_STRING:
+	case parser.DATA_TYPE_STRING:
 		switch operator {
 		case parser.BINARY_OPERATOR_ADDITION:
 			c.VarAssignment(helper, fmt.Sprintf("%s%s", left, right))
@@ -251,40 +255,42 @@ func (c *converter) Comparison(left string, operator parser.CompareOperator, rig
 
 	var operatorString string
 
-	switch valueType {
-	case parser.VALUE_TYPE_BOOLEAN:
-		switch operator {
-		case parser.COMPARE_OPERATOR_EQUAL:
-			operatorString = EQUAL_OPERATOR
-		case parser.COMPARE_OPERATOR_NOT_EQUAL:
-			operatorString = NOT_EQUAL_OPERATOR
-		}
-	case parser.VALUE_TYPE_INTEGER:
-		switch operator {
-		case parser.COMPARE_OPERATOR_EQUAL:
-			operatorString = EQUAL_OPERATOR
-		case parser.COMPARE_OPERATOR_NOT_EQUAL:
-			operatorString = NOT_EQUAL_OPERATOR
-		case parser.COMPARE_OPERATOR_GREATER:
-			operatorString = "gtr"
-		case parser.COMPARE_OPERATOR_GREATER_OR_EQUAL:
-			operatorString = "geq"
-		case parser.COMPARE_OPERATOR_LESS:
-			operatorString = "lss"
-		case parser.COMPARE_OPERATOR_LESS_OR_EQUAL:
-			operatorString = "leq"
-		}
-	case parser.VALUE_TYPE_STRING:
-		switch operator {
-		case parser.COMPARE_OPERATOR_EQUAL:
-			operatorString = EQUAL_OPERATOR
-		case parser.COMPARE_OPERATOR_NOT_EQUAL:
-			operatorString = NOT_EQUAL_OPERATOR
+	if !valueType.IsSlice() {
+		switch valueType.DataType() {
+		case parser.DATA_TYPE_BOOLEAN:
+			switch operator {
+			case parser.COMPARE_OPERATOR_EQUAL:
+				operatorString = EQUAL_OPERATOR
+			case parser.COMPARE_OPERATOR_NOT_EQUAL:
+				operatorString = NOT_EQUAL_OPERATOR
+			}
+		case parser.DATA_TYPE_INTEGER:
+			switch operator {
+			case parser.COMPARE_OPERATOR_EQUAL:
+				operatorString = EQUAL_OPERATOR
+			case parser.COMPARE_OPERATOR_NOT_EQUAL:
+				operatorString = NOT_EQUAL_OPERATOR
+			case parser.COMPARE_OPERATOR_GREATER:
+				operatorString = "gtr"
+			case parser.COMPARE_OPERATOR_GREATER_OR_EQUAL:
+				operatorString = "geq"
+			case parser.COMPARE_OPERATOR_LESS:
+				operatorString = "lss"
+			case parser.COMPARE_OPERATOR_LESS_OR_EQUAL:
+				operatorString = "leq"
+			}
+		case parser.DATA_TYPE_STRING:
+			switch operator {
+			case parser.COMPARE_OPERATOR_EQUAL:
+				operatorString = EQUAL_OPERATOR
+			case parser.COMPARE_OPERATOR_NOT_EQUAL:
+				operatorString = NOT_EQUAL_OPERATOR
+			}
 		}
 	}
 
 	if len(operatorString) == 0 {
-		return "", fmt.Errorf("comparison %s is not allowed on type %s", operator, valueType)
+		return "", fmt.Errorf("comparison %s is not allowed on type %s", operator, valueType.ToString())
 	}
 	helper := c.nextHelperVar()
 	c.addLine(
@@ -344,7 +350,7 @@ func (c *converter) Group(value string, valueUsed bool) (string, error) {
 }
 
 func (c *converter) FuncCall(name string, args []string, valueType parser.ValueType, valueUsed bool) (string, error) {
-	if valueType != parser.VALUE_TYPE_VOID {
+	if valueType.DataType() != parser.DATA_TYPE_VOID {
 		c.addLine(fmt.Sprintf("call :%s %s", name, fmt.Sprintf("\"%s\"", strings.Join(args, "\" \""))))
 		funcVar, err := c.funcVar(name)
 

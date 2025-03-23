@@ -9,7 +9,7 @@ func (i Input) StatementType() StatementType {
 }
 
 func (i Input) ValueType() ValueType {
-	return VALUE_TYPE_STRING
+	return ValueType{dataType: DATA_TYPE_STRING}
 }
 
 func (i Input) Prompt() Expression {

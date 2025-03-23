@@ -1,10 +1,42 @@
 package parser
 
+import "fmt"
+
 type StatementType string
-type ValueType string
+type DataType string
 type CompareOperator = string
 type BinaryOperator = string
 type LogicalOperator = string
+
+type ValueType struct {
+	dataType DataType
+	isSlice  bool
+}
+
+func (vt ValueType) DataType() DataType {
+	return vt.dataType
+}
+
+func (vt ValueType) IsSlice() bool {
+	return vt.isSlice
+}
+
+func (vt ValueType) ToString() string {
+	s := string(vt.dataType)
+
+	if vt.isSlice {
+		s = fmt.Sprintf("[]%s", s)
+	}
+	return s
+}
+
+func (vt ValueType) Equals(valueType ValueType) bool {
+	return vt.DataType() == valueType.DataType() && vt.IsSlice() == valueType.IsSlice()
+}
+
+func (vt ValueType) IsBool() bool {
+	return vt.DataType() == DATA_TYPE_BOOLEAN && !vt.IsSlice()
+}
 
 const (
 	STATEMENT_TYPE_PROGRAM             StatementType = "program"
@@ -29,14 +61,17 @@ const (
 	STATEMENT_TYPE_INSTANTIATION       StatementType = "instantiation"
 	STATEMENT_TYPE_PRINT               StatementType = "print"
 	STATEMENT_TYPE_INPUT               StatementType = "input"
+	STATEMENT_TYPE_SLICE_INSTANTIATION StatementType = "slice instantiation"
+	STATEMENT_TYPE_SLICE_ASSIGNMENT    StatementType = "slice assignment"
+	STATEMENT_TYPE_SLICE_EVALUATION    StatementType = "slice evaluation"
 )
 
 const (
-	VALUE_TYPE_UNKNOWN ValueType = "unknown"
-	VALUE_TYPE_VOID    ValueType = "void"
-	VALUE_TYPE_BOOLEAN ValueType = "boolean"
-	VALUE_TYPE_INTEGER ValueType = "integer"
-	VALUE_TYPE_STRING  ValueType = "string"
+	DATA_TYPE_UNKNOWN DataType = "unknown"
+	DATA_TYPE_VOID    DataType = "void"
+	DATA_TYPE_BOOLEAN DataType = "bool"
+	DATA_TYPE_INTEGER DataType = "int"
+	DATA_TYPE_STRING  DataType = "string"
 )
 
 const (
