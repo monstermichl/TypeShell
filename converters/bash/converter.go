@@ -59,15 +59,6 @@ func (c *converter) VarAssignment(name string, value string) error {
 	return nil
 }
 
-func (c *converter) SliceDefinition(name string, values []string) error {
-	slice, err := c.SliceInstantiation(values, true)
-
-	if err != nil {
-		return err
-	}
-	return c.VarDefinition(name, slice)
-}
-
 func (c *converter) SliceAssignment(name string, index int, value string) error {
 	c.addLine(fmt.Sprintf("%s[%d]=\"%s\"", name, index, value))
 	return nil

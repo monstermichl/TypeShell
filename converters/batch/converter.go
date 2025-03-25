@@ -91,15 +91,6 @@ func (c *converter) VarAssignment(name string, value string) error {
 	return nil
 }
 
-func (c *converter) SliceDefinition(name string, values []string) error {
-	helper, err := c.SliceInstantiation(values, true)
-
-	if err != nil {
-		return err
-	}
-	return c.VarAssignment(name, helper)
-}
-
 func (c *converter) SliceAssignment(name string, index int, value string) error {
 	// Add array helper to batch file for easier array processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
 	if !c.arrayHelperSet {

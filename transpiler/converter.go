@@ -45,7 +45,6 @@ type Converter interface {
 	ProgramEnd() error
 	VarDefinition(name string, value string) error
 	VarAssignment(name string, value string) error
-	SliceDefinition(name string, values []string) error
 	SliceAssignment(name string, index int, value string) error
 	FuncStart(name string, params []string) error
 	FuncEnd(name string) error
