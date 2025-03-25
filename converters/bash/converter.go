@@ -16,13 +16,9 @@ type converter struct {
 
 func New() *converter {
 	return &converter{
-		interpreter: "/bin/sh",
+		interpreter: "/bin/bash",
 		code:        []string{},
 	}
-}
-
-func (c *converter) SetInterpreter(interpreter string) {
-	c.interpreter = interpreter
 }
 
 func (c *converter) BoolToString(value bool) string {
@@ -60,6 +56,20 @@ func (c *converter) VarDefinition(name string, value string) error {
 
 func (c *converter) VarAssignment(name string, value string) error {
 	c.addLine(fmt.Sprintf("%s=%s", name, value))
+	return nil
+}
+
+func (c *converter) SliceDefinition(name string, values []string) error {
+	slice, err := c.SliceInstantiation(values, true)
+
+	if err != nil {
+		return err
+	}
+	return c.VarDefinition(name, slice)
+}
+
+func (c *converter) SliceAssignment(name string, index int, value string) error {
+	c.addLine(fmt.Sprintf("%s[%d]=\"%s\"", name, index, value))
 	return nil
 }
 
@@ -248,6 +258,19 @@ func (c *converter) LogicalOperation(left string, operator parser.LogicalOperato
 
 func (c *converter) VarEvaluation(name string, valueUsed bool) (string, error) {
 	return fmt.Sprintf("${%s}", name), nil
+}
+
+func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
+	valuesString := ""
+
+	if len(values) > 0 {
+		valuesString = fmt.Sprintf("\"%s\"", strings.Join(values, "\", \""))
+	}
+	return fmt.Sprintf("(%s)", valuesString), nil
+}
+
+func (c *converter) SliceEvaluation(name string, index int, valueUsed bool) (string, error) {
+	return c.VarEvaluation(fmt.Sprintf("%s[%d]", name, index), valueUsed)
 }
 
 func (c *converter) Group(value string, valueUsed bool) (string, error) {

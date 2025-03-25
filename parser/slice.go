@@ -18,29 +18,39 @@ func (s SliceInstantiation) Values() []Expression {
 }
 
 type SliceEvaluation struct {
-	dataType DataType
+	name     string
 	index    Expression
+	dataType DataType
 }
 
 func (s SliceEvaluation) StatementType() StatementType {
 	return STATEMENT_TYPE_SLICE_EVALUATION
 }
 
-func (s SliceEvaluation) ValueType() ValueType {
-	return ValueType{dataType: s.dataType, isSlice: true}
+func (s SliceEvaluation) Name() string {
+	return s.name
 }
 
 func (s SliceEvaluation) Index() Expression {
 	return s.index
 }
 
+func (s SliceEvaluation) ValueType() ValueType {
+	return ValueType{dataType: s.dataType, isSlice: true}
+}
+
 type SliceAssignment struct {
+	name  string
 	index Expression
 	value Expression
 }
 
 func (s SliceAssignment) StatementType() StatementType {
 	return STATEMENT_TYPE_SLICE_ASSIGNMENT
+}
+
+func (s SliceAssignment) Name() string {
+	return s.name
 }
 
 func (s SliceAssignment) Index() Expression {

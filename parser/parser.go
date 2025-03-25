@@ -1350,8 +1350,9 @@ func (p *Parser) evaluateSliceEvaluation(ctx context) (Expression, error) {
 		return nil, expectedError("\"]\"", nextToken)
 	}
 	return SliceEvaluation{
-		dataType: variable.ValueType().DataType(),
+		name:     name,
 		index:    index,
+		dataType: variable.ValueType().DataType(),
 	}, nil
 }
 
@@ -1370,7 +1371,7 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 	variableValueType := variable.ValueType()
 
 	if !variableValueType.IsSlice() {
-		return nil, expectedError(fmt.Sprintf("slice but variable is of type %s", variable.ValueType().ToString()), nameToken)
+		return nil, expectedError(fmt.Sprintf("slice but variable is of type %s", variableValueType.ToString()), nameToken)
 	}
 	nextToken := p.eat()
 
@@ -1411,6 +1412,7 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 		return nil, expectedError(fmt.Sprintf("%s value but got %s", variableDataType, assignedDataType), valueToken)
 	}
 	return SliceAssignment{
+		name:  name,
 		index: index,
 		value: value,
 	}, nil

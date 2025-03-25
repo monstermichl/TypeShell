@@ -1,8 +1,8 @@
 package transpiler
 
 import (
-	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/monstermichl/typeshell/parser"
 )
@@ -34,6 +34,21 @@ func (t *transpiler) Transpile(converter Converter) (string, error) {
 		return "", err
 	}
 	return t.converter.Dump()
+}
+
+func (t *transpiler) evaluateIndex(index parser.Expression, valueUsed bool) (int, error) {
+	i := -1
+	indexString, err := t.evaluateExpression(index, true)
+
+	if err != nil {
+		return i, err
+	}
+	i, err = strconv.Atoi(indexString)
+
+	if err != nil {
+		return i, err
+	}
+	return i, nil
 }
 
 func (t *transpiler) evaluateProgram(program parser.Program) error {
@@ -229,8 +244,31 @@ func (t *transpiler) evaluateVarAssignment(assignment parser.VariableAssignment)
 	return t.converter.VarAssignment(assignment.Variable().Name(), value)
 }
 
+func (t *transpiler) evaluateSliceAssignment(assignment parser.SliceAssignment) error {
+	index, err := t.evaluateIndex(assignment.Index(), true)
+
+	if err != nil {
+		return err
+	}
+	value, err := t.evaluateExpression(assignment.Value(), true)
+
+	if err != nil {
+		return err
+	}
+	return t.converter.SliceAssignment(assignment.Name(), index, value)
+}
+
 func (t *transpiler) evaluateVarEvaluation(evaluation parser.VariableEvaluation, valueUsed bool) (string, error) {
 	return t.converter.VarEvaluation(evaluation.Name(), valueUsed)
+}
+
+func (t *transpiler) evaluateSliceEvaluation(evaluation parser.SliceEvaluation, valueUsed bool) (string, error) {
+	index, err := t.evaluateIndex(evaluation.Index(), true)
+
+	if err != nil {
+		return "", err
+	}
+	return t.converter.SliceEvaluation(evaluation.Name(), index, valueUsed)
 }
 
 func (t *transpiler) evaluateGroup(group parser.Group, valueUsed bool) (string, error) {
@@ -342,6 +380,20 @@ func (t *transpiler) evaluateInput(input parser.Input, valueUsed bool) (string, 
 	return t.converter.Input(promptString, valueUsed)
 }
 
+func (t *transpiler) evaluateSliceInstantiation(instantiation parser.SliceInstantiation, valueUsed bool) (string, error) {
+	values := []string{}
+
+	for _, expr := range instantiation.Values() {
+		value, err := t.evaluateExpression(expr, true)
+
+		if err != nil {
+			return "", err
+		}
+		values = append(values, value)
+	}
+	return t.converter.SliceInstantiation(values, valueUsed)
+}
+
 func (t *transpiler) evaluate(statement parser.Statement) error {
 	statementType := statement.StatementType()
 
@@ -352,6 +404,8 @@ func (t *transpiler) evaluate(statement parser.Statement) error {
 		return t.evaluateVarDefinition(statement.(parser.VariableDefinition))
 	case parser.STATEMENT_TYPE_VAR_ASSIGNMENT:
 		return t.evaluateVarAssignment(statement.(parser.VariableAssignment))
+	case parser.STATEMENT_TYPE_SLICE_ASSIGNMENT:
+		return t.evaluateSliceAssignment(statement.(parser.SliceAssignment))
 	case parser.STATEMENT_TYPE_FUNCTION_DEFINITION:
 		return t.evaluateFunctionDefinition(statement.(parser.FunctionDefinition))
 	case parser.STATEMENT_TYPE_RETURN:
@@ -370,7 +424,7 @@ func (t *transpiler) evaluate(statement parser.Statement) error {
 		expression, ok := statement.(parser.Expression)
 
 		if !ok {
-			return errors.New("statement is not an expression")
+			return fmt.Errorf("statement is not an expression (%v)", statement)
 		}
 		_, err := t.evaluateExpression(expression, false)
 		return err
@@ -395,6 +449,8 @@ func (t *transpiler) evaluateExpression(expression parser.Expression, valueUsed 
 		return t.evaluateLogicalOperation(expression.(parser.LogicalOperation), valueUsed)
 	case parser.STATEMENT_TYPE_VAR_EVALUATION:
 		return t.evaluateVarEvaluation(expression.(parser.VariableEvaluation), valueUsed)
+	case parser.STATEMENT_TYPE_SLICE_EVALUATION:
+		return t.evaluateSliceEvaluation(expression.(parser.SliceEvaluation), valueUsed)
 	case parser.STATEMENT_TYPE_GROUP:
 		return t.evaluateGroup(expression.(parser.Group), valueUsed)
 	case parser.STATEMENT_TYPE_FUNCTION_CALL:
@@ -403,6 +459,8 @@ func (t *transpiler) evaluateExpression(expression parser.Expression, valueUsed 
 		return t.evaluateAppCall(expression.(parser.AppCall), valueUsed)
 	case parser.STATEMENT_TYPE_INPUT:
 		return t.evaluateInput(expression.(parser.Input), valueUsed)
+	case parser.STATEMENT_TYPE_SLICE_INSTANTIATION:
+		return t.evaluateSliceInstantiation(expression.(parser.SliceInstantiation), valueUsed)
 	}
 	return "", fmt.Errorf("unknown expression type %s", expressionType)
 }

@@ -23,15 +23,16 @@ type ifInfo struct {
 }
 
 type converter struct {
-	code         []string
-	varCounter   int
-	ifCounter    int
-	whileCounter int
-	endLabels    []string
-	funcs        []funcInfo
-	fors         []forInfo
-	ifs          []ifInfo
-	lfSet        bool
+	code           []string
+	varCounter     int
+	ifCounter      int
+	whileCounter   int
+	endLabels      []string
+	funcs          []funcInfo
+	fors           []forInfo
+	ifs            []ifInfo
+	lfSet          bool
+	arrayHelperSet bool
 }
 
 func varAssignmentString(name string, value string) string {
@@ -90,10 +91,44 @@ func (c *converter) VarAssignment(name string, value string) error {
 	return nil
 }
 
+func (c *converter) SliceDefinition(name string, values []string) error {
+	helper, err := c.SliceInstantiation(values, true)
+
+	if err != nil {
+		return err
+	}
+	return c.VarAssignment(name, helper)
+}
+
+func (c *converter) SliceAssignment(name string, index int, value string) error {
+	// Add array helper to batch file for easier array processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
+	if !c.arrayHelperSet {
+		c.addLine(":: array assignment helper begin")
+		c.addLine("goto :_esa")
+		c.addLine(":_sa")
+		c.addLine("set %1[%2]=%~3")
+		c.addLine("set lenvar=%1len")
+		c.addLine("if not defined %lenvar% goto :1")
+		c.addLine("if %2 gtr %lenvar% goto :1")
+		c.addLine("goto :2")
+		c.addLine(":1")
+		c.addLine("set /A %lenvar%=%2+1")
+		c.addLine(":2")
+		c.addLine("exit /B 0")
+		c.addLine(":_esa")
+		c.addLine(":: array assignment helper end")
+
+		c.arrayHelperSet = true
+	}
+	c.addLine(fmt.Sprintf("call :_sa %s %d \"%s\"", varEvaluationString(name), index, value))
+	return nil
+}
+
 func (c *converter) FuncStart(name string, params []string) error {
 	c.funcs = append(c.funcs, funcInfo{
 		name: name,
 	})
+	c.addLine(fmt.Sprintf(":: %s function begin", name))
 	c.addLine(fmt.Sprintf("goto :_eo%s", name))
 	c.addLine(fmt.Sprintf(":%s", name))
 
@@ -106,6 +141,7 @@ func (c *converter) FuncStart(name string, params []string) error {
 func (c *converter) FuncEnd(name string) error {
 	c.addLine("exit /B 0")
 	c.addLine(fmt.Sprintf(":_eo%s", name))
+	c.addLine(fmt.Sprintf(":: %s function end", name))
 
 	lastIndex := len(c.funcs) - 1
 	c.funcs = slices.Delete(c.funcs, lastIndex, lastIndex+1)
@@ -343,6 +379,25 @@ func (c *converter) LogicalOperation(left string, operator parser.LogicalOperato
 
 func (c *converter) VarEvaluation(name string, valueUsed bool) (string, error) {
 	return varEvaluationString(name), nil
+}
+
+func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
+	helper := c.nextHelperVar()
+	c.addLine(varAssignmentString(fmt.Sprintf("%slen", helper), "")) // Unset length variable.
+
+	// Init array values.
+	for i, value := range values {
+		err := c.SliceAssignment(helper, i, value)
+
+		if err != nil {
+			return "", err
+		}
+	}
+	return helper, nil
+}
+
+func (c *converter) SliceEvaluation(name string, index int, valueUsed bool) (string, error) {
+	return c.VarEvaluation(fmt.Sprintf("%s[%d]", varEvaluationString(name), index), valueUsed)
 }
 
 func (c *converter) Group(value string, valueUsed bool) (string, error) {
