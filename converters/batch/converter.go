@@ -388,7 +388,10 @@ func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string,
 }
 
 func (c *converter) SliceEvaluation(name string, index int, valueUsed bool) (string, error) {
-	return c.VarEvaluation(fmt.Sprintf("%s[%d]", varEvaluationString(name), index), valueUsed)
+	helper := c.nextHelperVar()
+
+	c.addLine(fmt.Sprintf("for /f \"delims=\" %%%%i in (\"!%s![%d]\") do set %s=!%%%%i!", name, index, helper))
+	return c.VarEvaluation(helper, valueUsed)
 }
 
 func (c *converter) Group(value string, valueUsed bool) (string, error) {
