@@ -390,6 +390,19 @@ func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string,
 func (c *converter) SliceEvaluation(name string, index int, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
+	// A for-loop is required because the evaluation wouldn't work with the following code as expected.
+	// It always put out "_h0[0]" instead of "4".
+	//
+	// set a1=_h0
+	// set _h0[0]=4
+	// set x=!a1![0]
+	// echo !x!
+	// 
+	// ChatGpt (yes, I'm a bit ashamed about it but I used it) told me the following:
+	// In your Batch script, the issue arises because set x=!a1![0] does not expand !a1! before
+	// accessing [0]. Instead, it treats !a1![0] as a literal string, so x is assigned the value
+	// _h0[0], not 4. Batch scripts do not support indirect variable expansion in a straightforward
+	// way. However, you can work around this by using for /f to evaluate the variable dynamically
 	c.addLine(fmt.Sprintf("for /f \"delims=\" %%%%i in (\"!%s![%d]\") do set %s=!%%%%i!", name, index, helper))
 	return c.VarEvaluation(helper, valueUsed)
 }
