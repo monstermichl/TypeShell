@@ -67,6 +67,10 @@ func New(tokens []lexer.Token) Parser {
 	}
 }
 
+func (p *Parser) Parse() (Program, error) {
+	return p.evaluateProgram()
+}
+
 func expectedError(what string, token lexer.Token) error {
 	return fmt.Errorf("expected %s at row %d, column %d", what, token.Row(), token.Column())
 }
@@ -148,6 +152,75 @@ func (p *Parser) eat() lexer.Token {
 func (p *Parser) isShortVarInit() bool {
 	// Short initialization is an identifier plus the short init operator (e.g. x := 123).
 	return p.peek().Type() == lexer.IDENTIFIER && p.peekAt(1).Type() == lexer.SHORT_INIT_OPERATOR
+}
+
+func (p *Parser) checkVariableNameToken(token lexer.Token, ctx context) error {
+	name := token.Value()
+	_, exists := ctx.variables[name]
+
+	if exists {
+		return fmt.Errorf("variable %s has already been defined at row %d, column %d", name, token.Row(), token.Column())
+	}
+	return nil
+}
+
+func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword string, minArgs int, maxArg int, ctx context, stmtCallout func(keywordToken lexer.Token, expressions []Expression) (Statement, error)) (Statement, error) {
+	keywordToken := p.eat()
+
+	if keywordToken.Type() != tokenType {
+		return nil, expectedError(fmt.Sprintf("%s-keyword", keyword), keywordToken)
+	}
+	nextToken := p.eat()
+
+	// Make sure after the print call comes a  opening round bracket.
+	if nextToken.Type() != lexer.OPENING_ROUND_BRACKET {
+		return nil, expectedError("\"(\"", nextToken)
+	}
+	expressions := []Expression{}
+	nextToken = p.peek()
+
+	// Evaluate arguments if it's a print call with arguments.
+	if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
+		for {
+			expr, err := p.evaluateExpression(ctx)
+
+			if err != nil {
+				return nil, err
+			}
+			expressions = append(expressions, expr)
+			nextToken = p.peek()
+			nextTokenType := nextToken.Type()
+
+			if nextTokenType == lexer.COMMA {
+				p.eat()
+			} else if nextTokenType == lexer.CLOSING_ROUND_BRACKET {
+				break
+			} else {
+				return nil, expectedError("\",\" or \")\"", nextToken)
+			}
+		}
+	}
+	expressionsLength := len(expressions)
+
+	if minArgs < 0 {
+		minArgs = 0
+	}
+	if maxArg < minArgs {
+		maxArg = minArgs
+	}
+	if expressionsLength < minArgs {
+		return nil, expectedError(fmt.Sprintf("at least %d arguments for %s", minArgs, keyword), keywordToken)
+	}
+	if maxArg >= 0 && expressionsLength > maxArg {
+		return nil, expectedError(fmt.Sprintf("a maximum of %d arguments for %s", minArgs, keyword), keywordToken)
+	}
+	nextToken = p.eat()
+
+	// Make sure print call is terminated with a closing round bracket.
+	if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
+		return nil, expectedError("\")\"", nextToken)
+	}
+	return stmtCallout(keywordToken, expressions)
 }
 
 func (p *Parser) evaluateProgram() (Program, error) {
@@ -233,6 +306,8 @@ func (p *Parser) evaluateBlockContent(terminationTokenType lexer.TokenType, call
 			stmt, err = p.evaluateIf(ctx)
 		case lexer.FOR:
 			stmt, err = p.evaluateFor(ctx)
+		case lexer.LEN:
+			stmt, err = p.evaluateLen(ctx)
 		case lexer.BREAK:
 			stmt, err = p.evaluateBreak(ctx)
 		case lexer.CONTINUE:
@@ -320,7 +395,7 @@ func (p *Parser) evaluateBlock(callback blockCallback, ctx context, scope scope)
 
 func (p *Parser) evaluateValueType(ctx context) (ValueType, error) {
 	nextToken := p.peek()
-	evaluatedType := ValueType{dataType: DATA_TYPE_UNKNOWN}
+	evaluatedType := NewValueType(DATA_TYPE_UNKNOWN, false)
 
 	// Evaluate if value type is a slice type.
 	if nextToken.Type() == lexer.OPENING_SQUARE_BRACKET {
@@ -369,13 +444,13 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 	if nameToken.Type() != lexer.IDENTIFIER {
 		return nil, expectedError("variable name", nameToken)
 	}
-	name := nameToken.Value()
-	_, exists := ctx.variables[name]
+	err := p.checkVariableNameToken(nameToken, ctx)
 
-	if exists {
-		return nil, fmt.Errorf("variable %s has already been defined at row %d, column %d", name, nameToken.Row(), nameToken.Column())
+	if err != nil {
+		return nil, err
 	}
-	specifiedType := ValueType{dataType: DATA_TYPE_UNKNOWN}
+	name := nameToken.Value()
+	specifiedType := NewValueType(DATA_TYPE_UNKNOWN, false)
 
 	if isShortVarInit {
 		nextToken := p.eat() // Eat short init operator.
@@ -408,8 +483,6 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 	}
 	nextToken := p.peek()
 	nextTokenType := nextToken.Type()
-
-	var err error
 	var value Expression
 
 	// TODO: Improve check.
@@ -439,11 +512,8 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 		}
 	}
 	variable := VariableDefinition{
-		variable: Variable{
-			name:      name,
-			valueType: specifiedType,
-		},
-		value: value,
+		variable: NewVariable(name, specifiedType),
+		value:    value,
 	}
 	return variable, nil
 }
@@ -520,10 +590,7 @@ func (p *Parser) evaluateParams(ctx context) ([]Variable, error) {
 		} else if nextTokenType == lexer.COMMA {
 			p.eat()
 		}
-		params = append(params, Variable{
-			name:      name,
-			valueType: valueType,
-		})
+		params = append(params, NewVariable(name, valueType))
 	}
 	return params, nil
 }
@@ -570,7 +637,7 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 		}
 	}
 	returnTypeToken := p.peek()
-	returnType := ValueType{dataType: DATA_TYPE_VOID}
+	returnType := NewValueType(DATA_TYPE_VOID, false)
 
 	// Check if a return type has been specified.
 	if returnTypeToken.Type() == lexer.DATA_TYPE {
@@ -630,7 +697,7 @@ func (p *Parser) evaluateReturn(ctx context) (Statement, error) {
 		return nil, expectedError(fmt.Sprintf("return within %s-scope", SCOPE_FUNCTION), returnToken)
 	}
 	if returnToken.Type() != lexer.RETURN {
-		return nil, expectedError("return keyword", returnToken)
+		return nil, expectedError("return-keyword", returnToken)
 	}
 	value, err := p.evaluateExpression(ctx)
 
@@ -691,7 +758,7 @@ func (p *Parser) evaluateIf(ctx context) (Statement, error) {
 		// "if" needs to start with if-token.
 		if ifRequired {
 			if nextTokenType != lexer.IF {
-				return nil, expectedError("if keyword", nextToken)
+				return nil, expectedError("if-keyword", nextToken)
 			}
 			p.eat()
 		} else {
@@ -754,74 +821,95 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 	forToken := p.eat()
 
 	if forToken.Type() != lexer.FOR {
-		return nil, expectedError("for keyword", forToken)
+		return nil, expectedError("for-keyword", forToken)
 	}
-	conditionToken := p.peek()
-	expr, err := p.evaluateExpression(ctx)
+	nextToken := p.peek()
 
-	if err != nil {
-		return nil, err
-	}
-	if !expr.ValueType().IsBool() {
-		return nil, expectedError("boolean expression", conditionToken)
-	}
-	statements, err := p.evaluateBlock(nil, ctx, SCOPE_FOR)
+	// If next token is an identifier, parse a for-range statement.
+	if nextToken.Type() == lexer.IDENTIFIER {
+		p.eat()
+		err := p.checkVariableNameToken(nextToken, ctx)
 
-	if err != nil {
-		return nil, err
-	}
-	return For{
-		condition: expr,
-		body:      statements,
-	}, nil
-}
-
-func (p *Parser) evaluatePrint(ctx context) (Statement, error) {
-	nextToken := p.eat()
-
-	if nextToken.Type() != lexer.PRINT {
-		return nil, expectedError("print keyword", nextToken)
-	}
-	nextToken = p.eat()
-
-	// Make sure after the print call comes a  opening round bracket.
-	if nextToken.Type() != lexer.OPENING_ROUND_BRACKET {
-		return nil, expectedError("\"(\"", nextToken)
-	}
-	expressions := []Expression{}
-	nextToken = p.peek()
-
-	// Evaluate arguments if it's a print call with arguments.
-	if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
-		for {
-			expr, err := p.evaluateExpression(ctx)
-
-			if err != nil {
-				return nil, err
-			}
-			expressions = append(expressions, expr)
-			nextToken = p.peek()
-			nextTokenType := nextToken.Type()
-
-			if nextTokenType == lexer.COMMA {
-				p.eat()
-			} else if nextTokenType == lexer.CLOSING_ROUND_BRACKET {
-				break
-			} else {
-				fmt.Println(nextToken)
-				return nil, expectedError("\",\" or \")\"", nextToken)
-			}
+		if err != nil {
+			return nil, err
 		}
-	}
-	nextToken = p.eat()
+		indexVarName := nextToken.Value()
+		nextToken = p.eat()
 
-	// Make sure print call is terminated with a closing round bracket.
-	if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
-		return nil, expectedError("\")\"", nextToken)
+		if nextToken.Type() != lexer.COMMA {
+			return nil, expectedError("\",\"", nextToken)
+		}
+		nextToken = p.eat()
+		err = p.checkVariableNameToken(nextToken, ctx)
+
+		if err != nil {
+			return nil, err
+		}
+		valueVarName := nextToken.Value()
+		nextToken = p.eat()
+
+		if nextToken.Type() != lexer.SHORT_INIT_OPERATOR {
+			return nil, expectedError("\":=\"", nextToken)
+		}
+		nextToken = p.eat()
+
+		if nextToken.Type() != lexer.RANGE {
+			return nil, expectedError("range-keyword", nextToken)
+		}
+		nextToken = p.peek()
+		expr, err := p.evaluateExpression(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if !expr.ValueType().isSlice {
+			return nil, expectedError("slice", nextToken)
+		}
+		indexVar := NewVariable(indexVarName, NewValueType(DATA_TYPE_INTEGER, false))
+		valueVar := NewVariable(valueVarName, expr.ValueType())
+
+		// Add block variables.
+		ctx.variables[indexVarName] = indexVar
+		ctx.variables[valueVarName] = valueVar
+
+		statements, err := p.evaluateBlock(nil, ctx, SCOPE_FOR)
+
+		// Remove block variables.
+		delete(ctx.variables, indexVarName)
+		delete(ctx.variables, valueVarName)
+
+		if err != nil {
+			return nil, err
+		}
+		
+		x := ForRange{
+			indexVar: indexVar,
+			valueVar: valueVar,
+			slice:    expr,
+			body:     statements,
+		}
+		fmt.Println(x)
+		return x, nil
+	} else {
+		expr, err := p.evaluateExpression(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+		if !expr.ValueType().IsBool() {
+			return nil, expectedError("boolean expression", nextToken)
+		}
+		statements, err := p.evaluateBlock(nil, ctx, SCOPE_FOR)
+
+		if err != nil {
+			return nil, err
+		}
+		return For{
+			condition: expr,
+			body:      statements,
+		}, nil
 	}
-	return Print{
-		expressions: expressions,
-	}, nil
 }
 
 func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
@@ -900,8 +988,8 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 			expr, err = p.evaluateFunctionCall(ctx)
 		case lexer.ASSIGN_OPERATOR:
 			expr, err = p.evaluateVarAssignment(ctx)
-		case lexer.OPENING_CURLY_BRACKET:
-			expr, err = p.evaluateAppCall(ctx)
+		// case lexer.OPENING_CURLY_BRACKET:
+		// 	expr, err = p.evaluateAppCall(ctx)
 		case lexer.OPENING_SQUARE_BRACKET:
 			expr, err = p.evaluateSliceEvaluation(ctx)
 		default:
@@ -1223,39 +1311,6 @@ func (p *Parser) evaluateAppCall(ctx context) (Call, error) {
 	return call, nil
 }
 
-func (p *Parser) evaluateInput(ctx context) (Expression, error) {
-	nextToken := p.eat()
-
-	if nextToken.Type() != lexer.INPUT {
-		return nil, expectedError("input keyword", nextToken)
-	}
-	nextToken = p.eat()
-
-	if nextToken.Type() != lexer.OPENING_ROUND_BRACKET {
-		return nil, expectedError("\"(\"", nextToken)
-	}
-	nextToken = p.peek()
-	var expr Expression
-
-	// If input has a prompt, evaluate it.
-	if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
-		exprTemp, err := p.evaluateExpression(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-		expr = exprTemp
-	}
-	nextToken = p.eat()
-
-	if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
-		return nil, expectedError("\")\"", nextToken)
-	}
-	return Input{
-		prompt: expr,
-	}, nil
-}
-
 func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
 	nextToken := p.peek()
 	sliceValueType, err := p.evaluateValueType(ctx)
@@ -1418,6 +1473,46 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 	}, nil
 }
 
-func (p *Parser) Parse() (Program, error) {
-	return p.evaluateProgram()
+func (p *Parser) evaluateLen(ctx context) (Expression, error) {
+	expr, err := p.evaluateBuiltInFunction(lexer.LEN, "len", 1, 1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
+		expr := expressions[0]
+
+		if !expr.ValueType().isSlice {
+			return nil, expectedError("slice", keywordToken)
+		}
+		return Len{
+			expression: expr,
+		}, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return expr.(Len), nil
+}
+
+func (p *Parser) evaluateInput(ctx context) (Expression, error) {
+	expr, err := p.evaluateBuiltInFunction(lexer.INPUT, "input", 0, 1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
+		var expr Expression
+
+		if len(expressions) > 0 {
+			expr = expressions[0]
+		}
+		return Input{
+			prompt: expr,
+		}, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return expr.(Input), nil
+}
+
+func (p *Parser) evaluatePrint(ctx context) (Statement, error) {
+	return p.evaluateBuiltInFunction(lexer.PRINT, "print", 0, -1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
+		return Print{
+			expressions: expressions,
+		}, nil
+	})
 }

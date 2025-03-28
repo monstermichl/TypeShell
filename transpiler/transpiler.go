@@ -201,14 +201,14 @@ func (t *transpiler) evaluateIf(ifStatement parser.If) error {
 	return conv.IfEnd()
 }
 
-func (t *transpiler) evaluateWhile(whileStatement parser.For) error {
+func (t *transpiler) evaluateFor(forStatement parser.For) error {
 	conv := t.converter
 	err := conv.ForStart()
 
 	if err != nil {
 		return err
 	}
-	condition, err := t.evaluateExpression(whileStatement.Condition(), true)
+	condition, err := t.evaluateExpression(forStatement.Condition(), true)
 
 	if err != nil {
 		return err
@@ -218,7 +218,32 @@ func (t *transpiler) evaluateWhile(whileStatement parser.For) error {
 	if err != nil {
 		return err
 	}
-	err = t.evaluateBlock(whileStatement)
+	err = t.evaluateBlock(forStatement)
+
+	if err != nil {
+		return err
+	}
+	return conv.ForEnd()
+}
+
+func (t *transpiler) evaluateForRange(forRangeStatement parser.ForRange) error {
+	conv := t.converter
+	err := conv.ForStart()
+
+	if err != nil {
+		return err
+	}
+	condition, err := t.evaluateExpression(forRangeStatement.Condition(), true)
+
+	if err != nil {
+		return err
+	}
+	err = conv.ForCondition(condition)
+
+	if err != nil {
+		return err
+	}
+	err = t.evaluateBlock(forRangeStatement)
 
 	if err != nil {
 		return err
@@ -413,7 +438,9 @@ func (t *transpiler) evaluate(statement parser.Statement) error {
 	case parser.STATEMENT_TYPE_IF:
 		return t.evaluateIf(statement.(parser.If))
 	case parser.STATEMENT_TYPE_FOR:
-		return t.evaluateWhile(statement.(parser.For))
+		return t.evaluateFor(statement.(parser.For))
+	case parser.STATEMENT_TYPE_FOR_RANGE:
+		return t.evaluateForRange(statement.(parser.ForRange))
 	case parser.STATEMENT_TYPE_BREAK:
 		return t.evaluateBreak(statement.(parser.Break))
 	case parser.STATEMENT_TYPE_CONTINUE:

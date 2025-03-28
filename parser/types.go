@@ -13,6 +13,13 @@ type ValueType struct {
 	isSlice  bool
 }
 
+func NewValueType(dataType DataType, isSlice bool) ValueType {
+	return ValueType{
+		dataType,
+		isSlice,
+	}
+}
+
 func (vt ValueType) DataType() DataType {
 	return vt.dataType
 }
@@ -64,10 +71,12 @@ const (
 	STATEMENT_TYPE_RETURN              StatementType = "return"
 	STATEMENT_TYPE_IF                  StatementType = "if"
 	STATEMENT_TYPE_FOR                 StatementType = "for"
+	STATEMENT_TYPE_FOR_RANGE           StatementType = "for range"
 	STATEMENT_TYPE_BREAK               StatementType = "break"
 	STATEMENT_TYPE_CONTINUE            StatementType = "continue"
 	STATEMENT_TYPE_INSTANTIATION       StatementType = "instantiation"
 	STATEMENT_TYPE_PRINT               StatementType = "print"
+	STATEMENT_TYPE_LEN                 StatementType = "len"
 	STATEMENT_TYPE_INPUT               StatementType = "input"
 	STATEMENT_TYPE_SLICE_INSTANTIATION StatementType = "slice instantiation"
 	STATEMENT_TYPE_SLICE_ASSIGNMENT    StatementType = "slice assignment"

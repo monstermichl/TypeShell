@@ -5,6 +5,13 @@ type Variable struct {
 	valueType ValueType
 }
 
+func NewVariable(name string, valueType ValueType) Variable {
+	return Variable{
+		name,
+		valueType,
+	}
+}
+
 func (v Variable) Name() string {
 	return v.name
 }

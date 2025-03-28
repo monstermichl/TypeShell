@@ -53,6 +53,8 @@ const (
 	IF
 	ELSE
 	FOR
+	RANGE
+	LEN
 	BREAK
 	CONTINUE
 	PRINT
@@ -144,6 +146,8 @@ var keywords = map[string]TokenType{
 	"if":       IF,
 	"else":     ELSE,
 	"for":      FOR,
+	"range":    RANGE,
+	"len":      LEN,
 	"break":    BREAK,
 	"continue": CONTINUE,
 	"print":    PRINT,
