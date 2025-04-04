@@ -36,7 +36,7 @@ func (s SliceEvaluation) Index() Expression {
 }
 
 func (s SliceEvaluation) ValueType() ValueType {
-	return ValueType{dataType: s.dataType, isSlice: true}
+	return ValueType{dataType: s.dataType}
 }
 
 type SliceAssignment struct {
