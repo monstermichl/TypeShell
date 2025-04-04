@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/monstermichl/typeshell/parser"
@@ -23,16 +24,17 @@ type ifInfo struct {
 }
 
 type converter struct {
-	code           []string
-	varCounter     int
-	ifCounter      int
-	whileCounter   int
-	endLabels      []string
-	funcs          []funcInfo
-	fors           []forInfo
-	ifs            []ifInfo
-	lfSet          bool
-	arrayHelperSet bool
+	code                     []string
+	varCounter               int
+	ifCounter                int
+	whileCounter             int
+	endLabels                []string
+	funcs                    []funcInfo
+	fors                     []forInfo
+	ifs                      []ifInfo
+	lfSet                    bool
+	sliceAssignmentHelperSet bool
+	sliceLenHelperSet        bool
 }
 
 func varAssignmentString(name string, value string) string {
@@ -91,27 +93,20 @@ func (c *converter) VarAssignment(name string, value string) error {
 	return nil
 }
 
-func (c *converter) SliceAssignment(name string, index int, value string) error {
+func (c *converter) SliceAssignment(name string, index string, value string) error {
 	// Add array helper to batch file for easier array processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
-	if !c.arrayHelperSet {
+	if !c.sliceAssignmentHelperSet {
 		c.addLine(":: array assignment helper begin")
 		c.addLine("goto :_esa")
 		c.addLine(":_sa")
 		c.addLine("set %1[%2]=%~3")
-		c.addLine("set lenvar=%1len")
-		c.addLine("if not defined %lenvar% goto :1")
-		c.addLine("if %2 gtr %lenvar% goto :1")
-		c.addLine("goto :2")
-		c.addLine(":1")
-		c.addLine("set /A %lenvar%=%2+1")
-		c.addLine(":2")
 		c.addLine("exit /B 0")
 		c.addLine(":_esa")
 		c.addLine(":: array assignment helper end")
 
-		c.arrayHelperSet = true
+		c.sliceAssignmentHelperSet = true
 	}
-	c.addLine(fmt.Sprintf("call :_sa %s %d \"%s\"", varEvaluationString(name), index, value))
+	c.addLine(fmt.Sprintf("call :_sa %s %s \"%s\"", varEvaluationString(name), index, value))
 	return nil
 }
 
@@ -378,7 +373,7 @@ func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string,
 
 	// Init array values.
 	for i, value := range values {
-		err := c.SliceAssignment(helper, i, value)
+		err := c.SliceAssignment(helper, strconv.Itoa(i), value)
 
 		if err != nil {
 			return "", err
@@ -387,7 +382,7 @@ func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string,
 	return helper, nil
 }
 
-func (c *converter) SliceEvaluation(name string, index int, valueUsed bool) (string, error) {
+func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
 	// A for-loop is required because the evaluation wouldn't work with the following code as expected.
@@ -397,13 +392,39 @@ func (c *converter) SliceEvaluation(name string, index int, valueUsed bool) (str
 	// set _h0[0]=4
 	// set x=!a1![0]
 	// echo !x!
-	// 
+	//
 	// ChatGpt (yes, I'm a bit ashamed about it but I used it) told me the following:
 	// In your Batch script, the issue arises because set x=!a1![0] does not expand !a1! before
 	// accessing [0]. Instead, it treats !a1![0] as a literal string, so x is assigned the value
 	// _h0[0], not 4. Batch scripts do not support indirect variable expansion in a straightforward
 	// way. However, you can work around this by using for /f to evaluate the variable dynamically
-	c.addLine(fmt.Sprintf("for /f \"delims=\" %%%%i in (\"!%s![%d]\") do set %s=!%%%%i!", name, index, helper))
+	c.addLine(fmt.Sprintf("for /f \"delims=\" %%%%i in (\"!%s![%s]\") do set %s=!%%%%i!", name, index, helper))
+	return c.VarEvaluation(helper, valueUsed)
+}
+
+func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
+	// Add array helper to batch file for easier array processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
+	if !c.sliceLenHelperSet {
+		c.addLine(":: array length helper begin")
+		c.addLine("goto :_esl")
+		c.addLine(":_sl")
+		c.addLine("set _l=0")
+		c.addLine(":_sll")
+		c.addLine("if not defined %1[%_l%] goto :_slle")
+		c.addLine("set /A _l=%_l%+1")
+		c.addLine("goto :_sll")
+		c.addLine(":_slle")
+		c.addLine("exit /B 0")
+		c.addLine(":_esl")
+		c.addLine(":: array length helper end")
+
+		c.sliceLenHelperSet = true
+	}
+	helper := c.nextHelperVar()
+
+	c.addLine(fmt.Sprintf("call :_sl %s", name))
+	c.VarAssignment(helper, varEvaluationString("_l"))
+
 	return c.VarEvaluation(helper, valueUsed)
 }
 

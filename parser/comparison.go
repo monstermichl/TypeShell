@@ -6,6 +6,14 @@ type Comparison struct {
 	right    Expression
 }
 
+func NewComparison(left Expression, operator CompareOperator, right Expression) Comparison {
+	return Comparison{
+		left,
+		operator,
+		right,
+	}
+}
+
 func (c Comparison) StatementType() StatementType {
 	return STATEMENT_TYPE_COMPARISON
 }

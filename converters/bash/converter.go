@@ -59,8 +59,8 @@ func (c *converter) VarAssignment(name string, value string) error {
 	return nil
 }
 
-func (c *converter) SliceAssignment(name string, index int, value string) error {
-	c.addLine(fmt.Sprintf("%s[%d]=\"%s\"", name, index, value))
+func (c *converter) SliceAssignment(name string, index string, value string) error {
+	c.addLine(fmt.Sprintf("%s[%s]=\"%s\"", name, index, value))
 	return nil
 }
 
@@ -260,8 +260,12 @@ func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string,
 	return fmt.Sprintf("(%s)", valuesString), nil
 }
 
-func (c *converter) SliceEvaluation(name string, index int, valueUsed bool) (string, error) {
-	return c.VarEvaluation(fmt.Sprintf("%s[%d]", name, index), valueUsed)
+func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (string, error) {
+	return c.VarEvaluation(fmt.Sprintf("%s[%s]", name, index), valueUsed)
+}
+
+func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
+	return c.VarEvaluation(fmt.Sprintf("#%s[@]", name), valueUsed)
 }
 
 func (c *converter) Group(value string, valueUsed bool) (string, error) {

@@ -154,7 +154,7 @@ func (p *Parser) isShortVarInit() bool {
 	return p.peek().Type() == lexer.IDENTIFIER && p.peekAt(1).Type() == lexer.SHORT_INIT_OPERATOR
 }
 
-func (p *Parser) checkVariableNameToken(token lexer.Token, ctx context) error {
+func (p *Parser) checkNewVariableNameToken(token lexer.Token, ctx context) error {
 	name := token.Value()
 	_, exists := ctx.variables[name]
 
@@ -204,9 +204,6 @@ func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword stri
 
 	if minArgs < 0 {
 		minArgs = 0
-	}
-	if maxArg < minArgs {
-		maxArg = minArgs
 	}
 	if expressionsLength < minArgs {
 		return nil, expectedError(fmt.Sprintf("at least %d arguments for %s", minArgs, keyword), keywordToken)
@@ -444,7 +441,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 	if nameToken.Type() != lexer.IDENTIFIER {
 		return nil, expectedError("variable name", nameToken)
 	}
-	err := p.checkVariableNameToken(nameToken, ctx)
+	err := p.checkNewVariableNameToken(nameToken, ctx)
 
 	if err != nil {
 		return nil, err
@@ -828,7 +825,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 	// If next token is an identifier, parse a for-range statement.
 	if nextToken.Type() == lexer.IDENTIFIER {
 		p.eat()
-		err := p.checkVariableNameToken(nextToken, ctx)
+		err := p.checkNewVariableNameToken(nextToken, ctx)
 
 		if err != nil {
 			return nil, err
@@ -840,7 +837,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 			return nil, expectedError("\",\"", nextToken)
 		}
 		nextToken = p.eat()
-		err = p.checkVariableNameToken(nextToken, ctx)
+		err = p.checkNewVariableNameToken(nextToken, ctx)
 
 		if err != nil {
 			return nil, err
@@ -856,18 +853,27 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		if nextToken.Type() != lexer.RANGE {
 			return nil, expectedError("range-keyword", nextToken)
 		}
-		nextToken = p.peek()
-		expr, err := p.evaluateExpression(ctx)
+
+		// To make transpilation easier, only allow a variable-identifier here instead of an expression.
+		// This is necessary to have an identifier for the slice for converting the for-range-loop into
+		// a for-loop.
+		// sliceIdentifierToken := p.eat()
+		// err = p.checkNewVariableNameToken(sliceIdentifierToken, ctx)
+		nextToken := p.peek()
+		sliceExpression, err := p.evaluateExpression(ctx)
 
 		if err != nil {
 			return nil, err
 		}
+		// sliceName := sliceIdentifierToken.Value()
+		// sliceVariable := ctx.variables[sliceName]
 
-		if !expr.ValueType().isSlice {
+		if !sliceExpression.ValueType().isSlice {
 			return nil, expectedError("slice", nextToken)
 		}
+		sliceValueType := sliceExpression.ValueType()
 		indexVar := NewVariable(indexVarName, NewValueType(DATA_TYPE_INTEGER, false))
-		valueVar := NewVariable(valueVarName, expr.ValueType())
+		valueVar := NewVariable(valueVarName, sliceValueType)
 
 		// Add block variables.
 		ctx.variables[indexVarName] = indexVar
@@ -882,12 +888,33 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		if err != nil {
 			return nil, err
 		}
-		
-		x := ForRange{
-			indexVar: indexVar,
-			valueVar: valueVar,
-			slice:    expr,
-			body:     statements,
+
+		// Convert for-range-loop to for-loop.
+		indexEvaluation := VariableEvaluation{indexVar.Name(), indexVar.ValueType()}
+		condition := NewComparison(indexEvaluation, COMPARE_OPERATOR_LESS, Len{expression: sliceExpression})
+		assignment := VariableAssignment{
+			variable: valueVar,
+			value: SliceEvaluation{
+				name:     "test",
+				index:    indexEvaluation,
+				dataType: sliceValueType.DataType(),
+			},
+		}
+		updatedStatements := []Statement{assignment}
+		updatedStatements = append(updatedStatements, statements...)
+		updatedStatements = append(updatedStatements, VariableAssignment{
+			variable: indexVar,
+			value: BinaryOperation{
+				left:      indexEvaluation,
+				operator:  BINARY_OPERATOR_ADDITION,
+				right:     IntegerLiteral{value: 1},
+				valueType: indexEvaluation.ValueType(),
+			},
+		})
+
+		x := For{
+			condition: condition,
+			body:      updatedStatements,
 		}
 		fmt.Println(x)
 		return x, nil
@@ -1117,11 +1144,7 @@ func (p *Parser) evaluateComparison(ctx context) (Expression, error) {
 		if !slices.Contains(allowedOperators, operator) {
 			return nil, expectedError(fmt.Sprintf("valid %s operator but got \"%s\"", leftType.ToString(), operator), operatorToken)
 		}
-		return Comparison{
-			left:     leftExpression,
-			operator: operator,
-			right:    rightExpression,
-		}, nil
+		return NewComparison(leftExpression, operator, rightExpression), nil
 	}
 	return leftExpression, nil
 }

@@ -45,7 +45,7 @@ type Converter interface {
 	ProgramEnd() error
 	VarDefinition(name string, value string) error
 	VarAssignment(name string, value string) error
-	SliceAssignment(name string, index int, value string) error
+	SliceAssignment(name string, index string, value string) error
 	FuncStart(name string, params []string) error
 	FuncEnd(name string) error
 	Return(value string, valueType parser.ValueType) error
@@ -69,7 +69,8 @@ type Converter interface {
 	LogicalOperation(left string, operator parser.LogicalOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error)
 	VarEvaluation(name string, valueUsed bool) (string, error)
 	SliceInstantiation(values []string, valueUsed bool) (string, error)
-	SliceEvaluation(name string, index int, valueUsed bool) (string, error)
+	SliceEvaluation(name string, index string, valueUsed bool) (string, error)
+	SliceLen(name string, valueUsed bool) (string, error)
 	Group(value string, valueUsed bool) (string, error)
 	FuncCall(name string, args []string, valueType parser.ValueType, valueUsed bool) (string, error)
 	AppCall(calls []AppCall, valueUsed bool) (string, error)
