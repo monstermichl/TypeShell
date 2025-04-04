@@ -303,8 +303,6 @@ func (p *Parser) evaluateBlockContent(terminationTokenType lexer.TokenType, call
 			stmt, err = p.evaluateIf(ctx)
 		case lexer.FOR:
 			stmt, err = p.evaluateFor(ctx)
-		case lexer.LEN:
-			stmt, err = p.evaluateLen(ctx)
 		case lexer.BREAK:
 			stmt, err = p.evaluateBreak(ctx)
 		case lexer.CONTINUE:
@@ -1001,6 +999,10 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 	// Handle input.
 	case lexer.INPUT:
 		expr, err = p.evaluateInput(ctx)
+
+	// Handle len.
+	case lexer.LEN:
+		expr, err = p.evaluateLen(ctx)
 
 	// Handle identifiers.
 	case lexer.IDENTIFIER:

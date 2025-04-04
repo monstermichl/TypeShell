@@ -369,7 +369,6 @@ func (c *converter) VarEvaluation(name string, valueUsed bool) (string, error) {
 
 func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
-	c.addLine(varAssignmentString(fmt.Sprintf("%slen", helper), "")) // Unset length variable.
 
 	// Init array values.
 	for i, value := range values {
