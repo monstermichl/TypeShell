@@ -819,9 +819,10 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		return nil, expectedError("for-keyword", forToken)
 	}
 	nextToken := p.peek()
+	nextTokenType := nextToken.Type()
 
-	// If next token is an identifier, parse a for-range statement.
-	if nextToken.Type() == lexer.IDENTIFIER {
+	// If next token is an identifier and the one after it a comma, parse a for-range statement.
+	if nextTokenType == lexer.IDENTIFIER && p.peekAt(1).Type() == lexer.COMMA {
 		p.eat()
 		err := p.checkNewVariableNameToken(nextToken, ctx)
 
@@ -886,42 +887,22 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		// Convert for-range-loop to for-loop.
-		indexEvaluation := VariableEvaluation{indexVar.Name(), indexVar.ValueType()}
-		condition := NewComparison(indexEvaluation, COMPARE_OPERATOR_LESS, Len{expression: sliceExpression})
-		assignment := VariableAssignment{
-			variable: valueVar,
-			value: SliceEvaluation{
-				name:     "test",
-				index:    indexEvaluation,
-				dataType: sliceValueType.DataType(),
-			},
-		}
-		updatedStatements := []Statement{assignment}
-		updatedStatements = append(updatedStatements, statements...)
-		updatedStatements = append(updatedStatements, VariableAssignment{
-			variable: indexVar,
-			value: BinaryOperation{
-				left:      indexEvaluation,
-				operator:  BINARY_OPERATOR_ADDITION,
-				right:     IntegerLiteral{value: 1},
-				valueType: indexEvaluation.ValueType(),
-			},
-		})
-
-		x := For{
-			condition: condition,
-			body:      updatedStatements,
-		}
-		fmt.Println(x)
-		return x, nil
 	} else {
-		expr, err := p.evaluateExpression(ctx)
+		var expr Expression
 
-		if err != nil {
-			return nil, err
+		// If next token is already a curly brackets, it's an endless loop without a condition.
+		// Therefore create a fake condition.
+		if nextTokenType == lexer.OPENING_CURLY_BRACKET {
+			expr = BooleanLiteral{value: true}
+		} else {
+			exprTemp, err := p.evaluateExpression(ctx)
+
+			if err != nil {
+				return nil, err
+			}
+			expr = exprTemp
 		}
+
 		if !expr.ValueType().IsBool() {
 			return nil, expectedError("boolean expression", nextToken)
 		}
