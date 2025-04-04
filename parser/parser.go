@@ -3,6 +3,7 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -142,6 +143,26 @@ func (p Parser) peekAt(add uint) lexer.Token {
 	return token
 }
 
+func (p Parser) findBefore(searchTokenType lexer.TokenType, before []lexer.TokenType) (lexer.Token, error) {
+	tokens := p.tokens
+
+	for i := p.index; i < len(tokens); i++ {
+		token := tokens[i]
+		tokenType := token.Type()
+
+		if tokenType == searchTokenType {
+			return token, nil
+		}
+
+		for _, tokenTypeTemp := range before {
+			if tokenTypeTemp == tokenType {
+				return lexer.Token{}, fmt.Errorf("found \"%d\" before \"%d\"", tokenTypeTemp, tokenType)
+			}
+		}
+	}
+	return lexer.Token{}, fmt.Errorf("token type \"%d\" not found", searchTokenType)
+}
+
 func (p *Parser) eat() lexer.Token {
 	token := p.peek()
 	p.index++
@@ -262,16 +283,8 @@ func (p *Parser) evaluateBlockContent(terminationTokenType lexer.TokenType, call
 		}
 		return errTemp
 	}
-	handleVarDefinition := func() (Statement, error) {
-		stmtTemp, errTemp := p.evaluateVarDefinition(ctx)
-
-		// Add new variable to scope variables.
-		if errTemp == nil {
-			variable := stmtTemp.(VariableDefinition).variable
-			ctx.variables[variable.Name()] = variable
-		}
-		return stmtTemp, errTemp
-	}
+	// Store original variables.
+	variables := maps.Clone(ctx.variables) // TODO: Find out if this works properly to restore variables at the end of the block.
 
 	// Add scope to context.
 	ctx.scopeStack = append(ctx.scopeStack, scope)
@@ -287,46 +300,21 @@ func (p *Parser) evaluateBlockContent(terminationTokenType lexer.TokenType, call
 			loop = false
 		case lexer.NEWLINE:
 			// Ignore termination tokens as they are handled after the switch.
-		case lexer.VAR_DEFINITION:
-			stmt, err = handleVarDefinition()
-		case lexer.FUNCTION_DEFINITION:
-			stmt, err = p.evaluateFunctionDefinition(ctx)
+		default:
+			stmt, err = p.evaluateStatement(ctx)
 
-			// Add new function to scope functions.
-			if err == nil {
+			if err != nil {
+				break
+			}
+			switch stmt.StatementType() {
+			case STATEMENT_TYPE_VAR_DEFINITION:
+				// Store new variable.
+				variable := stmt.(VariableDefinition).variable
+				ctx.variables[variable.Name()] = variable
+			case STATEMENT_TYPE_FUNCTION_DEFINITION:
+				// Store new function.
 				function := stmt.(FunctionDefinition)
 				ctx.functions[function.Name()] = function
-			}
-		case lexer.RETURN:
-			stmt, err = p.evaluateReturn(ctx)
-		case lexer.IF:
-			stmt, err = p.evaluateIf(ctx)
-		case lexer.FOR:
-			stmt, err = p.evaluateFor(ctx)
-		case lexer.BREAK:
-			stmt, err = p.evaluateBreak(ctx)
-		case lexer.CONTINUE:
-			stmt, err = p.evaluateContinue(ctx)
-		case lexer.PRINT:
-			stmt, err = p.evaluatePrint(ctx)
-		default:
-			// Variable initialization also starts with identifier but is a statement (e.g. x := 1234).
-			if p.isShortVarInit() {
-				stmt, err = handleVarDefinition()
-			} else {
-				// If token is identifier it could be a slice assignment.
-				if token.Type() == lexer.IDENTIFIER {
-					variable, exists := ctx.variables[token.Value()]
-
-					// If variable has been defined and is a slice, handles slice assignment.
-					if exists && variable.ValueType().IsSlice() {
-						stmt, err = p.evaluateSliceAssignment(ctx)
-					}
-				}
-
-				if err == nil && stmt == nil {
-					stmt, err = p.evaluateExpression(ctx)
-				}
 			}
 		}
 
@@ -357,6 +345,9 @@ func (p *Parser) evaluateBlockContent(terminationTokenType lexer.TokenType, call
 			break
 		}
 	}
+	// Restore original variables.
+	ctx.variables = variables
+
 	return statements, err
 }
 
@@ -818,8 +809,12 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 	if forToken.Type() != lexer.FOR {
 		return nil, expectedError("for-keyword", forToken)
 	}
+	var stmt Statement
 	nextToken := p.peek()
 	nextTokenType := nextToken.Type()
+
+	// Store original variables.
+	variables := maps.Clone(ctx.variables) // TODO: Find out if this works properly to restore variables at the end of the block.
 
 	// If next token is an identifier and the one after it a comma, parse a for-range statement.
 	if nextTokenType == lexer.IDENTIFIER && p.peekAt(1).Type() == lexer.COMMA {
@@ -887,35 +882,112 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		if err != nil {
 			return nil, err
 		}
+		stmt = ForRange{
+			indexVar: indexVar,
+			valueVar: valueVar,
+			slice:    sliceExpression,
+			body:     statements,
+		}
 	} else {
-		var expr Expression
+		var init Statement
+		var condition Expression
+		var increment Statement
+
+		conditionToken := nextToken
+		trueCondition := BooleanLiteral{value: true}
 
 		// If next token is already a curly brackets, it's an endless loop without a condition.
 		// Therefore create a fake condition.
 		if nextTokenType == lexer.OPENING_CURLY_BRACKET {
-			expr = BooleanLiteral{value: true}
+			condition = trueCondition
+		} else if _, err := p.findBefore(lexer.SEMICOLON, []lexer.TokenType{lexer.OPENING_CURLY_BRACKET}); err == nil {
+			// If a semicolon was found before the curly bracket, consider for as a three-part for-loop.
+			nextToken := p.peek()
+
+			// If the next token is not a semicolon, consider it a statement.
+			if nextToken.Type() != lexer.SEMICOLON {
+				init, err = p.evaluateStatement(ctx)
+
+				if err != nil {
+					return nil, err
+				}
+				switch init.StatementType() {
+				case STATEMENT_TYPE_VAR_DEFINITION:
+					// Store new variable.
+					variable := init.(VariableDefinition).variable
+					ctx.variables[variable.Name()] = variable
+				case STATEMENT_TYPE_VAR_ASSIGNMENT:
+				default:
+					return nil, expectedError("variable assignment or variable definition", nextToken)
+				}
+			}
+			nextToken = p.eat()
+
+			// Next token must be a semicolon.
+			if nextToken.Type() != lexer.SEMICOLON {
+				return nil, expectedError("\";\"", nextToken)
+			}
+			nextToken = p.peek()
+			conditionToken = nextToken
+
+			// If the next token is not a semicolon, consider it a condition.
+			if nextToken.Type() != lexer.SEMICOLON {
+				condition, err = p.evaluateExpression(ctx)
+
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				condition = trueCondition
+			}
+			nextToken = p.eat()
+
+			// Next token must be a semicolon.
+			if nextToken.Type() != lexer.SEMICOLON {
+				return nil, expectedError("\";\"", nextToken)
+			}
+			nextToken = p.peek()
+
+			if nextToken.Type() != lexer.OPENING_CURLY_BRACKET {
+				increment, err = p.evaluateStatement(ctx)
+
+				if err != nil {
+					return nil, err
+				}
+				switch increment.StatementType() {
+				case STATEMENT_TYPE_VAR_ASSIGNMENT:
+				default:
+					return nil, expectedError("variable assignment", nextToken)
+				}
+			}
 		} else {
 			exprTemp, err := p.evaluateExpression(ctx)
 
 			if err != nil {
 				return nil, err
 			}
-			expr = exprTemp
+			condition = exprTemp
 		}
 
-		if !expr.ValueType().IsBool() {
-			return nil, expectedError("boolean expression", nextToken)
+		if !condition.ValueType().IsBool() {
+			return nil, expectedError("boolean expression", conditionToken)
 		}
 		statements, err := p.evaluateBlock(nil, ctx, SCOPE_FOR)
 
 		if err != nil {
 			return nil, err
 		}
-		return For{
-			condition: expr,
+		stmt = For{
+			init:      init,
+			condition: condition,
+			increment: increment,
 			body:      statements,
-		}, nil
+		}
 	}
+	// Restore original variables.
+	ctx.variables = variables
+
+	return stmt, nil
 }
 
 func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
@@ -1050,6 +1122,53 @@ func (p *Parser) evaluateLogicalOr(ctx context) (Expression, error) {
 
 func (p *Parser) evaluateExpression(ctx context) (Expression, error) {
 	return p.evaluateLogicalOr(ctx)
+}
+
+func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
+	var stmt Statement
+	var err error
+
+	token := p.peek()
+	tokenType := token.Type()
+
+	switch tokenType {
+	case lexer.VAR_DEFINITION:
+		stmt, err = p.evaluateVarDefinition(ctx)
+	case lexer.FUNCTION_DEFINITION:
+		stmt, err = p.evaluateFunctionDefinition(ctx)
+	case lexer.RETURN:
+		stmt, err = p.evaluateReturn(ctx)
+	case lexer.IF:
+		stmt, err = p.evaluateIf(ctx)
+	case lexer.FOR:
+		stmt, err = p.evaluateFor(ctx)
+	case lexer.BREAK:
+		stmt, err = p.evaluateBreak(ctx)
+	case lexer.CONTINUE:
+		stmt, err = p.evaluateContinue(ctx)
+	case lexer.PRINT:
+		stmt, err = p.evaluatePrint(ctx)
+	default:
+		// Variable initialization also starts with identifier but is a statement (e.g. x := 1234).
+		if p.isShortVarInit() {
+			stmt, err = p.evaluateVarDefinition(ctx)
+		} else {
+			// If token is identifier it could be a slice assignment.
+			if token.Type() == lexer.IDENTIFIER {
+				variable, exists := ctx.variables[token.Value()]
+
+				// If variable has been defined and is a slice, handles slice assignment.
+				if exists && variable.ValueType().IsSlice() {
+					stmt, err = p.evaluateSliceAssignment(ctx)
+				}
+			}
+
+			if err == nil && stmt == nil {
+				stmt, err = p.evaluateExpression(ctx)
+			}
+		}
+	}
+	return stmt, err
 }
 
 // -----------------------------------------------------------------------------------------------

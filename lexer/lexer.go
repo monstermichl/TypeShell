@@ -40,6 +40,7 @@ const (
 
 	// Separators.
 	COMMA
+	SEMICOLON
 	SPACE
 	NEWLINE
 
@@ -130,6 +131,7 @@ var nonAlphabeticTokens = []tokenMapping{
 	{"%", BINARY_OPERATOR},
 
 	{",", COMMA},
+	{";", SEMICOLON},
 	{" ", SPACE},
 	{"\t", SPACE},
 

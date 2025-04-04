@@ -189,14 +189,23 @@ func (t *transpiler) evaluateIf(ifStatement parser.If) error {
 	return conv.IfEnd()
 }
 
-func (t *transpiler) evaluateFor(whileStatement parser.For) error {
+func (t *transpiler) evaluateFor(forStatement parser.For) error {
 	conv := t.converter
+	init := forStatement.Init()
+
+	if init != nil {
+		err := t.evaluate(init)
+
+		if err != nil {
+			return err
+		}
+	}
 	err := conv.ForStart()
 
 	if err != nil {
 		return err
 	}
-	condition, err := t.evaluateExpression(whileStatement.Condition(), true)
+	condition, err := t.evaluateExpression(forStatement.Condition(), true)
 
 	if err != nil {
 		return err
@@ -206,10 +215,19 @@ func (t *transpiler) evaluateFor(whileStatement parser.For) error {
 	if err != nil {
 		return err
 	}
-	err = t.evaluateBlock(whileStatement)
+	err = t.evaluateBlock(forStatement)
 
 	if err != nil {
 		return err
+	}
+	increment := forStatement.Increment()
+
+	if increment != nil {
+		err = t.evaluate(increment)
+
+		if err != nil {
+			return err
+		}
 	}
 	return conv.ForEnd()
 }
