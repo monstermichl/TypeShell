@@ -27,6 +27,10 @@ func varEvaluationString(name string) string {
 	return fmt.Sprintf("${%s}", name)
 }
 
+func sliceAssignmentString(name string, index string, value string) string {
+	return fmt.Sprintf("eval %s_%s=\"%s\"", name, index, value)
+}
+
 func (c *converter) BoolToString(value bool) string {
 	if value {
 		return "1"
@@ -66,7 +70,7 @@ func (c *converter) VarAssignment(name string, value string) error {
 }
 
 func (c *converter) SliceAssignment(name string, index string, value string) error {
-	c.addLine(fmt.Sprintf("eval %s_%s=\"%s\"", varEvaluationString(name), index, value)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+	c.addLine(sliceAssignmentString(varEvaluationString(name), index, value)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 	return nil
 }
 
@@ -259,12 +263,10 @@ func (c *converter) VarEvaluation(name string, valueUsed bool) (string, error) {
 
 func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
-	valuesString := ""
 
-	if len(values) > 0 {
-		valuesString = fmt.Sprintf("\"%s\"", strings.Join(values, "\", \""))
+	for i, value := range values {
+		c.addLine(sliceAssignmentString(helper, strconv.Itoa(i), value))
 	}
-	c.VarAssignment(helper, fmt.Sprintf("(%s)", valuesString))
 	return helper, nil
 }
 

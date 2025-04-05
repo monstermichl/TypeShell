@@ -45,6 +45,10 @@ func varEvaluationString(name string) string {
 	return fmt.Sprintf("!%s!", name)
 }
 
+func sliceAssignmentString(name string, index string, value string) string {
+	return fmt.Sprintf("call :_sa %s %s \"%s\"", name, index, value)
+}
+
 func New() *converter {
 	return &converter{
 		code: []string{},
@@ -106,7 +110,7 @@ func (c *converter) SliceAssignment(name string, index string, value string) err
 
 		c.sliceAssignmentHelperSet = true
 	}
-	c.addLine(fmt.Sprintf("call :_sa %s %s \"%s\"", varEvaluationString(name), index, value)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+	c.addLine(sliceAssignmentString(varEvaluationString(name), index, value)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 	return nil
 }
 
@@ -372,11 +376,7 @@ func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string,
 
 	// Init array values.
 	for i, value := range values {
-		err := c.SliceAssignment(helper, strconv.Itoa(i), value)
-
-		if err != nil {
-			return "", err
-		}
+		c.addLine(sliceAssignmentString(helper, strconv.Itoa(i), value))
 	}
 	return helper, nil
 }
