@@ -45,10 +45,6 @@ func varEvaluationString(name string) string {
 	return fmt.Sprintf("!%s!", name)
 }
 
-func sliceAssignmentString(name string, index string, value string) string {
-	return fmt.Sprintf("call :_sa %s %s \"%s\"", name, index, value)
-}
-
 func New() *converter {
 	return &converter{
 		code: []string{},
@@ -98,19 +94,7 @@ func (c *converter) VarAssignment(name string, value string) error {
 }
 
 func (c *converter) SliceAssignment(name string, index string, value string) error {
-	// Add array helper to batch file for easier array processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
-	if !c.sliceAssignmentHelperSet {
-		c.addLine(":: array assignment helper begin")
-		c.addLine("goto :_esa")
-		c.addLine(":_sa")
-		c.addLine("set %1[%2]=%~3")
-		c.addLine("exit /B 0")
-		c.addLine(":_esa")
-		c.addLine(":: array assignment helper end")
-
-		c.sliceAssignmentHelperSet = true
-	}
-	c.addLine(sliceAssignmentString(varEvaluationString(name), index, value)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+	c.addLine(c.sliceAssignmentString(varEvaluationString(name), index, value)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 	return nil
 }
 
@@ -376,7 +360,7 @@ func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string,
 
 	// Init array values.
 	for i, value := range values {
-		c.addLine(sliceAssignmentString(helper, strconv.Itoa(i), value))
+		c.addLine(c.sliceAssignmentString(helper, strconv.Itoa(i), value))
 	}
 	return helper, nil
 }
@@ -549,4 +533,20 @@ func (c *converter) nextHelperVar() string {
 	c.varCounter++
 
 	return helperVar
+}
+
+func (c *converter) sliceAssignmentString(name string, index string, value string) string {
+	// Add array helper to batch file for easier array processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
+	if !c.sliceAssignmentHelperSet {
+		c.addLine(":: array assignment helper begin")
+		c.addLine("goto :_esa")
+		c.addLine(":_sa")
+		c.addLine("set %1[%2]=%~3")
+		c.addLine("exit /B 0")
+		c.addLine(":_esa")
+		c.addLine(":: array assignment helper end")
+
+		c.sliceAssignmentHelperSet = true
+	}
+	return fmt.Sprintf("call :_sa %s %s \"%s\"", name, index, value)
 }
