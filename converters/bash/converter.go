@@ -2,6 +2,7 @@ package bash
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/monstermichl/typeshell/parser"
@@ -65,7 +66,7 @@ func (c *converter) VarAssignment(name string, value string) error {
 }
 
 func (c *converter) SliceAssignment(name string, index string, value string) error {
-	c.addLine(fmt.Sprintf("eval %s[%s]=\"%s\"", varEvaluationString(name), index, value)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+	c.addLine(fmt.Sprintf("eval %s_%s=\"%s\"", varEvaluationString(name), index, value)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 	return nil
 }
 
@@ -174,7 +175,7 @@ func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator,
 		default:
 			return notAllowedError()
 		}
-		c.VarAssignment(helper, fmt.Sprintf("$(expr %s %s %s)", left, operator, right))
+		c.VarAssignment(helper, fmt.Sprintf("$(expr %s \\%s %s)", left, operator, right)) // Backslash is required for * operator to prevent pattern expansion (https://www.shell-tips.com/bash/math-arithmetic-calculation/#using-the-expr-command-line).
 	case parser.DATA_TYPE_STRING:
 		switch operator {
 		case parser.BINARY_OPERATOR_ADDITION:
@@ -269,7 +270,7 @@ func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string,
 
 func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
-	c.VarAssignment(helper, fmt.Sprintf("$(eval \"echo \\${%s[%s]}\")", varEvaluationString(name), index)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+	c.VarAssignment(helper, fmt.Sprintf("$(eval \"echo \\${%s_%s}\")", varEvaluationString(name), index)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 
 	return c.VarEvaluation(helper, valueUsed)
 }
@@ -279,8 +280,8 @@ func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 		c.addLine("_sl() {")
 		c.addLine("local _l=0")
 		c.addLine("while true; do")
-		c.addLine("eval \"local _t=\\${$1[${_l}]}\"")
-		c.addLine("if [ -z \"${_t+_x}\" ]; then break; fi") // https://stackoverflow.com/a/13864829
+		c.addLine("eval \"local _t=\\${$1_${_l}}\"")
+		c.addLine("if [ -z \"${_t}\" ]; then break; fi") // https://stackoverflow.com/a/13864829 (didn't work with +x (probably due to the underscore of the variable)).
 		c.addLine("_l=$(expr ${_l} + 1)")
 		c.addLine("done")
 		c.addLine("echo ${_l}")
