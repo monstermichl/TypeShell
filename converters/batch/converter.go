@@ -106,7 +106,7 @@ func (c *converter) SliceAssignment(name string, index string, value string) err
 
 		c.sliceAssignmentHelperSet = true
 	}
-	c.addLine(fmt.Sprintf("call :_sa %s %s \"%s\"", varEvaluationString(name), index, value))
+	c.addLine(fmt.Sprintf("call :_sa %s %s \"%s\"", varEvaluationString(name), index, value)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 	return nil
 }
 
@@ -397,7 +397,7 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (
 	// accessing [0]. Instead, it treats !a1![0] as a literal string, so x is assigned the value
 	// _h0[0], not 4. Batch scripts do not support indirect variable expansion in a straightforward
 	// way. However, you can work around this by using for /f to evaluate the variable dynamically
-	c.addLine(fmt.Sprintf("for /f \"delims=\" %%%%i in (\"!%s![%s]\") do set %s=!%%%%i!", name, index, helper))
+	c.addLine(fmt.Sprintf("for /f \"delims=\" %%%%i in (\"%s[%s]\") do set %s=!%%%%i!", varEvaluationString(name), index, helper)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 	return c.VarEvaluation(helper, valueUsed)
 }
 

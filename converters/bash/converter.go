@@ -9,9 +9,10 @@ import (
 )
 
 type converter struct {
-	interpreter string
-	code        []string
-	varCounter  int
+	interpreter       string
+	code              []string
+	varCounter        int
+	sliceLenHelperSet bool
 }
 
 func New() *converter {
@@ -19,6 +20,10 @@ func New() *converter {
 		interpreter: "/bin/bash",
 		code:        []string{},
 	}
+}
+
+func varEvaluationString(name string) string {
+	return fmt.Sprintf("${%s}", name)
 }
 
 func (c *converter) BoolToString(value bool) string {
@@ -60,7 +65,7 @@ func (c *converter) VarAssignment(name string, value string) error {
 }
 
 func (c *converter) SliceAssignment(name string, index string, value string) error {
-	c.addLine(fmt.Sprintf("%s[%s]=\"%s\"", name, index, value))
+	c.addLine(fmt.Sprintf("eval %s[%s]=\"%s\"", varEvaluationString(name), index, value)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 	return nil
 }
 
@@ -248,24 +253,45 @@ func (c *converter) LogicalOperation(left string, operator parser.LogicalOperato
 }
 
 func (c *converter) VarEvaluation(name string, valueUsed bool) (string, error) {
-	return fmt.Sprintf("${%s}", name), nil
+	return varEvaluationString(name), nil
 }
 
 func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
+	helper := c.nextHelperVar()
 	valuesString := ""
 
 	if len(values) > 0 {
 		valuesString = fmt.Sprintf("\"%s\"", strings.Join(values, "\", \""))
 	}
-	return fmt.Sprintf("(%s)", valuesString), nil
+	c.VarAssignment(helper, fmt.Sprintf("(%s)", valuesString))
+	return helper, nil
 }
 
 func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (string, error) {
-	return c.VarEvaluation(fmt.Sprintf("%s[%s]", name, index), valueUsed)
+	helper := c.nextHelperVar()
+	c.VarAssignment(helper, fmt.Sprintf("$(eval \"echo \\${%s[%s]}\")", varEvaluationString(name), index)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+
+	return c.VarEvaluation(helper, valueUsed)
 }
 
 func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
-	return c.VarEvaluation(fmt.Sprintf("#%s[@]", name), valueUsed)
+	if !c.sliceLenHelperSet {
+		c.addLine("_sl() {")
+		c.addLine("local _l=0")
+		c.addLine("while true; do")
+		c.addLine("eval \"local _t=\\${$1[${_l}}\"")
+		c.addLine("if [ -z \"${_t+_x}\" ]; then break; fi") // https://stackoverflow.com/a/13864829
+		c.addLine("_l=$(expr ${_l} + 1)")
+		c.addLine("done")
+		c.addLine("echo ${_l}")
+		c.addLine("}")
+
+		c.sliceLenHelperSet = true
+	}
+	helper := c.nextHelperVar()
+	c.VarAssignment(helper, fmt.Sprintf("$(_sl %s)", name)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+
+	return c.VarEvaluation(helper, valueUsed)
 }
 
 func (c *converter) Group(value string, valueUsed bool) (string, error) {
