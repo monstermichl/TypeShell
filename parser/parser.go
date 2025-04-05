@@ -1464,9 +1464,11 @@ func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
 				return nil, err
 			}
 			valueDataType := expr.ValueType()
+			sliceElementValueType := sliceValueType
+			sliceElementValueType.isSlice = false
 
-			if !valueDataType.Equals(sliceValueType) {
-				return nil, fmt.Errorf("%s cannot not be added to %s at row %d, column %d", valueDataType.ToString(), sliceValueType.ToString(), valueToken.Row(), valueToken.Column())
+			if !valueDataType.Equals(sliceElementValueType) {
+				return nil, fmt.Errorf("%s cannot not be added to %s at row %d, column %d", valueDataType.ToString(), sliceElementValueType.ToString(), valueToken.Row(), valueToken.Column())
 			}
 			values = append(values, expr)
 			nextToken = p.peek()
