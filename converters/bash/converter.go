@@ -279,7 +279,7 @@ func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 		c.addLine("_sl() {")
 		c.addLine("local _l=0")
 		c.addLine("while true; do")
-		c.addLine("eval \"local _t=\\${$1[${_l}}\"")
+		c.addLine("eval \"local _t=\\${$1[${_l}]}\"")
 		c.addLine("if [ -z \"${_t+_x}\" ]; then break; fi") // https://stackoverflow.com/a/13864829
 		c.addLine("_l=$(expr ${_l} + 1)")
 		c.addLine("done")
