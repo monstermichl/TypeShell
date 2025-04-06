@@ -60,12 +60,12 @@ func (c *converter) ProgramEnd() error {
 }
 
 func (c *converter) VarDefinition(name string, value string) error {
-	c.addLine(fmt.Sprintf("%s=%s", name, value))
+	c.addLine(fmt.Sprintf("%s=\"%s\"", name, value))
 	return nil
 }
 
 func (c *converter) VarAssignment(name string, value string) error {
-	c.addLine(fmt.Sprintf("%s=%s", name, value))
+	c.addLine(fmt.Sprintf("%s=\"%s\"", name, value))
 	return nil
 }
 
