@@ -5,6 +5,7 @@ import "fmt"
 type StatementType string
 type DataType string
 type CompareOperator = string
+type UnaryOperator = string
 type BinaryOperator = string
 type LogicalOperator = string
 
@@ -58,6 +59,7 @@ const (
 	STATEMENT_TYPE_BOOL_LITERAL        StatementType = "boolean"
 	STATEMENT_TYPE_INT_LITERAL         StatementType = "integer"
 	STATEMENT_TYPE_STRING_LITERAL      StatementType = "string"
+	STATEMENT_TYPE_UNARY_OPERATION     StatementType = "unary operation"
 	STATEMENT_TYPE_BINARY_OPERATION    StatementType = "binary operation"
 	STATEMENT_TYPE_LOGICAL_OPERATION   StatementType = "logical operation"
 	STATEMENT_TYPE_COMPARISON          StatementType = "comparison"
@@ -98,6 +100,10 @@ const (
 	COMPARE_OPERATOR_LESS_OR_EQUAL    CompareOperator = "<="
 	COMPARE_OPERATOR_GREATER          CompareOperator = ">"
 	COMPARE_OPERATOR_GREATER_OR_EQUAL CompareOperator = ">="
+)
+
+const (
+	UNARY_OPERATOR_NEGATE UnaryOperator = "!"
 )
 
 const (

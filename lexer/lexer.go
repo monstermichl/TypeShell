@@ -25,6 +25,7 @@ const (
 
 	// Operators.
 	ASSIGN_OPERATOR
+	UNARY_OPERATOR
 	BINARY_OPERATOR
 	COMPARE_OPERATOR
 	LOGICAL_OPERATOR
@@ -129,6 +130,8 @@ var nonAlphabeticTokens = []tokenMapping{
 
 	{"++", INCREMENT_OPERATOR},
 	{"--", DECREMENT_OPERATOR},
+
+	{"!", UNARY_OPERATOR},
 
 	{"+", BINARY_OPERATOR},
 	{"-", BINARY_OPERATOR},
@@ -263,7 +266,6 @@ func Tokenize(source string) ([]Token, error) {
 			// Create bool token.
 			token = newToken(match, BOOL_LITERAL, ogRow, ogColumn)
 			i += len(match)
-
 		} else if match := regexp.MustCompile(`^\d+(\.\d+)?`).FindString(source[i:]); match != "" {
 			// Create number token.
 			token = newToken(match, NUMBER_LITERAL, ogRow, ogColumn)

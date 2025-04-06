@@ -87,6 +87,16 @@ func (t *transpiler) evaluateOperation(
 	return callout(left, operation.Operator(), right, operation.Left().ValueType(), valueUsed)
 }
 
+func (t *transpiler) evaluateUnaryOperation(operation parser.UnaryOperation, valueUsed bool) (string, error) {
+	expr := operation.Expression()
+	convertedExpr, err := t.evaluateExpression(expr, true)
+
+	if err != nil {
+		return "", err
+	}
+	return t.converter.UnaryOperation(convertedExpr, operation.Operator(), expr.ValueType(), valueUsed)
+}
+
 func (t *transpiler) evaluateBinaryOperation(operation parser.BinaryOperation, valueUsed bool) (string, error) {
 	return t.evaluateOperation(operation, t.converter.BinaryOperation, valueUsed)
 }
@@ -456,6 +466,8 @@ func (t *transpiler) evaluateExpression(expression parser.Expression, valueUsed 
 		return t.evaluateIntegerLiteral(expression.(parser.IntegerLiteral), valueUsed)
 	case parser.STATEMENT_TYPE_STRING_LITERAL:
 		return t.evaluateStringLiteral(expression.(parser.StringLiteral), valueUsed)
+	case parser.STATEMENT_TYPE_UNARY_OPERATION:
+		return t.evaluateUnaryOperation(expression.(parser.UnaryOperation), valueUsed)
 	case parser.STATEMENT_TYPE_BINARY_OPERATION:
 		return t.evaluateBinaryOperation(expression.(parser.BinaryOperation), valueUsed)
 	case parser.STATEMENT_TYPE_COMPARISON:

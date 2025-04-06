@@ -1105,8 +1105,38 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 // in a function because higher precedence means it must be processed further down the chain.
 // Learnt a lot about priority handling from this video https://www.youtube.com/watch?v=aAvL2BTHf60.
 // Precedence is the same as in Go (https://go.dev/ref/spec#Operator_precedence).
+func (p *Parser) evaluateUnaryOperation(ctx context) (Expression, error) {
+	nextToken := p.peek()
+	negate := false
+
+	if nextToken.Value() == UNARY_OPERATOR_NEGATE {
+		negate = true
+		p.eat()
+	}
+	valueToken := p.peek()
+	expr, err := p.evaluateSingleExpression(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if negate {
+		valueType := expr.ValueType()
+
+		if !valueType.IsBool() {
+			return nil, expectedError("boolean value", valueToken)
+		}
+		return UnaryOperation{
+			expr:      expr,
+			operator:  UNARY_OPERATOR_NEGATE,
+			valueType: expr.ValueType(),
+		}, nil
+	}
+	return expr, nil
+}
+
 func (p *Parser) evaluateMultiplication(ctx context) (Expression, error) {
-	return p.evaluateBinaryOperation(ctx, []BinaryOperator{BINARY_OPERATOR_MULTIPLICATION, BINARY_OPERATOR_DIVISION, BINARY_OPERATOR_MODULO}, p.evaluateSingleExpression)
+	return p.evaluateBinaryOperation(ctx, []BinaryOperator{BINARY_OPERATOR_MULTIPLICATION, BINARY_OPERATOR_DIVISION, BINARY_OPERATOR_MODULO}, p.evaluateUnaryOperation)
 }
 
 func (p *Parser) evaluateAddition(ctx context) (Expression, error) {

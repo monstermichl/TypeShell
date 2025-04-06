@@ -157,6 +157,24 @@ func (c *converter) Nop() error {
 	return nil
 }
 
+func (c *converter) UnaryOperation(expr string, operator parser.UnaryOperator, valueType parser.ValueType, valueUsed bool) (string, error) {
+	helper := c.nextHelperVar()
+
+	switch operator {
+	case parser.UNARY_OPERATOR_NEGATE:
+		c.VarAssignment(helper,
+			fmt.Sprintf("$(if [ \"%s\" -eq \"%s\" ]; then echo %s; else echo %s; fi)",
+				expr,
+				c.BoolToString(true),
+				c.BoolToString(false),
+				c.BoolToString(true),
+			))
+	default:
+		return "", fmt.Errorf("unknown unary operator \"%s\"", operator)
+	}
+	return c.VarEvaluation(helper, valueUsed)
+}
+
 func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	notAllowedError := func() (string, error) {
