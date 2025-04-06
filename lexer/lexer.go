@@ -259,7 +259,7 @@ func Tokenize(source string) ([]Token, error) {
 				comment += c0
 			}
 			token = newToken(regexp.MustCompile(`\s+`).ReplaceAllString(comment, " "), COMMENT, ogRow, ogColumn)
-		} else if match := regexp.MustCompile(`^true|false`).FindString(source[i:]); match != "" {
+		} else if match := regexp.MustCompile(`^(true|false)`).FindString(source[i:]); match != "" {
 			// Create bool token.
 			token = newToken(match, BOOL_LITERAL, ogRow, ogColumn)
 			i += len(match)
