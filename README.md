@@ -33,6 +33,10 @@ if x == 5 {
 for x == 5 {
     // Do something.
 }
+
+for x := 0; x < 5; x++ {
+    // Do something.
+}
 ```
 
 ### Functions

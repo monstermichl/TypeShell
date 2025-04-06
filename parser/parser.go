@@ -1154,13 +1154,19 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 		if p.isShortVarInit() {
 			stmt, err = p.evaluateVarDefinition(ctx)
 		} else {
-			// If token is identifier it could be a slice assignment.
+			// If token is identifier it could be a slice assignment, an increment or a decrement.
 			if token.Type() == lexer.IDENTIFIER {
-				variable, exists := ctx.variables[token.Value()]
+				switch p.peekAt(1).Type() {
+				case lexer.INCREMENT_OPERATOR, lexer.DECREMENT_OPERATOR:
+					stmt, err = p.evaluateIncrementDecrement(ctx)
+				default:
+					// Handle slice assignment.
+					variable, exists := ctx.variables[token.Value()]
 
-				// If variable has been defined and is a slice, handles slice assignment.
-				if exists && variable.ValueType().IsSlice() {
-					stmt, err = p.evaluateSliceAssignment(ctx)
+					// If variable has been defined and is a slice, handles slice assignment.
+					if exists && variable.ValueType().IsSlice() {
+						stmt, err = p.evaluateSliceAssignment(ctx)
+					}
 				}
 			}
 
@@ -1583,6 +1589,48 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 		name:  name,
 		index: index,
 		value: value,
+	}, nil
+}
+
+func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
+	identifierToken := p.eat()
+
+	if identifierToken.Type() != lexer.IDENTIFIER {
+		return nil, expectedError("identifier", identifierToken)
+	}
+	name := identifierToken.Value()
+	definedVariable, exists := ctx.variables[name]
+
+	if !exists {
+		return nil, fmt.Errorf("variable %s has not been defined at row %d, column %d", name, identifierToken.Row(), identifierToken.Column())
+	}
+	valueType := definedVariable.ValueType()
+
+	if valueType.DataType() != DATA_TYPE_INTEGER || valueType.isSlice {
+		return nil, expectedError(fmt.Sprintf("%s but got %s", NewValueType(DATA_TYPE_INTEGER, false).ToString(), valueType.ToString()), identifierToken)
+	}
+	var operation BinaryOperator
+	operationToken := p.eat()
+
+	switch operationToken.Type() {
+	case lexer.INCREMENT_OPERATOR:
+		operation = BINARY_OPERATOR_ADDITION
+	case lexer.DECREMENT_OPERATOR:
+		operation = BINARY_OPERATOR_SUBTRACTION
+	default:
+		return nil, expectedError("\"++\" or \"--\"", operationToken)
+	}
+	return VariableAssignment{
+		variable: definedVariable,
+		value: BinaryOperation{
+			left: VariableEvaluation{
+				name:      definedVariable.Name(),
+				valueType: valueType,
+			},
+			operator:  operation,
+			right:     IntegerLiteral{value: 1},
+			valueType: valueType,
+		},
 	}, nil
 }
 
