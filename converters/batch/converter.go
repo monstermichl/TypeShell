@@ -435,20 +435,17 @@ func (c *converter) Group(value string, valueUsed bool) (string, error) {
 }
 
 func (c *converter) FuncCall(name string, args []string, valueType parser.ValueType, valueUsed bool) (string, error) {
-	if valueType.DataType() != parser.DATA_TYPE_VOID {
-		c.addLine(fmt.Sprintf("call :%s %s", name, fmt.Sprintf("\"%s\"", strings.Join(args, "\" \""))))
-		funcVar, err := c.funcVar(name)
+	c.addLine(fmt.Sprintf("call :%s %s", name, fmt.Sprintf("\"%s\"", strings.Join(args, "\" \""))))
+	funcVar, err := c.funcVar(name)
 
-		if err != nil {
-			return "", err
-		}
+	if err != nil {
+		return "", err
+	}
 
-		if valueUsed {
-			helper := c.nextHelperVar()
-			c.VarDefinition(helper, varEvaluationString(funcVar))
-			return c.VarEvaluation(helper, valueUsed)
-		}
-		return "", nil
+	if valueType.DataType() != parser.DATA_TYPE_VOID && valueUsed {
+		helper := c.nextHelperVar()
+		c.VarDefinition(helper, varEvaluationString(funcVar))
+		return c.VarEvaluation(helper, valueUsed)
 	}
 	return "", nil
 }
