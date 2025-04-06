@@ -1606,7 +1606,7 @@ func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
 	}
 	valueType := definedVariable.ValueType()
 
-	if valueType.DataType() != DATA_TYPE_INTEGER || valueType.isSlice {
+	if !valueType.IsInt() {
 		return nil, expectedError(fmt.Sprintf("%s but got %s", NewValueType(DATA_TYPE_INTEGER, false).ToString(), valueType.ToString()), identifierToken)
 	}
 	var operation BinaryOperator
