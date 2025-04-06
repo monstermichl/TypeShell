@@ -338,7 +338,7 @@ func (t *transpiler) evaluateFunctionDefinition(functionDefinition parser.Functi
 	if err != nil {
 		return err
 	}
-	return conv.FuncEnd(name)
+	return conv.FuncEnd()
 }
 
 func (t *transpiler) evaluateFunctionCall(functionCall parser.FunctionCall, valueUsed bool) (string, error) {

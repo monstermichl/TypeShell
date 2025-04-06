@@ -37,6 +37,12 @@ type converter struct {
 	sliceLenHelperSet        bool
 }
 
+func New() *converter {
+	return &converter{
+		code: []string{},
+	}
+}
+
 func varAssignmentString(name string, value string) string {
 	return fmt.Sprintf("set %s=%s", name, value)
 }
@@ -45,10 +51,11 @@ func varEvaluationString(name string) string {
 	return fmt.Sprintf("!%s!", name)
 }
 
-func New() *converter {
-	return &converter{
-		code: []string{},
+func funcReturnVariable(funcName string) (string, error) {
+	if len(funcName) == 0 {
+		return "", errors.New("no function name to return value for")
 	}
+	return fmt.Sprintf("_ret%s", funcName), nil
 }
 
 func (c *converter) BoolToString(value bool) string {
@@ -105,6 +112,7 @@ func (c *converter) FuncStart(name string, params []string) error {
 	c.addLine(fmt.Sprintf(":: %s function begin", name))
 	c.addLine(fmt.Sprintf("goto :_eo%s", name))
 	c.addLine(fmt.Sprintf(":%s", name))
+	c.addLine("setlocal")
 
 	for i, param := range params {
 		c.addLine(varAssignmentString(param, fmt.Sprintf("%%~%d", i+1)))
@@ -112,7 +120,22 @@ func (c *converter) FuncStart(name string, params []string) error {
 	return nil
 }
 
-func (c *converter) FuncEnd(name string) error {
+func (c *converter) FuncEnd() error {
+	name := c.currentFuncInfo().name
+	localVariable, err := c.funcVarLocal(name)
+
+	if err != nil {
+		return err
+	}
+	returnVariable, err := funcReturnVariable(name)
+
+	if err != nil {
+		return err
+	}
+	c.addLine(fmt.Sprintf(":_r%s", name))
+	c.addLine("endlocal & (") // https://stackoverflow.com/a/18291599
+	c.VarAssignment(returnVariable, fmt.Sprintf("%%%s%%", localVariable)) // TODO: Why is %variable% needed here instead of !variable! to work properly?...
+	c.addLine(")")
 	c.addLine("exit /B 0")
 	c.addLine(fmt.Sprintf(":_eo%s", name))
 	c.addLine(fmt.Sprintf(":: %s function end", name))
@@ -123,15 +146,17 @@ func (c *converter) FuncEnd(name string) error {
 }
 
 func (c *converter) Return(value string, valueType parser.ValueType) error {
+	currFunc := c.currentFuncInfo()
+
 	if valueType.DataType() != parser.DATA_TYPE_VOID {
-		funcVar, err := c.funcVar(c.funcs[len(c.funcs)-1].name)
+		funcVarLocal, err := c.funcVarLocal(currFunc.name)
 
 		if err != nil {
 			return err
 		}
-		c.VarDefinition(funcVar, value)
+		c.VarDefinition(funcVarLocal, value)
 	}
-	c.addLine("exit /B 0")
+	c.addLine(fmt.Sprintf("goto :_r%s", currFunc.name))
 	return nil
 }
 
@@ -436,7 +461,7 @@ func (c *converter) Group(value string, valueUsed bool) (string, error) {
 
 func (c *converter) FuncCall(name string, args []string, valueType parser.ValueType, valueUsed bool) (string, error) {
 	c.addLine(fmt.Sprintf("call :%s %s", name, fmt.Sprintf("\"%s\"", strings.Join(args, "\" \""))))
-	funcVar, err := c.funcVar(name)
+	funcVar, err := funcReturnVariable(name)
 
 	if err != nil {
 		return "", err
@@ -493,11 +518,11 @@ func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 	return c.VarEvaluation(helper, valueUsed)
 }
 
-func (c *converter) funcVar(funcName string) (string, error) {
+func (c *converter) funcVarLocal(funcName string) (string, error) {
 	if len(funcName) == 0 {
 		return "", errors.New("no function name to return value for")
 	}
-	return fmt.Sprintf("_ret%s", funcName), nil
+	return fmt.Sprintf("_retl%s", funcName), nil
 }
 
 func (c *converter) ifStart(condition string, startAddition string) error {
@@ -521,6 +546,10 @@ func (c *converter) nextIfLabel() string {
 	c.ifCounter++
 
 	return label
+}
+
+func (c *converter) currentFuncInfo() funcInfo {
+	return c.funcs[len(c.funcs)-1]
 }
 
 func (c *converter) currentIfInfo() ifInfo {

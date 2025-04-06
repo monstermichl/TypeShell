@@ -83,7 +83,7 @@ func (c *converter) FuncStart(name string, params []string) error {
 	return nil
 }
 
-func (c *converter) FuncEnd(name string) error {
+func (c *converter) FuncEnd() error {
 	c.addLine("}")
 	return nil
 }
