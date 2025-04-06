@@ -3,12 +3,14 @@ package parser
 type Variable struct {
 	name      string
 	valueType ValueType
+	global    bool
 }
 
-func NewVariable(name string, valueType ValueType) Variable {
+func NewVariable(name string, valueType ValueType, global bool) Variable {
 	return Variable{
 		name,
 		valueType,
+		global,
 	}
 }
 
@@ -18,6 +20,10 @@ func (v Variable) Name() string {
 
 func (v Variable) ValueType() ValueType {
 	return v.valueType
+}
+
+func (v Variable) Global() bool {
+	return v.global
 }
 
 type VariableAssignment struct {

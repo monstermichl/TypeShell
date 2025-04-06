@@ -46,6 +46,10 @@ func (c context) currentScope() scope {
 	return c.scopeStack[len(c.scopeStack)-1]
 }
 
+func (c context) global() bool {
+	return c.currentScope() == SCOPE_PROGRAM
+}
+
 func (c context) findScope(s scope) bool {
 	for i := len(c.scopeStack) - 1; i >= 0; i-- {
 		if c.scopeStack[i] == s {
@@ -471,7 +475,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 	nextTokenType := nextToken.Type()
 	var value Expression
 
-	// TODO: Improve check.
+	// TODO: Improve check (avaid NEWLINE and EOF check).
 	if nextTokenType != lexer.NEWLINE && nextTokenType != lexer.EOF {
 		value, err = p.evaluateExpression(ctx)
 
@@ -498,7 +502,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 		}
 	}
 	variable := VariableDefinition{
-		variable: NewVariable(name, specifiedType),
+		variable: NewVariable(name, specifiedType, ctx.global()),
 		value:    value,
 	}
 	return variable, nil
@@ -576,7 +580,7 @@ func (p *Parser) evaluateParams(ctx context) ([]Variable, error) {
 		} else if nextTokenType == lexer.COMMA {
 			p.eat()
 		}
-		params = append(params, NewVariable(name, valueType))
+		params = append(params, NewVariable(name, valueType, false))
 	}
 	return params, nil
 }
@@ -584,7 +588,7 @@ func (p *Parser) evaluateParams(ctx context) ([]Variable, error) {
 func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 	functionToken := p.eat()
 
-	if ctx.currentScope() != SCOPE_PROGRAM {
+	if !ctx.global() {
 		return nil, expectedError("function definition at top level", functionToken)
 	}
 	if functionToken.Type() != lexer.FUNCTION_DEFINITION {
@@ -866,8 +870,8 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 			return nil, expectedError("slice", nextToken)
 		}
 		sliceValueType := sliceExpression.ValueType()
-		indexVar := NewVariable(indexVarName, NewValueType(DATA_TYPE_INTEGER, false))
-		valueVar := NewVariable(valueVarName, sliceValueType)
+		indexVar := NewVariable(indexVarName, NewValueType(DATA_TYPE_INTEGER, false), false)
+		valueVar := NewVariable(valueVarName, sliceValueType, false)
 
 		// Add block variables.
 		ctx.variables[indexVarName] = indexVar
