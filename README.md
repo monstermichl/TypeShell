@@ -7,34 +7,34 @@ Supported variable types are *bool*, *int* and *string*.
 
 ```golang
 // Variable definition with default value.
-var x int
+var i int
 ```
 
 ```golang
 // Variable definition with assigned value.
-var x int = 5
+var i int = 5
 ```
 
 ```golang
 // Variable definition short form.
-x := 5
+i := 5
 ```
 
 ### Control flow
 ```golang
 // If-statement.
-if x == 5 {
+if i == 5 {
     // Do something.
 }
 ```
 
 ```golang
 // For-loop.
-for x == 5 {
+for i == 5 {
     // Do something.
 }
 
-for x := 0; x < 5; x++ {
+for i := 0; i < 5; i++ {
     // Do something.
 }
 ```
@@ -50,6 +50,39 @@ func sum(a int, b int) int {
 ```golang
 // Function call.
 sum(2, 5)
+```
+
+### Slices
+```golang
+// Slice creation.
+s := []int{}
+```
+
+```golang
+// Slice creation with values.
+s := []int{1, 2, 3}
+```
+
+```golang
+// Slice assignment.
+s[0] = 10
+```
+
+```golang
+// Slice evaluation.
+v := s[0]
+```
+
+```golang
+// Slice length.
+l := len(s)
+```
+
+```golang
+// Slice iteration.
+for i := 0; i < len(s); i++ {
+    v := s[i]
+}
 ```
 
 ### Operators
@@ -74,8 +107,9 @@ sum(2, 5)
 
 ```golang
 // Logical operators.
-true || true
+!true
 true && true
+true || true
 ```
 
 ### Programs
