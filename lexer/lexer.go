@@ -61,7 +61,8 @@ const (
 	PRINT
 	INPUT
 
-	// Pipe.
+	// App operators.
+	AT
 	PIPE
 
 	// End of file.
@@ -135,6 +136,7 @@ var nonAlphabeticTokens = []tokenMapping{
 	{" ", SPACE},
 	{"\t", SPACE},
 
+	{"@", AT},
 	{"|", PIPE},
 
 	{"\n", NEWLINE},

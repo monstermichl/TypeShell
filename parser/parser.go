@@ -1057,21 +1057,22 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 	case lexer.LEN:
 		expr, err = p.evaluateLen(ctx)
 
+	// Handle app call.
+	case lexer.AT:
+		expr, err = p.evaluateAppCall(ctx)
+
 	// Handle identifiers.
 	case lexer.IDENTIFIER:
 		nextToken := p.peekAt(1)
 
 		// If the current token is an identifier and the next is an opening
 		// brace, it's a function call, if the next is an assignment operator,
-		// it's an assignment, if the next is a smaller sign, it's an app call,
-		// otherwise it's a variable evaluation.
+		// it's an assignment, otherwise it's a variable evaluation.
 		switch nextToken.Type() {
 		case lexer.OPENING_ROUND_BRACKET:
 			expr, err = p.evaluateFunctionCall(ctx)
 		case lexer.ASSIGN_OPERATOR:
 			expr, err = p.evaluateVarAssignment(ctx)
-		// case lexer.OPENING_CURLY_BRACKET:
-		// 	expr, err = p.evaluateAppCall(ctx)
 		case lexer.OPENING_SQUARE_BRACKET:
 			expr, err = p.evaluateSliceEvaluation(ctx)
 		default:
@@ -1289,7 +1290,12 @@ func (p *Parser) evaluateArguments(typeName string, name string, params []Variab
 	}
 	nextToken := p.peek()
 	args := []Expression{}
-	paramsLength := len(params)
+	ignoreParams := params == nil // If params is nil, arguments will not be checked for length or type.
+	paramsLength := 0
+
+	if !ignoreParams {
+		paramsLength = len(params)
+	}
 	argsLengthError := func(amount int) error {
 		return fmt.Errorf("%s %s expects %d parameters but got %d", typeName, name, paramsLength, amount)
 	}
@@ -1304,21 +1310,24 @@ func (p *Parser) evaluateArguments(typeName string, name string, params []Variab
 			return nil, err
 		}
 		args = append(args, expr)
-		argsLength := len(args)
 
-		// Make sure arguments have not been exceeded.
-		if argsLength > paramsLength {
-			return nil, argsLengthError(argsLength)
-		}
+		if !ignoreParams {
+			argsLength := len(args)
 
-		// Make sure argument type fits parameter type.
-		lastArgsIndex := argsLength - 1
-		param := params[lastArgsIndex]
-		lastParamType := param.ValueType()
-		lastArgType := expr.ValueType()
+			// Make sure arguments have not been exceeded.
+			if argsLength > paramsLength {
+				return nil, argsLengthError(argsLength)
+			}
 
-		if !lastParamType.Equals(lastArgType) {
-			return nil, expectedError(fmt.Sprintf("parameter %s (%s) but got %s", lastParamType.ToString(), param.Name(), lastArgType.ToString()), argToken)
+			// Make sure argument type fits parameter type.
+			lastArgsIndex := argsLength - 1
+			param := params[lastArgsIndex]
+			lastParamType := param.ValueType()
+			lastArgType := expr.ValueType()
+
+			if !lastParamType.Equals(lastArgType) {
+				return nil, expectedError(fmt.Sprintf("parameter %s (%s) but got %s", lastParamType.ToString(), param.Name(), lastArgType.ToString()), argToken)
+			}
 		}
 		nextToken = p.peek()
 		tokenType := nextToken.Type()
@@ -1332,15 +1341,18 @@ func (p *Parser) evaluateArguments(typeName string, name string, params []Variab
 	}
 
 	// Check for the appropriate arguments amount.
-	argsLength := len(args)
+	if !ignoreParams {
+		argsLength := len(args)
 
-	if len(args) != paramsLength {
-		return nil, argsLengthError(argsLength)
+		if len(args) != paramsLength {
+			return nil, argsLengthError(argsLength)
+		}
 	}
 
 	if err != nil {
 		return nil, err
 	}
+
 	closingBraceToken := p.eat()
 
 	if closingBraceToken.Type() != lexer.CLOSING_ROUND_BRACKET {
@@ -1377,46 +1389,20 @@ func (p *Parser) evaluateFunctionCall(ctx context) (Call, error) {
 
 func (p *Parser) evaluateAppCall(ctx context) (Call, error) {
 	nextToken := p.eat()
+
+	if nextToken.Type() != lexer.AT {
+		return nil, expectedError("\"@\"", nextToken)
+	}
+	nextToken = p.eat()
 	name := nextToken.Value()
 
 	if nextToken.Type() != lexer.IDENTIFIER {
 		return nil, expectedError("program identifier", nextToken)
 	}
-	nextToken = p.eat()
+	args, err := p.evaluateArguments("program", name, nil, ctx)
 
-	// Make sure after the program call comes an opening curly bracket.
-	if nextToken.Type() != lexer.OPENING_CURLY_BRACKET {
-		return nil, expectedError("\"{\"", nextToken)
-	}
-	args := []Expression{}
-	nextToken = p.peek()
-
-	// Evaluate arguments if it's a program call with arguments.
-	if nextToken.Type() != lexer.CLOSING_CURLY_BRACKET {
-		for {
-			arg, err := p.evaluateExpression(ctx)
-
-			if err != nil {
-				return nil, err
-			}
-			args = append(args, arg)
-			nextToken = p.peek()
-			nextTokenType := nextToken.Type()
-
-			if nextTokenType == lexer.COMMA {
-				p.eat()
-			} else if nextTokenType == lexer.CLOSING_CURLY_BRACKET {
-				break
-			} else {
-				return nil, expectedError("\",\" or \"}\"", nextToken)
-			}
-		}
-	}
-	nextToken = p.eat()
-
-	// Make sure program call is terminated with a closing curly bracket.
-	if nextToken.Type() != lexer.CLOSING_CURLY_BRACKET {
-		return nil, expectedError("\"}\"", nextToken)
+	if err != nil {
+		return nil, err
 	}
 	call := AppCall{
 		name: name,

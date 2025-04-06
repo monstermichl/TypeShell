@@ -79,18 +79,18 @@ true && true
 // Programs get called by stating the program name followed by
 // curly brackets. Arguments to the program are passed within
 // the curly brackets.
-ls{"-a"}
+@ls("-a")
 ```
 
 ```golang
 // Similar to Bash/Batch, the output can be piped into another
 // program.
-ls{"-a"} | sort{}
+@ls("-a") | @sort()
 ```
 
 ```golang
 // To capture the output, just the call chain to a variable.
-x := ls{"-a"} | sort{}
+x := @ls("-a") | @sort()
 ```
 
 ### Input/Output
