@@ -74,7 +74,7 @@ func (c *converter) SliceAssignment(name string, index string, value string) err
 	return nil
 }
 
-func (c *converter) FuncStart(name string, params []string) error {
+func (c *converter) FuncStart(name string, params []string, returnType parser.ValueType) error {
 	c.addLine(fmt.Sprintf("%s() {", name))
 
 	for i, param := range params {

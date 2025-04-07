@@ -46,7 +46,7 @@ type Converter interface {
 	VarDefinition(name string, value string) error
 	VarAssignment(name string, value string) error
 	SliceAssignment(name string, index string, value string) error
-	FuncStart(name string, params []string) error
+	FuncStart(name string, params []string, returnType parser.ValueType) error
 	FuncEnd() error
 	Return(value string, valueType parser.ValueType) error
 	IfStart(condition string) error

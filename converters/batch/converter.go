@@ -33,6 +33,7 @@ type converter struct {
 	fors                     []forInfo
 	ifs                      []ifInfo
 	lfSet                    bool
+	returnHelperSet          bool
 	sliceAssignmentHelperSet bool
 	sliceLenHelperSet        bool
 }
@@ -49,13 +50,6 @@ func varAssignmentString(name string, value string) string {
 
 func varEvaluationString(name string) string {
 	return fmt.Sprintf("!%s!", name)
-}
-
-func funcReturnVariable(funcName string) (string, error) {
-	if len(funcName) == 0 {
-		return "", errors.New("no function name to return value for")
-	}
-	return fmt.Sprintf("_ret%s", funcName), nil
 }
 
 func (c *converter) BoolToString(value bool) string {
@@ -105,12 +99,23 @@ func (c *converter) SliceAssignment(name string, index string, value string) err
 	return nil
 }
 
-func (c *converter) FuncStart(name string, params []string) error {
+func (c *converter) FuncStart(name string, params []string, returnType parser.ValueType) error {
+	if returnType.DataType() != parser.DATA_TYPE_VOID && !c.returnHelperSet {
+		c.addLine(":: global var helper begin")
+		c.addLine("goto :_eo_gvh")
+		c.addLine(":_gvh")
+		c.addLine("set %1=%~2")
+		c.addLine("exit /B 0")
+		c.addLine(":_eo_gvh")
+		c.addLine(":: global var helper end")
+
+		c.returnHelperSet = true
+	}
 	c.funcs = append(c.funcs, funcInfo{
 		name: name,
 	})
 	c.addLine(fmt.Sprintf(":: %s function begin", name))
-	c.addLine(fmt.Sprintf("goto :_eo%s", name))
+	c.addLine(fmt.Sprintf("goto :_eo_%s", name))
 	c.addLine(fmt.Sprintf(":%s", name))
 	c.addLine("setlocal")
 
@@ -122,22 +127,11 @@ func (c *converter) FuncStart(name string, params []string) error {
 
 func (c *converter) FuncEnd() error {
 	name := c.currentFuncInfo().name
-	localVariable, err := c.funcVarLocal(name)
 
-	if err != nil {
-		return err
-	}
-	returnVariable, err := funcReturnVariable(name)
-
-	if err != nil {
-		return err
-	}
-	c.addLine(fmt.Sprintf(":_r%s", name))
-	c.addLine("endlocal & (") // https://stackoverflow.com/a/18291599
-	c.VarAssignment(returnVariable, fmt.Sprintf("%%%s%%", localVariable)) // TODO: Why is %variable% needed here instead of !variable! to work properly?...
-	c.addLine(")")
+	c.addLine(fmt.Sprintf(":_ret_%s", name))
+	c.addLine("endlocal")
 	c.addLine("exit /B 0")
-	c.addLine(fmt.Sprintf(":_eo%s", name))
+	c.addLine(fmt.Sprintf(":_eo_%s", name))
 	c.addLine(fmt.Sprintf(":: %s function end", name))
 
 	lastIndex := len(c.funcs) - 1
@@ -149,14 +143,14 @@ func (c *converter) Return(value string, valueType parser.ValueType) error {
 	currFunc := c.currentFuncInfo()
 
 	if valueType.DataType() != parser.DATA_TYPE_VOID {
-		funcVarLocal, err := c.funcVarLocal(currFunc.name)
+		returnVar, err := c.funcVar(currFunc.name)
 
 		if err != nil {
 			return err
 		}
-		c.VarDefinition(funcVarLocal, value)
+		c.addLine(fmt.Sprintf("call :_gvh %s \"%s\"", returnVar, value))
 	}
-	c.addLine(fmt.Sprintf("goto :_r%s", currFunc.name))
+	c.addLine(fmt.Sprintf("goto :_ret_%s", currFunc.name))
 	return nil
 }
 
@@ -461,7 +455,7 @@ func (c *converter) Group(value string, valueUsed bool) (string, error) {
 
 func (c *converter) FuncCall(name string, args []string, valueType parser.ValueType, valueUsed bool) (string, error) {
 	c.addLine(fmt.Sprintf("call :%s %s", name, fmt.Sprintf("\"%s\"", strings.Join(args, "\" \""))))
-	funcVar, err := funcReturnVariable(name)
+	returnVar, err := c.funcVar(name)
 
 	if err != nil {
 		return "", err
@@ -469,7 +463,7 @@ func (c *converter) FuncCall(name string, args []string, valueType parser.ValueT
 
 	if valueType.DataType() != parser.DATA_TYPE_VOID && valueUsed {
 		helper := c.nextHelperVar()
-		c.VarDefinition(helper, varEvaluationString(funcVar))
+		c.VarDefinition(helper, varEvaluationString(returnVar))
 		return c.VarEvaluation(helper, valueUsed)
 	}
 	return "", nil
@@ -518,11 +512,11 @@ func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 	return c.VarEvaluation(helper, valueUsed)
 }
 
-func (c *converter) funcVarLocal(funcName string) (string, error) {
+func (c *converter) funcVar(funcName string) (string, error) {
 	if len(funcName) == 0 {
 		return "", errors.New("no function name to return value for")
 	}
-	return fmt.Sprintf("_retl%s", funcName), nil
+	return fmt.Sprintf("_rv_%s", funcName), nil
 }
 
 func (c *converter) ifStart(condition string, startAddition string) error {
