@@ -18,17 +18,13 @@ func (s SliceInstantiation) Values() []Expression {
 }
 
 type SliceEvaluation struct {
-	name     string
+	Variable
 	index    Expression
 	dataType DataType
 }
 
 func (s SliceEvaluation) StatementType() StatementType {
 	return STATEMENT_TYPE_SLICE_EVALUATION
-}
-
-func (s SliceEvaluation) Name() string {
-	return s.name
 }
 
 func (s SliceEvaluation) Index() Expression {
@@ -40,7 +36,7 @@ func (s SliceEvaluation) ValueType() ValueType {
 }
 
 type SliceAssignment struct {
-	name  string
+	Variable
 	index Expression
 	value Expression
 }

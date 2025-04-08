@@ -44,11 +44,13 @@ func New() *converter {
 	}
 }
 
-func varAssignmentString(name string, value string) string {
+func varAssignmentString(name string, value string, global bool) string {
+	// TODO: Handle global flag.
 	return fmt.Sprintf("set %s=%s", name, value)
 }
 
-func varEvaluationString(name string) string {
+func varEvaluationString(name string, global bool) string {
+	// TODO: Handle global flag.
 	return fmt.Sprintf("!%s!", name)
 }
 
@@ -84,18 +86,19 @@ func (c *converter) ProgramEnd() error {
 	return nil
 }
 
-func (c *converter) VarDefinition(name string, value string) error {
-	c.addLine(varAssignmentString(name, value))
+func (c *converter) VarDefinition(name string, value string, global bool) error {
+	c.addLine(varAssignmentString(name, value, global))
 	return nil
 }
 
-func (c *converter) VarAssignment(name string, value string) error {
-	c.addLine(varAssignmentString(name, value))
+func (c *converter) VarAssignment(name string, value string, global bool) error {
+	c.addLine(varAssignmentString(name, value, global))
 	return nil
 }
 
-func (c *converter) SliceAssignment(name string, index string, value string) error {
-	c.addLine(c.sliceAssignmentString(varEvaluationString(name), index, value)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+func (c *converter) SliceAssignment(name string, index string, value string, global bool) error {
+	// TODO: Find out if global is used correctly here.
+	c.addLine(c.sliceAssignmentString(varEvaluationString(name, global), index, value, global)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 	return nil
 }
 
@@ -120,7 +123,7 @@ func (c *converter) FuncStart(name string, params []string, returnType parser.Va
 	c.addLine("setlocal")
 
 	for i, param := range params {
-		c.addLine(varAssignmentString(param, fmt.Sprintf("%%~%d", i+1)))
+		c.addLine(varAssignmentString(param, fmt.Sprintf("%%~%d", i+1), false))
 	}
 	return nil
 }
@@ -251,14 +254,14 @@ func (c *converter) UnaryOperation(expr string, operator parser.UnaryOperator, v
 			fmt.Sprintf("if \"%s\" equ \"%s\" (%s) else %s",
 				expr,
 				c.BoolToString(true),
-				varAssignmentString(helper, c.BoolToString(false)),
-				varAssignmentString(helper, c.BoolToString(true)),
+				varAssignmentString(helper, c.BoolToString(false), false),
+				varAssignmentString(helper, c.BoolToString(true), false),
 			),
 		)
 	default:
 		return "", fmt.Errorf("unknown unary operator \"%s\"", operator)
 	}
-	return c.VarEvaluation(helper, valueUsed)
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
 func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
@@ -287,14 +290,14 @@ func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator,
 	case parser.DATA_TYPE_STRING:
 		switch operator {
 		case parser.BINARY_OPERATOR_ADDITION:
-			c.VarAssignment(helper, fmt.Sprintf("%s%s", left, right))
+			c.VarAssignment(helper, fmt.Sprintf("%s%s", left, right), false)
 		default:
 			return notAllowedError()
 		}
 	default:
 		return notAllowedError()
 	}
-	return c.VarEvaluation(helper, valueUsed)
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
 func (c *converter) Comparison(left string, operator parser.CompareOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
@@ -346,11 +349,11 @@ func (c *converter) Comparison(left string, operator parser.CompareOperator, rig
 			left,
 			operatorString,
 			right,
-			varAssignmentString(helper, c.BoolToString(true)),
-			varAssignmentString(helper, c.BoolToString(false)),
+			varAssignmentString(helper, c.BoolToString(true), false),
+			varAssignmentString(helper, c.BoolToString(false), false),
 		),
 	)
-	return c.VarEvaluation(helper, valueUsed)
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
 func (c *converter) LogicalOperation(left string, operator parser.LogicalOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
@@ -358,8 +361,8 @@ func (c *converter) LogicalOperation(left string, operator parser.LogicalOperato
 	trueString := c.BoolToString(true)
 	falseString := c.BoolToString(false)
 	helper := c.nextHelperVar()
-	trueAssignment := varAssignmentString(helper, trueString)
-	falseAssignment := varAssignmentString(helper, falseString)
+	trueAssignment := varAssignmentString(helper, trueString, false)
+	falseAssignment := varAssignmentString(helper, falseString, false)
 
 	switch operator {
 	case parser.LOGICAL_OPERATOR_AND:
@@ -386,11 +389,11 @@ func (c *converter) LogicalOperation(left string, operator parser.LogicalOperato
 	}
 
 	c.addLine(line)
-	return c.VarEvaluation(helper, valueUsed)
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
-func (c *converter) VarEvaluation(name string, valueUsed bool) (string, error) {
-	return varEvaluationString(name), nil
+func (c *converter) VarEvaluation(name string, valueUsed bool, global bool) (string, error) {
+	return varEvaluationString(name, global), nil
 }
 
 func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
@@ -398,12 +401,12 @@ func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string,
 
 	// Init array values.
 	for i, value := range values {
-		c.addLine(c.sliceAssignmentString(helper, strconv.Itoa(i), value))
+		c.addLine(c.sliceAssignmentString(helper, strconv.Itoa(i), value, false))
 	}
 	return helper, nil
 }
 
-func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (string, error) {
+func (c *converter) SliceEvaluation(name string, index string, valueUsed bool, global bool) (string, error) {
 	helper := c.nextHelperVar()
 
 	// A for-loop is required because the evaluation wouldn't work with the following code as expected.
@@ -419,11 +422,18 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (
 	// accessing [0]. Instead, it treats !a1![0] as a literal string, so x is assigned the value
 	// _h0[0], not 4. Batch scripts do not support indirect variable expansion in a straightforward
 	// way. However, you can work around this by using for /f to evaluate the variable dynamically
-	c.addLine(fmt.Sprintf("for /f \"delims=\" %%%%i in (\"%s[%s]\") do set %s=!%%%%i!", varEvaluationString(name), index, helper)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
-	return c.VarEvaluation(helper, valueUsed)
+	c.addLine(
+		fmt.Sprintf("for /f \"delims=\" %%%%i in (\"%s[%s]\") do set %s=!%%%%i!",
+			// TODO: Find out if global is used correctly here.
+			varEvaluationString(name, global),
+			index,
+			helper,
+		),
+	) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
-func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
+func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, error) {
 	// Add array helper to batch file for easier array processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
 	if !c.sliceLenHelperSet {
 		c.addLine(":: array length helper begin")
@@ -444,9 +454,9 @@ func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
 	c.addLine(fmt.Sprintf("call :_sl %s", name))
-	c.VarAssignment(helper, varEvaluationString("_l"))
+	c.VarAssignment(helper, varEvaluationString("_l", false), false)
 
-	return c.VarEvaluation(helper, valueUsed)
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
 func (c *converter) Group(value string, valueUsed bool) (string, error) {
@@ -463,8 +473,8 @@ func (c *converter) FuncCall(name string, args []string, valueType parser.ValueT
 
 	if valueType.DataType() != parser.DATA_TYPE_VOID && valueUsed {
 		helper := c.nextHelperVar()
-		c.VarDefinition(helper, varEvaluationString(returnVar))
-		return c.VarEvaluation(helper, valueUsed)
+		c.VarDefinition(helper, varEvaluationString(returnVar, false), false)
+		return c.VarEvaluation(helper, valueUsed, false)
 	}
 	return "", nil
 }
@@ -500,7 +510,8 @@ func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) (string,
 		c.addLine(fmt.Sprintf("if defined %s set \"%s=!%s!!LF!\"", helper, helper, helper))
 		c.addLine(fmt.Sprintf("set \"%s=!%s!%%%%i\"", helper, helper))
 		c.addLine(")")
-		return c.VarEvaluation(helper, valueUsed)
+
+		return c.VarEvaluation(helper, valueUsed, false)
 	}
 	c.addLine(fmt.Sprintf("call %s", strings.Join(callStrings, " | ")))
 	return "", nil
@@ -509,7 +520,7 @@ func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) (string,
 func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	c.addLine(fmt.Sprintf("set /p %s=%s", helper, prompt))
-	return c.VarEvaluation(helper, valueUsed)
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
 func (c *converter) funcVar(funcName string) (string, error) {
@@ -574,7 +585,7 @@ func (c *converter) nextHelperVar() string {
 	return helperVar
 }
 
-func (c *converter) sliceAssignmentString(name string, index string, value string) string {
+func (c *converter) sliceAssignmentString(name string, index string, value string, global bool) string {
 	// Add array helper to batch file for easier array processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
 	if !c.sliceAssignmentHelperSet {
 		c.addLine(":: array assignment helper begin")
@@ -587,5 +598,6 @@ func (c *converter) sliceAssignmentString(name string, index string, value strin
 
 		c.sliceAssignmentHelperSet = true
 	}
+	// TODO: Handle global flag.
 	return fmt.Sprintf("call :_sa %s %s \"%s\"", name, index, value)
 }

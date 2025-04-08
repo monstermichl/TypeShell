@@ -540,7 +540,7 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Expression, error) {
 		return nil, expectedError(fmt.Sprintf("%s but got %s", expectedValueType.ToString(), assignedValueType.ToString()), valueToken)
 	}
 	return VariableAssignment{
-		variable: definedVariable,
+		Variable: definedVariable,
 		value:    value,
 	}, nil
 }
@@ -1088,8 +1088,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 				err = fmt.Errorf("variable %s has not been defined at row %d, column %d", name, nextToken.Row(), nextToken.Column())
 			} else {
 				expr = VariableEvaluation{
-					name:      name,
-					valueType: variable.ValueType(),
+					Variable: variable,
 				}
 			}
 		}
@@ -1558,7 +1557,7 @@ func (p *Parser) evaluateSliceEvaluation(ctx context) (Expression, error) {
 		return nil, expectedError("\"]\"", nextToken)
 	}
 	return SliceEvaluation{
-		name:     name,
+		Variable: variable,
 		index:    index,
 		dataType: variable.ValueType().DataType(),
 	}, nil
@@ -1620,9 +1619,9 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 		return nil, expectedError(fmt.Sprintf("%s value but got %s", variableDataType, assignedDataType), valueToken)
 	}
 	return SliceAssignment{
-		name:  name,
-		index: index,
-		value: value,
+		Variable: variable,
+		index:    index,
+		value:    value,
 	}, nil
 }
 
@@ -1655,11 +1654,10 @@ func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
 		return nil, expectedError("\"++\" or \"--\"", operationToken)
 	}
 	return VariableAssignment{
-		variable: definedVariable,
+		Variable: definedVariable,
 		value: BinaryOperation{
 			left: VariableEvaluation{
-				name:      definedVariable.Name(),
-				valueType: valueType,
+				Variable: definedVariable,
 			},
 			operator:  operation,
 			right:     IntegerLiteral{value: 1},

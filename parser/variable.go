@@ -27,20 +27,12 @@ func (v Variable) Global() bool {
 }
 
 type VariableAssignment struct {
-	variable Variable
-	value    Expression
+	Variable
+	value Expression
 }
 
 func (v VariableAssignment) StatementType() StatementType {
 	return STATEMENT_TYPE_VAR_ASSIGNMENT
-}
-
-func (v VariableAssignment) ValueType() ValueType {
-	return v.variable.ValueType()
-}
-
-func (v VariableAssignment) Variable() Variable {
-	return v.variable
 }
 
 func (v VariableAssignment) Value() Expression {
@@ -65,18 +57,9 @@ func (v VariableDefinition) Value() Expression {
 }
 
 type VariableEvaluation struct {
-	name      string
-	valueType ValueType
+	Variable
 }
 
 func (e VariableEvaluation) StatementType() StatementType {
 	return STATEMENT_TYPE_VAR_EVALUATION
-}
-
-func (e VariableEvaluation) ValueType() ValueType {
-	return e.valueType
-}
-
-func (e VariableEvaluation) Name() string {
-	return e.name
 }

@@ -23,11 +23,13 @@ func New() *converter {
 	}
 }
 
-func varEvaluationString(name string) string {
+func varEvaluationString(name string, global bool) string {
+	// TODO: Handle global flag.
 	return fmt.Sprintf("${%s}", name)
 }
 
-func sliceAssignmentString(name string, index string, value string) string {
+func sliceAssignmentString(name string, index string, value string, global bool) string {
+	// TODO: Handle global flag.
 	return fmt.Sprintf("eval %s_%s=\"%s\"", name, index, value)
 }
 
@@ -59,18 +61,21 @@ func (c *converter) ProgramEnd() error {
 	return nil
 }
 
-func (c *converter) VarDefinition(name string, value string) error {
+func (c *converter) VarDefinition(name string, value string, global bool) error {
+	// TODO: Handle global flag.
 	c.addLine(fmt.Sprintf("%s=%s", name, value))
 	return nil
 }
 
-func (c *converter) VarAssignment(name string, value string) error {
+func (c *converter) VarAssignment(name string, value string, global bool) error {
+	// TODO: Handle global flag.
 	c.addLine(fmt.Sprintf("%s=%s", name, value))
 	return nil
 }
 
-func (c *converter) SliceAssignment(name string, index string, value string) error {
-	c.addLine(sliceAssignmentString(varEvaluationString(name), index, value)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+func (c *converter) SliceAssignment(name string, index string, value string, global bool) error {
+	// TODO: Find out if global is correctly used here.
+	c.addLine(sliceAssignmentString(varEvaluationString(name, global), index, value, global)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 	return nil
 }
 
@@ -168,11 +173,13 @@ func (c *converter) UnaryOperation(expr string, operator parser.UnaryOperator, v
 				c.BoolToString(true),
 				c.BoolToString(false),
 				c.BoolToString(true),
-			))
+			),
+			false,
+		)
 	default:
 		return "", fmt.Errorf("unknown unary operator \"%s\"", operator)
 	}
-	return c.VarEvaluation(helper, valueUsed)
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
 func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
@@ -197,18 +204,18 @@ func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator,
 		default:
 			return notAllowedError()
 		}
-		c.VarAssignment(helper, fmt.Sprintf("$(expr %s \\%s %s)", left, operator, right)) // Backslash is required for * operator to prevent pattern expansion (https://www.shell-tips.com/bash/math-arithmetic-calculation/#using-the-expr-command-line).
+		c.VarAssignment(helper, fmt.Sprintf("$(expr %s \\%s %s)", left, operator, right), false) // Backslash is required for * operator to prevent pattern expansion (https://www.shell-tips.com/bash/math-arithmetic-calculation/#using-the-expr-command-line).
 	case parser.DATA_TYPE_STRING:
 		switch operator {
 		case parser.BINARY_OPERATOR_ADDITION:
-			c.VarAssignment(helper, fmt.Sprintf("\"%s%s\"", left, right))
+			c.VarAssignment(helper, fmt.Sprintf("\"%s%s\"", left, right), false)
 		default:
 			return notAllowedError()
 		}
 	default:
 		return notAllowedError()
 	}
-	return c.VarEvaluation(helper, valueUsed)
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
 func (c *converter) Comparison(left string, operator parser.CompareOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
@@ -253,8 +260,18 @@ func (c *converter) Comparison(left string, operator parser.CompareOperator, rig
 	}
 	helper := c.nextHelperVar()
 
-	c.VarAssignment(helper, fmt.Sprintf("$(if [ \"%s\" %s \"%s\" ]; then echo %s; else echo %s; fi)", left, operatorString, right, c.BoolToString(true), c.BoolToString(false)))
-	return c.VarEvaluation(helper, valueUsed)
+	c.VarAssignment(
+		helper,
+		fmt.Sprintf("$(if [ \"%s\" %s \"%s\" ]; then echo %s; else echo %s; fi)",
+			left,
+			operatorString,
+			right,
+			c.BoolToString(true),
+			c.BoolToString(false),
+		),
+		false,
+	)
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
 func (c *converter) LogicalOperation(left string, operator parser.LogicalOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
@@ -271,31 +288,50 @@ func (c *converter) LogicalOperation(left string, operator parser.LogicalOperato
 	trueString := c.BoolToString(true)
 	helper := c.nextHelperVar()
 
-	c.VarAssignment(helper, fmt.Sprintf("$(if [ \"%s\" -eq \"%s\" ] %s [ \"%s\" -eq \"%s\" ]; then echo %s; else echo %s; fi)", left, trueString, operatorString, right, trueString, trueString, c.BoolToString(false)))
-	return c.VarEvaluation(helper, valueUsed)
+	c.VarAssignment(
+		helper,
+		fmt.Sprintf("$(if [ \"%s\" -eq \"%s\" ] %s [ \"%s\" -eq \"%s\" ]; then echo %s; else echo %s; fi)",
+			left,
+			trueString,
+			operatorString,
+			right,
+			trueString,
+			trueString,
+			c.BoolToString(false),
+		),
+		false,
+	)
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
-func (c *converter) VarEvaluation(name string, valueUsed bool) (string, error) {
-	return varEvaluationString(name), nil
+func (c *converter) VarEvaluation(name string, valueUsed bool, global bool) (string, error) {
+	return varEvaluationString(name, global), nil
 }
 
 func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
 	for i, value := range values {
-		c.addLine(sliceAssignmentString(helper, strconv.Itoa(i), value))
+		c.addLine(sliceAssignmentString(helper, strconv.Itoa(i), value, false))
 	}
 	return helper, nil
 }
 
-func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (string, error) {
+func (c *converter) SliceEvaluation(name string, index string, valueUsed bool, global bool) (string, error) {
 	helper := c.nextHelperVar()
-	c.VarAssignment(helper, fmt.Sprintf("$(eval \"echo \\${%s_%s}\")", varEvaluationString(name), index)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+	c.VarAssignment(
+		helper,
+		fmt.Sprintf("$(eval \"echo \\${%s_%s}\")",
+			varEvaluationString(name, global),
+			index,
+		),
+		false,
+	) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 
-	return c.VarEvaluation(helper, valueUsed)
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
-func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
+func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, error) {
 	if !c.sliceLenHelperSet {
 		c.addLine("_sl() {")
 		c.addLine("local _l=0")
@@ -310,9 +346,10 @@ func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 		c.sliceLenHelperSet = true
 	}
 	helper := c.nextHelperVar()
-	c.VarAssignment(helper, fmt.Sprintf("$(_sl %s)", name)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+	// TODO: Handle global flag.
+	c.VarAssignment(helper, fmt.Sprintf("$(_sl %s)", name), false) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 
-	return c.VarEvaluation(helper, valueUsed)
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
 func (c *converter) Group(value string, valueUsed bool) (string, error) {
@@ -332,8 +369,8 @@ func (c *converter) FuncCall(name string, args []string, valueType parser.ValueT
 		helper := c.nextHelperVar()
 		call = fmt.Sprintf("$(%s)", call)
 
-		c.VarDefinition(helper, call)
-		return c.VarEvaluation(helper, valueUsed)
+		c.VarDefinition(helper, call, false)
+		return c.VarEvaluation(helper, valueUsed, false)
 	}
 	c.addLine(call)
 	return "", nil
@@ -362,8 +399,8 @@ func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) (string,
 		callString = fmt.Sprintf("$(%s)", callString)
 		helper := c.nextHelperVar()
 
-		c.VarDefinition(helper, callString)
-		return c.VarEvaluation(helper, valueUsed)
+		c.VarDefinition(helper, callString, false)
+		return c.VarEvaluation(helper, valueUsed, false)
 	}
 	c.addLine(callString)
 	return "", nil
@@ -376,7 +413,7 @@ func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 		prompt = fmt.Sprintf(" -p \"%s\"", prompt)
 	}
 	c.addLine(fmt.Sprintf("read%s %s", prompt, helper))
-	return c.VarEvaluation(helper, valueUsed)
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
 func (c *converter) ifStart(condition string, startWord string) error {

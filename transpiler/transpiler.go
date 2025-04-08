@@ -248,7 +248,8 @@ func (t *transpiler) evaluateVarDefinition(definition parser.VariableDefinition)
 	if err != nil {
 		return err
 	}
-	return t.converter.VarDefinition(definition.Variable().Name(), value)
+	variable := definition.Variable()
+	return t.converter.VarDefinition(variable.Name(), value, variable.Global())
 }
 
 func (t *transpiler) evaluateVarAssignment(assignment parser.VariableAssignment) error {
@@ -257,7 +258,7 @@ func (t *transpiler) evaluateVarAssignment(assignment parser.VariableAssignment)
 	if err != nil {
 		return err
 	}
-	return t.converter.VarAssignment(assignment.Variable().Name(), value)
+	return t.converter.VarAssignment(assignment.Name(), value, assignment.Global())
 }
 
 func (t *transpiler) evaluateSliceAssignment(assignment parser.SliceAssignment) error {
@@ -271,11 +272,11 @@ func (t *transpiler) evaluateSliceAssignment(assignment parser.SliceAssignment) 
 	if err != nil {
 		return err
 	}
-	return t.converter.SliceAssignment(assignment.Name(), index, value)
+	return t.converter.SliceAssignment(assignment.Name(), index, value, assignment.Global())
 }
 
 func (t *transpiler) evaluateVarEvaluation(evaluation parser.VariableEvaluation, valueUsed bool) (string, error) {
-	return t.converter.VarEvaluation(evaluation.Name(), valueUsed)
+	return t.converter.VarEvaluation(evaluation.Name(), valueUsed, evaluation.Global())
 }
 
 func (t *transpiler) evaluateSliceEvaluation(evaluation parser.SliceEvaluation, valueUsed bool) (string, error) {
@@ -284,7 +285,7 @@ func (t *transpiler) evaluateSliceEvaluation(evaluation parser.SliceEvaluation, 
 	if err != nil {
 		return "", err
 	}
-	return t.converter.SliceEvaluation(evaluation.Name(), index, valueUsed)
+	return t.converter.SliceEvaluation(evaluation.Name(), index, valueUsed, evaluation.Global())
 }
 
 func (t *transpiler) evaluateGroup(group parser.Group, valueUsed bool) (string, error) {
@@ -328,7 +329,7 @@ func (t *transpiler) evaluateFunctionDefinition(functionDefinition parser.Functi
 		params = append(params, param.Name())
 	}
 	conv := t.converter
-	err := conv.FuncStart(name, params)
+	err := conv.FuncStart(name, params, functionDefinition.ValueType())
 
 	if err != nil {
 		return err
@@ -411,12 +412,19 @@ func (t *transpiler) evaluateInput(input parser.Input, valueUsed bool) (string, 
 }
 
 func (t *transpiler) evaluateLen(len parser.Len, valueUsed bool) (string, error) {
-	name, err := t.evaluateExpression(len.Expression(), true)
+	expr := len.Expression()
+	name, err := t.evaluateExpression(expr, true)
 
 	if err != nil {
 		return "", err
 	}
-	return t.converter.SliceLen(name, valueUsed)
+	global := false
+
+	switch t := expr.(type) {
+	case parser.SliceEvaluation:
+		global = t.Global()
+	}
+	return t.converter.SliceLen(name, valueUsed, global)
 }
 
 func (t *transpiler) evaluate(statement parser.Statement) error {
