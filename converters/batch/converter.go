@@ -44,16 +44,6 @@ func New() *converter {
 	}
 }
 
-func varAssignmentString(name string, value string, global bool) string {
-	// TODO: Handle global flag.
-	return fmt.Sprintf("set %s=%s", name, value)
-}
-
-func varEvaluationString(name string, global bool) string {
-	// TODO: Handle global flag.
-	return fmt.Sprintf("!%s!", name)
-}
-
 func (c *converter) BoolToString(value bool) string {
 	if value {
 		return "1"
@@ -87,18 +77,18 @@ func (c *converter) ProgramEnd() error {
 }
 
 func (c *converter) VarDefinition(name string, value string, global bool) error {
-	c.addLine(varAssignmentString(name, value, global))
+	c.addLine(c.varAssignmentString(name, value, global))
 	return nil
 }
 
 func (c *converter) VarAssignment(name string, value string, global bool) error {
-	c.addLine(varAssignmentString(name, value, global))
+	c.addLine(c.varAssignmentString(name, value, global))
 	return nil
 }
 
 func (c *converter) SliceAssignment(name string, index string, value string, global bool) error {
 	// TODO: Find out if global is used correctly here.
-	c.addLine(c.sliceAssignmentString(varEvaluationString(name, global), index, value, global)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+	c.addLine(c.sliceAssignmentString(c.varEvaluationString(name, global), index, value, global)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 	return nil
 }
 
@@ -122,7 +112,7 @@ func (c *converter) FuncStart(name string, params []string, returnType parser.Va
 	c.addLine(fmt.Sprintf(":%s", name))
 
 	for i, param := range params {
-		c.addLine(varAssignmentString(param, fmt.Sprintf("%%~%d", i+1), false))
+		c.addLine(c.varAssignmentString(param, fmt.Sprintf("%%~%d", i+1), false))
 	}
 	return nil
 }
@@ -252,8 +242,8 @@ func (c *converter) UnaryOperation(expr string, operator parser.UnaryOperator, v
 			fmt.Sprintf("if \"%s\" equ \"%s\" (%s) else %s",
 				expr,
 				c.BoolToString(true),
-				varAssignmentString(helper, c.BoolToString(false), false),
-				varAssignmentString(helper, c.BoolToString(true), false),
+				c.varAssignmentString(helper, c.BoolToString(false), false),
+				c.varAssignmentString(helper, c.BoolToString(true), false),
 			),
 		)
 	default:
@@ -347,8 +337,8 @@ func (c *converter) Comparison(left string, operator parser.CompareOperator, rig
 			left,
 			operatorString,
 			right,
-			varAssignmentString(helper, c.BoolToString(true), false),
-			varAssignmentString(helper, c.BoolToString(false), false),
+			c.varAssignmentString(helper, c.BoolToString(true), false),
+			c.varAssignmentString(helper, c.BoolToString(false), false),
 		),
 	)
 	return c.VarEvaluation(helper, valueUsed, false)
@@ -359,8 +349,8 @@ func (c *converter) LogicalOperation(left string, operator parser.LogicalOperato
 	trueString := c.BoolToString(true)
 	falseString := c.BoolToString(false)
 	helper := c.nextHelperVar()
-	trueAssignment := varAssignmentString(helper, trueString, false)
-	falseAssignment := varAssignmentString(helper, falseString, false)
+	trueAssignment := c.varAssignmentString(helper, trueString, false)
+	falseAssignment := c.varAssignmentString(helper, falseString, false)
 
 	switch operator {
 	case parser.LOGICAL_OPERATOR_AND:
@@ -391,7 +381,7 @@ func (c *converter) LogicalOperation(left string, operator parser.LogicalOperato
 }
 
 func (c *converter) VarEvaluation(name string, valueUsed bool, global bool) (string, error) {
-	return varEvaluationString(name, global), nil
+	return c.varEvaluationString(name, global), nil
 }
 
 func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
@@ -423,7 +413,7 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool, g
 	c.addLine(
 		fmt.Sprintf("for /f \"delims=\" %%%%i in (\"%s[%s]\") do set %s=!%%%%i!",
 			// TODO: Find out if global is used correctly here.
-			varEvaluationString(name, global),
+			c.varEvaluationString(name, global),
 			index,
 			helper,
 		),
@@ -452,7 +442,7 @@ func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, 
 	helper := c.nextHelperVar()
 
 	c.addLine(fmt.Sprintf("call :_sl %s", name))
-	c.VarAssignment(helper, varEvaluationString("_l", false), false)
+	c.VarAssignment(helper, c.varEvaluationString("_l", false), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
 }
@@ -471,7 +461,7 @@ func (c *converter) FuncCall(name string, args []string, valueType parser.ValueT
 
 	if valueType.DataType() != parser.DATA_TYPE_VOID && valueUsed {
 		helper := c.nextHelperVar()
-		c.VarDefinition(helper, varEvaluationString(returnVar, false), false)
+		c.VarDefinition(helper, c.varEvaluationString(returnVar, false), false)
 		return c.VarEvaluation(helper, valueUsed, false)
 	}
 	return "", nil
@@ -519,6 +509,16 @@ func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	c.addLine(fmt.Sprintf("set /p %s=%s", helper, prompt))
 	return c.VarEvaluation(helper, valueUsed, false)
+}
+
+func (c *converter) varAssignmentString(name string, value string, global bool) string {
+	// TODO: Handle global flag.
+	return fmt.Sprintf("set %s=%s", name, value)
+}
+
+func (c *converter) varEvaluationString(name string, global bool) string {
+	// TODO: Handle global flag.
+	return fmt.Sprintf("!%s!", name)
 }
 
 func (c *converter) funcVar(funcName string) (string, error) {

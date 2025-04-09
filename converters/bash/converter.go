@@ -23,16 +23,6 @@ func New() *converter {
 	}
 }
 
-func varEvaluationString(name string, global bool) string {
-	// TODO: Handle global flag.
-	return fmt.Sprintf("${%s}", name)
-}
-
-func sliceAssignmentString(name string, index string, value string, global bool) string {
-	// TODO: Handle global flag.
-	return fmt.Sprintf("eval %s_%s=\"%s\"", name, index, value)
-}
-
 func (c *converter) BoolToString(value bool) string {
 	if value {
 		return "1"
@@ -83,7 +73,7 @@ func (c *converter) VarAssignment(name string, value string, global bool) error 
 
 func (c *converter) SliceAssignment(name string, index string, value string, global bool) error {
 	// TODO: Find out if global is correctly used here.
-	c.addLine(sliceAssignmentString(varEvaluationString(name, global), index, value, global)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+	c.addLine(c.sliceAssignmentString(c.varEvaluationString(name, global), index, value, global)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 	return nil
 }
 
@@ -313,14 +303,14 @@ func (c *converter) LogicalOperation(left string, operator parser.LogicalOperato
 }
 
 func (c *converter) VarEvaluation(name string, valueUsed bool, global bool) (string, error) {
-	return varEvaluationString(name, global), nil
+	return c.varEvaluationString(name, global), nil
 }
 
 func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
 	for i, value := range values {
-		c.addLine(sliceAssignmentString(helper, strconv.Itoa(i), value, false))
+		c.addLine(c.sliceAssignmentString(helper, strconv.Itoa(i), value, false))
 	}
 	return helper, nil
 }
@@ -330,7 +320,7 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool, g
 	c.VarAssignment(
 		helper,
 		fmt.Sprintf("$(eval \"echo \\${%s_%s}\")",
-			varEvaluationString(name, global),
+		c.varEvaluationString(name, global),
 			index,
 		),
 		false,
@@ -422,6 +412,16 @@ func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 	}
 	c.addLine(fmt.Sprintf("read%s %s", prompt, helper))
 	return c.VarEvaluation(helper, valueUsed, false)
+}
+
+func (c *converter) varEvaluationString(name string, global bool) string {
+	// TODO: Handle global flag.
+	return fmt.Sprintf("${%s}", name)
+}
+
+func (c *converter) sliceAssignmentString(name string, index string, value string, global bool) string {
+	// TODO: Handle global flag.
+	return fmt.Sprintf("eval %s_%s=\"%s\"", name, index, value)
 }
 
 func (c *converter) ifStart(condition string, startWord string) error {
