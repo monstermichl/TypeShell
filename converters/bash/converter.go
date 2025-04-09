@@ -62,13 +62,21 @@ func (c *converter) ProgramEnd() error {
 }
 
 func (c *converter) VarDefinition(name string, value string, global bool) error {
-	// TODO: Handle global flag.
-	c.addLine(fmt.Sprintf("%s=%s", name, value))
-	return nil
+	return c.VarAssignment(name, value, global)
 }
 
 func (c *converter) VarAssignment(name string, value string, global bool) error {
 	// TODO: Handle global flag.
+	length := len(value)
+
+	if length > 0 {
+		if string(value[length-1]) != "\"" {
+			value = fmt.Sprintf("%s\"", value)
+		}
+		if string(value[0]) != "\"" {
+			value = fmt.Sprintf("\"%s", value)
+		}
+	}
 	c.addLine(fmt.Sprintf("%s=%s", name, value))
 	return nil
 }
