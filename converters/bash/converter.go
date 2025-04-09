@@ -2,6 +2,7 @@ package bash
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -9,10 +10,16 @@ import (
 	"github.com/monstermichl/typeshell/transpiler"
 )
 
+type funcInfo struct {
+	name string
+}
+
 type converter struct {
 	interpreter       string
 	code              []string
 	varCounter        int
+	funcs             []funcInfo
+	funcCounter       int
 	sliceLenHelperSet bool
 }
 
@@ -56,7 +63,6 @@ func (c *converter) VarDefinition(name string, value string, global bool) error 
 }
 
 func (c *converter) VarAssignment(name string, value string, global bool) error {
-	// TODO: Handle global flag.
 	length := len(value)
 
 	if length > 0 {
@@ -67,7 +73,7 @@ func (c *converter) VarAssignment(name string, value string, global bool) error 
 			value = fmt.Sprintf("\"%s", value)
 		}
 	}
-	c.addLine(fmt.Sprintf("%s=%s", name, value))
+	c.addLine(fmt.Sprintf("%s=%s", c.varName(name, global), value))
 	return nil
 }
 
@@ -78,16 +84,23 @@ func (c *converter) SliceAssignment(name string, index string, value string, glo
 }
 
 func (c *converter) FuncStart(name string, params []string, returnType parser.ValueType) error {
+	c.funcs = append(c.funcs, funcInfo{
+		name: name,
+	})
+	c.funcCounter++
 	c.addLine(fmt.Sprintf("%s() {", name))
 
 	for i, param := range params {
-		c.addLine(fmt.Sprintf("local %s=$%d", param, i+1))
+		c.VarAssignment(param, fmt.Sprintf("$%d", i+1), false)
 	}
 	return nil
 }
 
 func (c *converter) FuncEnd() error {
 	c.addLine("}")
+
+	lastIndex := len(c.funcs) - 1
+	c.funcs = slices.Delete(c.funcs, lastIndex, lastIndex+1)
 	return nil
 }
 
@@ -320,7 +333,7 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool, g
 	c.VarAssignment(
 		helper,
 		fmt.Sprintf("$(eval \"echo \\${%s_%s}\")",
-		c.varEvaluationString(name, global),
+			c.varEvaluationString(name, global),
 			index,
 		),
 		false,
@@ -414,9 +427,15 @@ func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
+func (c *converter) varName(name string, global bool) string {
+	if c.inFunction() && !global {
+		name = fmt.Sprintf("f%d_%s", c.funcCounter, name)
+	}
+	return name
+}
+
 func (c *converter) varEvaluationString(name string, global bool) string {
-	// TODO: Handle global flag.
-	return fmt.Sprintf("${%s}", name)
+	return fmt.Sprintf("${%s}", c.varName(name, global))
 }
 
 func (c *converter) sliceAssignmentString(name string, index string, value string, global bool) string {
@@ -427,6 +446,14 @@ func (c *converter) sliceAssignmentString(name string, index string, value strin
 func (c *converter) ifStart(condition string, startWord string) error {
 	c.addLine(fmt.Sprintf("%s [ %s -eq %s ]; then", startWord, condition, c.BoolToString(true)))
 	return nil
+}
+
+func (c *converter) inFunction() bool {
+	return len(c.funcs) > 0
+}
+
+func (c *converter) mustCurrentFuncInfo() funcInfo {
+	return c.funcs[len(c.funcs)-1]
 }
 
 func (c *converter) addLine(line string) {

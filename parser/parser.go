@@ -610,6 +610,14 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 	openingBrace := p.peek()
 	params := []Variable{}
 
+	// Store original variables.
+	variables := maps.Clone(ctx.variables) // TODO: Find out if this works properly to restore variables at the end of the block.
+
+	// Remove all variables which are not global.
+	maps.DeleteFunc(ctx.variables, func(_ string, v Variable) bool {
+		return !v.Global()
+	})
+
 	// If no parameters are given, the brackets are optional.
 	if openingBrace.Type() == lexer.OPENING_ROUND_BRACKET {
 		var err error
@@ -639,10 +647,9 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 		returnType = returnTypeTemp
 	}
 
-	// Create ctx copy and add params as variables.
-	ctxCopy := ctx
+	// Add parameters to variables.
 	for _, param := range params {
-		ctxCopy.variables[param.Name()] = param
+		ctx.variables[param.Name()] = param
 	}
 
 	statements, err := p.evaluateBlock(func(statements []Statement, last bool) error {
@@ -667,11 +674,15 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 			errTemp = fmt.Errorf("function %s must not have a return statement", name)
 		}
 		return errTemp
-	}, ctxCopy, SCOPE_FUNCTION)
+	}, ctx, SCOPE_FUNCTION)
 
 	if err != nil {
 		return nil, err
 	}
+
+	// Restore original variables.
+	ctx.variables = variables
+
 	return FunctionDefinition{
 		name:      name,
 		valueType: returnType,
@@ -1504,7 +1515,6 @@ func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
 			} else if nextTokenType == lexer.CLOSING_CURLY_BRACKET {
 				break
 			} else {
-				fmt.Println(nextToken)
 				return nil, expectedError("\",\" or \"}\"", nextToken)
 			}
 		}

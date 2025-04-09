@@ -30,6 +30,7 @@ type converter struct {
 	whileCounter             int
 	endLabels                []string
 	funcs                    []funcInfo
+	funcCounter              int
 	fors                     []forInfo
 	ifs                      []ifInfo
 	lfSet                    bool
@@ -104,6 +105,7 @@ func (c *converter) FuncStart(name string, params []string, returnType parser.Va
 
 		c.returnHelperSet = true
 	}
+	c.funcCounter++
 	c.funcs = append(c.funcs, funcInfo{
 		name: name,
 	})
@@ -118,7 +120,7 @@ func (c *converter) FuncStart(name string, params []string, returnType parser.Va
 }
 
 func (c *converter) FuncEnd() error {
-	name := c.currentFuncInfo().name
+	name := c.mustCurrentFuncInfo().name
 
 	c.addLine(fmt.Sprintf(":_ret_%s", name))
 	c.addLine("exit /B 0")
@@ -131,15 +133,10 @@ func (c *converter) FuncEnd() error {
 }
 
 func (c *converter) Return(value string, valueType parser.ValueType) error {
-	currFunc := c.currentFuncInfo()
+	currFunc := c.mustCurrentFuncInfo()
 
 	if valueType.DataType() != parser.DATA_TYPE_VOID {
-		returnVar, err := c.funcVar(currFunc.name)
-
-		if err != nil {
-			return err
-		}
-		c.addLine(fmt.Sprintf("call :_gvh %s \"%s\"", returnVar, value))
+		c.VarDefinition("_rv", value, true)
 	}
 	c.addLine(fmt.Sprintf("goto :_ret_%s", currFunc.name))
 	return nil
@@ -153,7 +150,7 @@ func (c *converter) IfStart(condition string) error {
 }
 
 func (c *converter) IfEnd() error {
-	label := c.currentIfInfo().label
+	label := c.mustCurrentIfInfo().label
 
 	c.addLine(fmt.Sprintf("goto %s", label))
 	c.addLine(")")
@@ -166,7 +163,7 @@ func (c *converter) IfEnd() error {
 }
 
 func (c *converter) ElseIfStart(condition string) error {
-	c.addLine(fmt.Sprintf("goto %s", c.currentIfInfo().label))
+	c.addLine(fmt.Sprintf("goto %s", c.mustCurrentIfInfo().label))
 	return c.ifStart(condition, ") else ")
 }
 
@@ -175,7 +172,7 @@ func (c *converter) ElseIfEnd() error {
 }
 
 func (c *converter) ElseStart() error {
-	c.addLine(fmt.Sprintf("goto %s", c.currentIfInfo().label))
+	c.addLine(fmt.Sprintf("goto %s", c.mustCurrentIfInfo().label))
 	c.addLine(") else (")
 	return nil
 }
@@ -215,7 +212,7 @@ func (c *converter) ForEnd() error {
 }
 
 func (c *converter) Break() error {
-	c.addLine(fmt.Sprintf("goto %s", c.currentEndLabel()))
+	c.addLine(fmt.Sprintf("goto %s", c.mustCurrentEndLabel()))
 	return nil
 }
 
@@ -453,15 +450,10 @@ func (c *converter) Group(value string, valueUsed bool) (string, error) {
 
 func (c *converter) FuncCall(name string, args []string, valueType parser.ValueType, valueUsed bool) (string, error) {
 	c.addLine(fmt.Sprintf("call :%s %s", name, fmt.Sprintf("\"%s\"", strings.Join(args, "\" \""))))
-	returnVar, err := c.funcVar(name)
-
-	if err != nil {
-		return "", err
-	}
 
 	if valueType.DataType() != parser.DATA_TYPE_VOID && valueUsed {
 		helper := c.nextHelperVar()
-		c.VarDefinition(helper, c.varEvaluationString(returnVar, false), false)
+		c.VarDefinition(helper, c.varEvaluationString("_rv", true), false)
 		return c.VarEvaluation(helper, valueUsed, false)
 	}
 	return "", nil
@@ -511,21 +503,19 @@ func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
+func (c *converter) varName(name string, global bool) string {
+	if c.inFunction() && !global {
+		name = fmt.Sprintf("f%d_%s", c.funcCounter, name)
+	}
+	return name
+}
+
 func (c *converter) varAssignmentString(name string, value string, global bool) string {
-	// TODO: Handle global flag.
-	return fmt.Sprintf("set %s=%s", name, value)
+	return fmt.Sprintf("set %s=%s", c.varName(name, global), value)
 }
 
 func (c *converter) varEvaluationString(name string, global bool) string {
-	// TODO: Handle global flag.
-	return fmt.Sprintf("!%s!", name)
-}
-
-func (c *converter) funcVar(funcName string) (string, error) {
-	if len(funcName) == 0 {
-		return "", errors.New("no function name to return value for")
-	}
-	return fmt.Sprintf("_rv_%s", funcName), nil
+	return fmt.Sprintf("!%s!", c.varName(name, global))
 }
 
 func (c *converter) ifStart(condition string, startAddition string) error {
@@ -551,21 +541,25 @@ func (c *converter) nextIfLabel() string {
 	return label
 }
 
-func (c *converter) currentFuncInfo() funcInfo {
+func (c *converter) inFunction() bool {
+	return len(c.funcs) > 0
+}
+
+func (c *converter) mustCurrentFuncInfo() funcInfo {
 	return c.funcs[len(c.funcs)-1]
 }
 
-func (c *converter) currentIfInfo() ifInfo {
+func (c *converter) mustCurrentIfInfo() ifInfo {
 	return c.ifs[len(c.ifs)-1]
 }
 
-func (c *converter) currentEndLabel() string {
+func (c *converter) mustCurrentEndLabel() string {
 	return c.endLabels[len(c.endLabels)-1]
 }
 
 func (c *converter) popEndLabel() string {
 	lastIndex := len(c.endLabels) - 1
-	label := c.currentEndLabel()
+	label := c.mustCurrentEndLabel()
 	c.endLabels = slices.Delete(c.endLabels, lastIndex, lastIndex+1)
 
 	return label
@@ -573,7 +567,7 @@ func (c *converter) popEndLabel() string {
 
 func (c *converter) nextEndLabel() string {
 	c.endLabels = append(c.endLabels, fmt.Sprintf(":_e%d", len(c.endLabels)))
-	return c.currentEndLabel()
+	return c.mustCurrentEndLabel()
 }
 
 func (c *converter) nextHelperVar() string {
