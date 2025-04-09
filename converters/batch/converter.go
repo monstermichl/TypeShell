@@ -120,7 +120,6 @@ func (c *converter) FuncStart(name string, params []string, returnType parser.Va
 	c.addLine(fmt.Sprintf(":: %s function begin", name))
 	c.addLine(fmt.Sprintf("goto :_eo_%s", name))
 	c.addLine(fmt.Sprintf(":%s", name))
-	c.addLine("setlocal")
 
 	for i, param := range params {
 		c.addLine(varAssignmentString(param, fmt.Sprintf("%%~%d", i+1), false))
@@ -132,7 +131,6 @@ func (c *converter) FuncEnd() error {
 	name := c.currentFuncInfo().name
 
 	c.addLine(fmt.Sprintf(":_ret_%s", name))
-	c.addLine("endlocal")
 	c.addLine("exit /B 0")
 	c.addLine(fmt.Sprintf(":_eo_%s", name))
 	c.addLine(fmt.Sprintf(":: %s function end", name))
