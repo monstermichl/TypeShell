@@ -83,18 +83,18 @@ func (c *converter) ProgramEnd() error {
 	}
 
 	if c.sliceAssignmentHelperRequired {
-		// Add array helper to batch file for easier array processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
-		c.addLine(":: array assignment helper begin")
+		// Add slice helper to batch file for easier slice processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
+		c.addLine(":: slice assignment helper begin")
 		c.addLine("goto :_esa")
 		c.addLine(":_sa")
 		c.addLine("set %1[%2]=%~3")
 		c.addLine("exit /B 0")
 		c.addLine(":_esa")
-		c.addLine(":: array assignment helper end")
+		c.addLine(":: slice assignment helper end")
 	}
 
 	if c.sliceLenHelperRequired {
-		c.addLine(":: array length helper begin")
+		c.addLine(":: slice length helper begin")
 		c.addLine("goto :_esl")
 		c.addLine(":_sl")
 		c.addLine("set _l=0")
@@ -105,7 +105,7 @@ func (c *converter) ProgramEnd() error {
 		c.addLine(":_slle")
 		c.addLine("exit /B 0")
 		c.addLine(":_esl")
-		c.addLine(":: array length helper end")
+		c.addLine(":: slice length helper end")
 	}
 	c.addLine(":exit")
 	c.addLine("endlocal")
@@ -411,7 +411,7 @@ func (c *converter) VarEvaluation(name string, valueUsed bool, global bool) (str
 func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
-	// Init array values.
+	// Init slice values.
 	for i, value := range values {
 		c.addLine(c.sliceAssignmentString(helper, strconv.Itoa(i), value, false))
 	}
