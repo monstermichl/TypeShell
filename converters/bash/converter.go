@@ -15,12 +15,12 @@ type funcInfo struct {
 }
 
 type converter struct {
-	interpreter       string
-	code              []string
-	varCounter        int
-	funcs             []funcInfo
-	funcCounter       int
-	sliceLenHelperSet bool
+	interpreter            string
+	code                   []string
+	varCounter             int
+	funcs                  []funcInfo
+	funcCounter            int
+	sliceLenHelperRequired bool
 }
 
 func New() *converter {
@@ -55,6 +55,18 @@ func (c *converter) ProgramStart() error {
 }
 
 func (c *converter) ProgramEnd() error {
+	if c.sliceLenHelperRequired {
+		c.addLine("# slice length helper")
+		c.addLine("_sl() {")
+		c.addLine("local _l=0")
+		c.addLine("while true; do")
+		c.addLine("eval \"local _t=\\${$1_${_l}}\"")
+		c.addLine("if [ -z \"${_t}\" ]; then break; fi") // https://stackoverflow.com/a/13864829 (didn't work with +x (probably due to the underscore of the variable)).
+		c.addLine("_l=$(expr ${_l} + 1)")
+		c.addLine("done")
+		c.addLine("echo ${_l}")
+		c.addLine("}")
+	}
 	return nil
 }
 
@@ -106,7 +118,7 @@ func (c *converter) FuncEnd() error {
 
 func (c *converter) Return(value string, valueType parser.ValueType) error {
 	if valueType.DataType() != parser.DATA_TYPE_VOID {
-		c.Print([]string{value})
+		c.VarDefinition("_rv", value, true)
 	}
 	c.addLine("return")
 	return nil
@@ -343,20 +355,8 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool, g
 }
 
 func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, error) {
-	if !c.sliceLenHelperSet {
-		c.addLine("_sl() {")
-		c.addLine("local _l=0")
-		c.addLine("while true; do")
-		c.addLine("eval \"local _t=\\${$1_${_l}}\"")
-		c.addLine("if [ -z \"${_t}\" ]; then break; fi") // https://stackoverflow.com/a/13864829 (didn't work with +x (probably due to the underscore of the variable)).
-		c.addLine("_l=$(expr ${_l} + 1)")
-		c.addLine("done")
-		c.addLine("echo ${_l}")
-		c.addLine("}")
-
-		c.sliceLenHelperSet = true
-	}
 	helper := c.nextHelperVar()
+	c.sliceLenHelperRequired = true
 	// TODO: Handle global flag.
 	c.VarAssignment(helper, fmt.Sprintf("$(_sl %s)", name), false) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 
@@ -374,16 +374,14 @@ func (c *converter) FuncCall(name string, args []string, valueType parser.ValueT
 	for i, arg := range argsCopy {
 		argsCopy[i] = fmt.Sprintf("\"%s\"", arg)
 	}
-	call := fmt.Sprintf("%s %s", name, strings.Join(argsCopy, " "))
+	c.addLine(fmt.Sprintf("%s %s", name, strings.Join(argsCopy, " "))) // TODO: Remove general parameter quoting.
 
 	if returnsValue && valueUsed {
 		helper := c.nextHelperVar()
-		call = fmt.Sprintf("$(%s)", call)
 
-		c.VarDefinition(helper, call, false)
+		c.VarDefinition(helper, c.varEvaluationString("_rv", true), false)
 		return c.VarEvaluation(helper, valueUsed, false)
 	}
-	c.addLine(call)
 	return "", nil
 }
 
