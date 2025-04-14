@@ -24,19 +24,19 @@ type ifInfo struct {
 }
 
 type converter struct {
-	code                     []string
-	varCounter               int
-	ifCounter                int
-	whileCounter             int
-	endLabels                []string
-	funcs                    []funcInfo
-	funcCounter              int
-	fors                     []forInfo
-	ifs                      []ifInfo
-	lfSet                    bool
-	returnHelperSet          bool
-	sliceAssignmentHelperSet bool
-	sliceLenHelperSet        bool
+	code                          []string
+	varCounter                    int
+	ifCounter                     int
+	whileCounter                  int
+	endLabels                     []string
+	funcs                         []funcInfo
+	funcCounter                   int
+	fors                          []forInfo
+	ifs                           []ifInfo
+	lfSet                         bool
+	returnHelperRequired          bool
+	sliceAssignmentHelperRequired bool
+	sliceLenHelperRequired        bool
 }
 
 func New() *converter {
@@ -72,6 +72,41 @@ func (c *converter) ProgramStart() error {
 }
 
 func (c *converter) ProgramEnd() error {
+	if c.returnHelperRequired {
+		c.addLine(":: global var helper begin")
+		c.addLine("goto :_eo_gvh")
+		c.addLine(":_gvh")
+		c.addLine("set %1=%~2")
+		c.addLine("exit /B 0")
+		c.addLine(":_eo_gvh")
+		c.addLine(":: global var helper end")
+	}
+
+	if c.sliceAssignmentHelperRequired {
+		// Add array helper to batch file for easier array processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
+		c.addLine(":: array assignment helper begin")
+		c.addLine("goto :_esa")
+		c.addLine(":_sa")
+		c.addLine("set %1[%2]=%~3")
+		c.addLine("exit /B 0")
+		c.addLine(":_esa")
+		c.addLine(":: array assignment helper end")
+	}
+
+	if c.sliceLenHelperRequired {
+		c.addLine(":: array length helper begin")
+		c.addLine("goto :_esl")
+		c.addLine(":_sl")
+		c.addLine("set _l=0")
+		c.addLine(":_sll")
+		c.addLine("if not defined %1[%_l%] goto :_slle")
+		c.addLine("set /A _l=%_l%+1")
+		c.addLine("goto :_sll")
+		c.addLine(":_slle")
+		c.addLine("exit /B 0")
+		c.addLine(":_esl")
+		c.addLine(":: array length helper end")
+	}
 	c.addLine(":exit")
 	c.addLine("endlocal")
 	return nil
@@ -94,16 +129,8 @@ func (c *converter) SliceAssignment(name string, index string, value string, glo
 }
 
 func (c *converter) FuncStart(name string, params []string, returnType parser.ValueType) error {
-	if returnType.DataType() != parser.DATA_TYPE_VOID && !c.returnHelperSet {
-		c.addLine(":: global var helper begin")
-		c.addLine("goto :_eo_gvh")
-		c.addLine(":_gvh")
-		c.addLine("set %1=%~2")
-		c.addLine("exit /B 0")
-		c.addLine(":_eo_gvh")
-		c.addLine(":: global var helper end")
-
-		c.returnHelperSet = true
+	if returnType.DataType() != parser.DATA_TYPE_VOID {
+		c.returnHelperRequired = true
 	}
 	c.funcCounter++
 	c.funcs = append(c.funcs, funcInfo{
@@ -419,24 +446,8 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool, g
 }
 
 func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, error) {
-	// Add array helper to batch file for easier array processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
-	if !c.sliceLenHelperSet {
-		c.addLine(":: array length helper begin")
-		c.addLine("goto :_esl")
-		c.addLine(":_sl")
-		c.addLine("set _l=0")
-		c.addLine(":_sll")
-		c.addLine("if not defined %1[%_l%] goto :_slle")
-		c.addLine("set /A _l=%_l%+1")
-		c.addLine("goto :_sll")
-		c.addLine(":_slle")
-		c.addLine("exit /B 0")
-		c.addLine(":_esl")
-		c.addLine(":: array length helper end")
-
-		c.sliceLenHelperSet = true
-	}
 	helper := c.nextHelperVar()
+	c.sliceLenHelperRequired = true
 
 	c.addLine(fmt.Sprintf("call :_sl %s", name))
 	c.VarAssignment(helper, c.varEvaluationString("_l", false), false)
@@ -578,18 +589,7 @@ func (c *converter) nextHelperVar() string {
 }
 
 func (c *converter) sliceAssignmentString(name string, index string, value string, global bool) string {
-	// Add array helper to batch file for easier array processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
-	if !c.sliceAssignmentHelperSet {
-		c.addLine(":: array assignment helper begin")
-		c.addLine("goto :_esa")
-		c.addLine(":_sa")
-		c.addLine("set %1[%2]=%~3")
-		c.addLine("exit /B 0")
-		c.addLine(":_esa")
-		c.addLine(":: array assignment helper end")
-
-		c.sliceAssignmentHelperSet = true
-	}
+	c.sliceAssignmentHelperRequired = true
 	// TODO: Handle global flag.
 	return fmt.Sprintf("call :_sa %s %s \"%s\"", name, index, value)
 }
