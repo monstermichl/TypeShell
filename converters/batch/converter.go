@@ -412,7 +412,7 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool, g
 			// TODO: Find out if global is used correctly here.
 			c.varEvaluationString(name, global),
 			index,
-			helper,
+			c.varName(helper, global),
 		),
 	) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 	return c.VarEvaluation(helper, valueUsed, false)
