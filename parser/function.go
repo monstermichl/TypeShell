@@ -1,10 +1,10 @@
 package parser
 
 type FunctionDefinition struct {
-	name      string
-	valueType ValueType
-	params    []Variable
-	body      []Statement
+	name        string
+	returnTypes []ValueType
+	params      []Variable
+	body        []Statement
 }
 
 func (e FunctionDefinition) StatementType() StatementType {
@@ -16,7 +16,7 @@ func (e FunctionDefinition) Name() string {
 }
 
 func (e FunctionDefinition) ValueType() ValueType {
-	return e.valueType
+	return functionValueType(e.returnTypes)
 }
 
 func (e FunctionDefinition) Params() []Variable {
@@ -28,9 +28,9 @@ func (e FunctionDefinition) Body() []Statement {
 }
 
 type FunctionCall struct {
-	name      string
-	valueType ValueType
-	arguments []Expression
+	name        string
+	returnTypes []ValueType
+	arguments   []Expression
 }
 
 func (e FunctionCall) StatementType() StatementType {
@@ -42,9 +42,24 @@ func (e FunctionCall) Name() string {
 }
 
 func (e FunctionCall) ValueType() ValueType {
-	return e.valueType
+	return functionValueType(e.returnTypes)
+}
+
+func (e FunctionCall) ReturnTypes() []ValueType {
+	return e.returnTypes
 }
 
 func (e FunctionCall) Args() []Expression {
 	return e.arguments
+}
+
+func functionValueType(returnTypes []ValueType) ValueType {
+	var valueType ValueType
+
+	if len(returnTypes) > 1 {
+		valueType = NewValueType(DATA_TYPE_MULTIPLE, returnTypes[0].IsSlice())
+	} else {
+		valueType = returnTypes[0]
+	}
+	return valueType
 }

@@ -684,10 +684,10 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 	ctx.variables = variables
 
 	return FunctionDefinition{
-		name:      name,
-		valueType: returnType,
-		params:    params,
-		body:      statements,
+		name:        name,
+		returnTypes: []ValueType{returnType},
+		params:      params,
+		body:        statements,
 	}, nil
 }
 
@@ -1431,9 +1431,9 @@ func (p *Parser) evaluateFunctionCall(ctx context) (Call, error) {
 		return nil, err
 	}
 	return FunctionCall{
-		name:      name,
-		arguments: args,
-		valueType: definedFunction.ValueType(),
+		name:        name,
+		arguments:   args,
+		returnTypes: []ValueType{definedFunction.ValueType()},
 	}, nil
 }
 
