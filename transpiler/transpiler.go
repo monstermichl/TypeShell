@@ -408,7 +408,7 @@ func (t *transpiler) evaluateFunctionCall(functionCall parser.FunctionCall, valu
 	returnTypesLen := len(returnTypes)
 	valuesLen := len(values)
 
-	if valuesLen != returnTypesLen {
+	if valueUsed && valuesLen != returnTypesLen {
 		return expressionResult{}, fmt.Errorf("function \"%s\" must return %d values but returned %d", name, returnTypesLen, valuesLen)
 	}
 	return newExpressionResult(values...), nil

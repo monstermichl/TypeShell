@@ -690,7 +690,7 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 				if lastStatement == nil || lastStatement.StatementType() != STATEMENT_TYPE_RETURN {
 					errTemp = fmt.Errorf("function %s requires a return statement at the end of the block", name)
 				} else if returnStatement := lastStatement.(Return); len(returnStatement.Values()) != len(returnTypes) {
-					errTemp = fmt.Errorf("function %s requires %d return values but only %d are returned", name, len(returnTypes), len(returnStatement.Values()))
+					errTemp = fmt.Errorf("function %s requires %d return values but returns %d", name, len(returnTypes), len(returnStatement.Values()))
 				} else {
 					for i, returnValue := range returnStatement.Values() {
 						returnType := returnTypes[i]

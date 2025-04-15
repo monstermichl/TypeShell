@@ -464,7 +464,7 @@ func (c *converter) FuncCall(name string, args []string, returnTypes []parser.Va
 	c.addLine(fmt.Sprintf("call :%s %s", name, fmt.Sprintf("\"%s\"", strings.Join(args, "\" \""))))
 
 	if valueUsed {
-		for i, _ := range returnTypes {
+		for i := range returnTypes {
 			helper := c.nextHelperVar()
 			c.VarDefinition(helper, c.varEvaluationString(fmt.Sprintf("_rv%d", i), true), false)
 			eval, _ := c.VarEvaluation(helper, valueUsed, false)
