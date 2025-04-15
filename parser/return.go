@@ -1,13 +1,13 @@
 package parser
 
 type Return struct {
-	value Expression
+	values []Expression
 }
 
 func (r Return) StatementType() StatementType {
 	return STATEMENT_TYPE_RETURN
 }
 
-func (r Return) Value() Expression {
-	return r.value
+func (r Return) Values() []Expression {
+	return r.values
 }

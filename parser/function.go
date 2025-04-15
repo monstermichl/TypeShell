@@ -19,6 +19,10 @@ func (e FunctionDefinition) ValueType() ValueType {
 	return functionValueType(e.returnTypes)
 }
 
+func (e FunctionDefinition) ReturnTypes() []ValueType {
+	return e.returnTypes
+}
+
 func (e FunctionDefinition) Params() []Variable {
 	return e.params
 }

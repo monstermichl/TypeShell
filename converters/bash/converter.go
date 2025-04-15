@@ -95,7 +95,7 @@ func (c *converter) SliceAssignment(name string, index string, value string, glo
 	return nil
 }
 
-func (c *converter) FuncStart(name string, params []string, returnType parser.ValueType) error {
+func (c *converter) FuncStart(name string, params []string, returnTypes []parser.ValueType) error {
 	c.funcs = append(c.funcs, funcInfo{
 		name: name,
 	})
@@ -116,9 +116,9 @@ func (c *converter) FuncEnd() error {
 	return nil
 }
 
-func (c *converter) Return(value string, valueType parser.ValueType) error {
-	if valueType.DataType() != parser.DATA_TYPE_VOID {
-		c.VarDefinition("_rv", value, true)
+func (c *converter) Return(values []transpiler.ReturnValue) error {
+	for i, value := range values {
+		c.VarDefinition(fmt.Sprintf("_rv%d", i), value.Value(), true)
 	}
 	c.addLine("return")
 	return nil
@@ -367,22 +367,25 @@ func (c *converter) Group(value string, valueUsed bool) (string, error) {
 	return fmt.Sprintf("(%s)", value), nil
 }
 
-func (c *converter) FuncCall(name string, args []string, valueType parser.ValueType, valueUsed bool) (string, error) {
-	returnsValue := valueType.DataType() != parser.DATA_TYPE_VOID
+func (c *converter) FuncCall(name string, args []string, returnTypes []parser.ValueType, valueUsed bool) ([]string, error) {
 	argsCopy := args
 
 	for i, arg := range argsCopy {
 		argsCopy[i] = fmt.Sprintf("\"%s\"", arg)
 	}
+	returnValues := []string{}
 	c.addLine(fmt.Sprintf("%s %s", name, strings.Join(argsCopy, " "))) // TODO: Remove general parameter quoting.
 
-	if returnsValue && valueUsed {
-		helper := c.nextHelperVar()
+	if valueUsed {
+		for i, _ := range returnTypes {
+			helper := c.nextHelperVar()
 
-		c.VarDefinition(helper, c.varEvaluationString("_rv", true), false)
-		return c.VarEvaluation(helper, valueUsed, false)
+			c.VarDefinition(helper, c.varEvaluationString(fmt.Sprintf("_rv%d", i), true), false)
+			eval, _ := c.VarEvaluation(helper, valueUsed, false)
+			returnValues = append(returnValues, eval)
+		}
 	}
-	return "", nil
+	return returnValues, nil
 }
 
 func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) (string, error) {

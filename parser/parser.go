@@ -635,16 +635,38 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 		}
 	}
 	returnTypeToken := p.peek()
-	returnType := NewValueType(DATA_TYPE_VOID, false)
+	multiple := false
+	returnTypes := []ValueType{}
 
-	// Check if a return type has been specified.
-	if returnTypeToken.Type() == lexer.DATA_TYPE {
-		returnTypeTemp, err := p.evaluateValueType(ctx)
+	if returnTypeToken.Type() == lexer.OPENING_ROUND_BRACKET {
+		p.eat()
+		returnTypeToken = p.peek()
+		multiple = true
+	}
 
-		if err != nil {
-			return nil, err
+	for {
+		// Check if a return type has been specified.
+		if returnTypeToken.Type() == lexer.DATA_TYPE {
+			returnTypeTemp, err := p.evaluateValueType(ctx)
+
+			if err != nil {
+				return nil, err
+			}
+			returnTypes = append(returnTypes, returnTypeTemp)
 		}
-		returnType = returnTypeTemp
+
+		if !multiple {
+			break
+		}
+		nextToken := p.eat()
+		nextTokenType := nextToken.Type()
+
+		if nextTokenType == lexer.CLOSING_ROUND_BRACKET {
+			break
+		} else if nextTokenType != lexer.COMMA {
+			return nil, expectedError("\",\" or \")\"", nextToken)
+		}
+		returnTypeToken = p.peek()
 	}
 
 	// Add parameters to variables.
@@ -661,13 +683,24 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 			lastStatement = statements[length-1]
 		}
 
-		if returnType.DataType() != DATA_TYPE_VOID {
+		if len(returnTypes) > 0 {
 			// If a return value is required, the last statement must be a return statement.
 			if last {
+				// TODO: Add token position to errors to raise clearer error messages.
 				if lastStatement == nil || lastStatement.StatementType() != STATEMENT_TYPE_RETURN {
 					errTemp = fmt.Errorf("function %s requires a return statement at the end of the block", name)
-				} else if returnedType := lastStatement.(Return).value.ValueType(); !returnedType.Equals(returnType) {
-					errTemp = fmt.Errorf("function %s returns %s but expects %s", name, returnedType.ToString(), returnType.ToString())
+				} else if returnStatement := lastStatement.(Return); len(returnStatement.Values()) != len(returnTypes) {
+					errTemp = fmt.Errorf("function %s requires %d return values but only %d are returned", name, len(returnTypes), len(returnStatement.Values()))
+				} else {
+					for i, returnValue := range returnStatement.Values() {
+						returnType := returnTypes[i]
+						returnValueType := returnValue.ValueType()
+
+						if !returnValueType.Equals(returnType) {
+							errTemp = fmt.Errorf("function %s returns %s but expects %s", name, returnValueType.ToString(), returnType.ToString())
+							break
+						}
+					}
 				}
 			}
 		} else if lastStatement != nil && lastStatement.StatementType() == STATEMENT_TYPE_RETURN {
@@ -685,7 +718,7 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 
 	return FunctionDefinition{
 		name:        name,
-		returnTypes: []ValueType{returnType},
+		returnTypes: returnTypes,
 		params:      params,
 		body:        statements,
 	}, nil
@@ -700,13 +733,25 @@ func (p *Parser) evaluateReturn(ctx context) (Statement, error) {
 	if returnToken.Type() != lexer.RETURN {
 		return nil, expectedError("return-keyword", returnToken)
 	}
-	value, err := p.evaluateExpression(ctx)
+	var values []Expression
 
-	if err != nil {
-		return nil, err
+	for {
+		value, err := p.evaluateExpression(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+		nextToken := p.peek()
+
+		// If next token is a comman, multiple values are returned.
+		if nextToken.Type() != lexer.COMMA {
+			break
+		}
+		p.eat()
 	}
 	return Return{
-		value: value,
+		values,
 	}, nil
 }
 

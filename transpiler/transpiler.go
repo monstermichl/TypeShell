@@ -14,6 +14,23 @@ const (
 	ELSE
 )
 
+type expressionResult struct {
+	values []string
+}
+
+func newExpressionResult(values ...string) expressionResult {
+	return expressionResult{values: values}
+}
+
+func (r expressionResult) firstValue() string {
+	length := len(r.values)
+
+	if length == 0 {
+		return ""
+	}
+	return r.values[0]
+}
+
 type transpiler struct {
 	ast       parser.Statement
 	converter Converter
@@ -35,7 +52,7 @@ func (t *transpiler) Transpile(converter Converter) (string, error) {
 	return t.converter.Dump()
 }
 
-func (t *transpiler) evaluateIndex(index parser.Expression, valueUsed bool) (string, error) {
+func (t *transpiler) evaluateIndex(index parser.Expression, valueUsed bool) (expressionResult, error) {
 	return t.evaluateExpression(index, true)
 }
 
@@ -57,55 +74,65 @@ func (t *transpiler) evaluateProgram(program parser.Program) error {
 	return err
 }
 
-func (t *transpiler) evaluateBooleanLiteral(literal parser.BooleanLiteral, valueUsed bool) (string, error) {
-	return t.converter.BoolToString(literal.Value()), nil
+func (t *transpiler) evaluateBooleanLiteral(literal parser.BooleanLiteral, valueUsed bool) (expressionResult, error) {
+	return newExpressionResult(t.converter.BoolToString(literal.Value())), nil
 }
 
-func (t *transpiler) evaluateIntegerLiteral(literal parser.IntegerLiteral, valueUsed bool) (string, error) {
-	return t.converter.IntToString(literal.Value()), nil
+func (t *transpiler) evaluateIntegerLiteral(literal parser.IntegerLiteral, valueUsed bool) (expressionResult, error) {
+	return newExpressionResult(t.converter.IntToString(literal.Value())), nil
 }
 
-func (t *transpiler) evaluateStringLiteral(literal parser.StringLiteral, valueUsed bool) (string, error) {
-	return t.converter.StringToString(literal.Value()), nil
+func (t *transpiler) evaluateStringLiteral(literal parser.StringLiteral, valueUsed bool) (expressionResult, error) {
+	return newExpressionResult(t.converter.StringToString(literal.Value())), nil
 }
 
 func (t *transpiler) evaluateOperation(
 	operation parser.Operation,
 	callout func(left string, operator string, right string, valueType parser.ValueType, valueUsed bool) (string, error),
 	valueUsed bool,
-) (string, error) {
+) (expressionResult, error) {
 	left, err := t.evaluateExpression(operation.Left(), true)
 
 	if err != nil {
-		return "", err
+		return expressionResult{}, err
 	}
 	right, err := t.evaluateExpression(operation.Right(), true)
 
 	if err != nil {
-		return "", err
+		return expressionResult{}, err
 	}
-	return callout(left, operation.Operator(), right, operation.Left().ValueType(), valueUsed)
-}
-
-func (t *transpiler) evaluateUnaryOperation(operation parser.UnaryOperation, valueUsed bool) (string, error) {
-	expr := operation.Expression()
-	convertedExpr, err := t.evaluateExpression(expr, true)
+	s, err := callout(left.firstValue(), operation.Operator(), right.firstValue(), operation.Left().ValueType(), valueUsed)
 
 	if err != nil {
-		return "", err
+		return expressionResult{}, err
 	}
-	return t.converter.UnaryOperation(convertedExpr, operation.Operator(), expr.ValueType(), valueUsed)
+	return newExpressionResult(s), nil
 }
 
-func (t *transpiler) evaluateBinaryOperation(operation parser.BinaryOperation, valueUsed bool) (string, error) {
+func (t *transpiler) evaluateUnaryOperation(operation parser.UnaryOperation, valueUsed bool) (expressionResult, error) {
+	expr := operation.Expression()
+	result, err := t.evaluateExpression(expr, true)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	s, err := t.converter.UnaryOperation(result.firstValue(), operation.Operator(), expr.ValueType(), valueUsed)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	return newExpressionResult(s), nil
+}
+
+func (t *transpiler) evaluateBinaryOperation(operation parser.BinaryOperation, valueUsed bool) (expressionResult, error) {
 	return t.evaluateOperation(operation, t.converter.BinaryOperation, valueUsed)
 }
 
-func (t *transpiler) evaluateCompareOperation(operation parser.Comparison, valueUsed bool) (string, error) {
+func (t *transpiler) evaluateCompareOperation(operation parser.Comparison, valueUsed bool) (expressionResult, error) {
 	return t.evaluateOperation(operation, t.converter.Comparison, valueUsed)
 }
 
-func (t *transpiler) evaluateLogicalOperation(operation parser.LogicalOperation, valueUsed bool) (string, error) {
+func (t *transpiler) evaluateLogicalOperation(operation parser.LogicalOperation, valueUsed bool) (expressionResult, error) {
 	return t.evaluateOperation(operation, t.converter.LogicalOperation, valueUsed)
 }
 
@@ -121,12 +148,12 @@ func (t *transpiler) evaluatePrint(print parser.Print) error {
 	values := []string{}
 
 	for _, expr := range print.Expressions() {
-		value, err := t.evaluateExpression(expr, true)
+		result, err := t.evaluateExpression(expr, true)
 
 		if err != nil {
 			return err
 		}
-		values = append(values, value)
+		values = append(values, result.firstValue())
 	}
 	return t.converter.Print(values)
 }
@@ -134,7 +161,7 @@ func (t *transpiler) evaluatePrint(print parser.Print) error {
 func (t *transpiler) evaluateIf(ifStatement parser.If) error {
 	conv := t.converter
 	ifBranch := ifStatement.IfBranch()
-	condition, err := t.evaluateExpression(ifBranch.Condition(), true)
+	result, err := t.evaluateExpression(ifBranch.Condition(), true)
 
 	if err != nil {
 		return err
@@ -143,14 +170,14 @@ func (t *transpiler) evaluateIf(ifStatement parser.If) error {
 
 	// Evaluate all conditions first to make sure they are added in front of the first if.
 	for _, branch := range ifStatement.ElseIfBranches() {
-		condition, err := t.evaluateExpression(branch.Condition(), true)
+		result, err := t.evaluateExpression(branch.Condition(), true)
 
 		if err != nil {
 			return err
 		}
-		elifConditions = append(elifConditions, condition)
+		elifConditions = append(elifConditions, result.firstValue())
 	}
-	err = conv.IfStart(condition)
+	err = conv.IfStart(result.firstValue())
 
 	if err != nil {
 		return err
@@ -215,12 +242,12 @@ func (t *transpiler) evaluateFor(forStatement parser.For) error {
 	if err != nil {
 		return err
 	}
-	condition, err := t.evaluateExpression(forStatement.Condition(), true)
+	result, err := t.evaluateExpression(forStatement.Condition(), true)
 
 	if err != nil {
 		return err
 	}
-	err = conv.ForCondition(condition)
+	err = conv.ForCondition(result.firstValue())
 
 	if err != nil {
 		return err
@@ -243,52 +270,62 @@ func (t *transpiler) evaluateFor(forStatement parser.For) error {
 }
 
 func (t *transpiler) evaluateVarDefinition(definition parser.VariableDefinition) error {
-	value, err := t.evaluateExpression(definition.Value(), true)
+	result, err := t.evaluateExpression(definition.Value(), true)
 
 	if err != nil {
 		return err
 	}
 	variable := definition.Variable()
-	return t.converter.VarDefinition(variable.Name(), value, variable.Global())
+	return t.converter.VarDefinition(variable.Name(), result.firstValue(), variable.Global())
 }
 
 func (t *transpiler) evaluateVarAssignment(assignment parser.VariableAssignment) error {
-	value, err := t.evaluateExpression(assignment.Value(), true)
+	result, err := t.evaluateExpression(assignment.Value(), true)
 
 	if err != nil {
 		return err
 	}
-	return t.converter.VarAssignment(assignment.Name(), value, assignment.Global())
+	return t.converter.VarAssignment(assignment.Name(), result.firstValue(), assignment.Global())
 }
 
 func (t *transpiler) evaluateSliceAssignment(assignment parser.SliceAssignment) error {
-	index, err := t.evaluateIndex(assignment.Index(), true)
+	indexResult, err := t.evaluateIndex(assignment.Index(), true)
 
 	if err != nil {
 		return err
 	}
-	value, err := t.evaluateExpression(assignment.Value(), true)
+	valueResult, err := t.evaluateExpression(assignment.Value(), true)
 
 	if err != nil {
 		return err
 	}
-	return t.converter.SliceAssignment(assignment.Name(), index, value, assignment.Global())
+	return t.converter.SliceAssignment(assignment.Name(), indexResult.firstValue(), valueResult.firstValue(), assignment.Global())
 }
 
-func (t *transpiler) evaluateVarEvaluation(evaluation parser.VariableEvaluation, valueUsed bool) (string, error) {
-	return t.converter.VarEvaluation(evaluation.Name(), valueUsed, evaluation.Global())
-}
-
-func (t *transpiler) evaluateSliceEvaluation(evaluation parser.SliceEvaluation, valueUsed bool) (string, error) {
-	index, err := t.evaluateIndex(evaluation.Index(), true)
+func (t *transpiler) evaluateVarEvaluation(evaluation parser.VariableEvaluation, valueUsed bool) (expressionResult, error) {
+	s, err := t.converter.VarEvaluation(evaluation.Name(), valueUsed, evaluation.Global())
 
 	if err != nil {
-		return "", err
+		return expressionResult{}, err
 	}
-	return t.converter.SliceEvaluation(evaluation.Name(), index, valueUsed, evaluation.Global())
+	return newExpressionResult(s), nil
 }
 
-func (t *transpiler) evaluateGroup(group parser.Group, valueUsed bool) (string, error) {
+func (t *transpiler) evaluateSliceEvaluation(evaluation parser.SliceEvaluation, valueUsed bool) (expressionResult, error) {
+	result, err := t.evaluateIndex(evaluation.Index(), true)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	s, err := t.converter.SliceEvaluation(evaluation.Name(), result.firstValue(), valueUsed, evaluation.Global())
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	return newExpressionResult(s), err
+}
+
+func (t *transpiler) evaluateGroup(group parser.Group, valueUsed bool) (expressionResult, error) {
 	return t.evaluateExpression(group.Child(), valueUsed)
 }
 
@@ -313,12 +350,20 @@ func (t *transpiler) evaluateBlock(block parser.Block) error {
 }
 
 func (t *transpiler) evaluateReturn(returnStatement parser.Return) error {
-	value, err := t.evaluateExpression(returnStatement.Value(), true)
+	returnValues := []ReturnValue{}
 
-	if err != nil {
-		return err
+	for _, expr := range returnStatement.Values() {
+		result, err := t.evaluateExpression(expr, true)
+
+		if err != nil {
+			return err
+		}
+		returnValues = append(returnValues, ReturnValue{
+			value:     result.firstValue(),
+			valueType: expr.ValueType(),
+		})
 	}
-	return t.converter.Return(value, returnStatement.Value().ValueType())
+	return t.converter.Return(returnValues)
 }
 
 func (t *transpiler) evaluateFunctionDefinition(functionDefinition parser.FunctionDefinition) error {
@@ -329,7 +374,7 @@ func (t *transpiler) evaluateFunctionDefinition(functionDefinition parser.Functi
 		params = append(params, param.Name())
 	}
 	conv := t.converter
-	err := conv.FuncStart(name, params, functionDefinition.ValueType())
+	err := conv.FuncStart(name, params, functionDefinition.ReturnTypes())
 
 	if err != nil {
 		return err
@@ -342,22 +387,34 @@ func (t *transpiler) evaluateFunctionDefinition(functionDefinition parser.Functi
 	return conv.FuncEnd()
 }
 
-func (t *transpiler) evaluateFunctionCall(functionCall parser.FunctionCall, valueUsed bool) (string, error) {
+func (t *transpiler) evaluateFunctionCall(functionCall parser.FunctionCall, valueUsed bool) (expressionResult, error) {
 	name := functionCall.Name()
 	args := []string{}
 
 	for _, arg := range functionCall.Args() {
-		value, err := t.evaluateExpression(arg, true)
+		result, err := t.evaluateExpression(arg, true)
 
 		if err != nil {
-			return "", err
+			return expressionResult{}, err
 		}
-		args = append(args, value)
+		args = append(args, result.firstValue())
 	}
-	return t.converter.FuncCall(name, args, functionCall.ValueType(), valueUsed)
+	returnTypes := functionCall.ReturnTypes()
+	values, err := t.converter.FuncCall(name, args, returnTypes, valueUsed)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	returnTypesLen := len(returnTypes)
+	valuesLen := len(values)
+
+	if valuesLen != returnTypesLen {
+		return expressionResult{}, fmt.Errorf("function \"%s\" must return %d values but returned %d", name, returnTypesLen, valuesLen)
+	}
+	return newExpressionResult(values...), nil
 }
 
-func (t *transpiler) evaluateAppCall(call parser.AppCall, valueUsed bool) (string, error) {
+func (t *transpiler) evaluateAppCall(call parser.AppCall, valueUsed bool) (expressionResult, error) {
 	convertedCalls := []AppCall{}
 	nextCall := &call
 
@@ -366,12 +423,12 @@ func (t *transpiler) evaluateAppCall(call parser.AppCall, valueUsed bool) (strin
 		args := []string{}
 
 		for _, arg := range nextCall.Args() {
-			value, err := t.evaluateExpression(arg, true)
+			result, err := t.evaluateExpression(arg, true)
 
 			if err != nil {
-				return "", err
+				return expressionResult{}, err
 			}
-			args = append(args, value)
+			args = append(args, result.firstValue())
 		}
 		convertedCalls = append(convertedCalls, AppCall{
 			name: name,
@@ -379,44 +436,59 @@ func (t *transpiler) evaluateAppCall(call parser.AppCall, valueUsed bool) (strin
 		})
 		nextCall = nextCall.Next()
 	}
-	return t.converter.AppCall(convertedCalls, valueUsed)
+	s, err := t.converter.AppCall(convertedCalls, valueUsed)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	return newExpressionResult(s), nil
 }
 
-func (t *transpiler) evaluateSliceInstantiation(instantiation parser.SliceInstantiation, valueUsed bool) (string, error) {
+func (t *transpiler) evaluateSliceInstantiation(instantiation parser.SliceInstantiation, valueUsed bool) (expressionResult, error) {
 	values := []string{}
 
 	for _, expr := range instantiation.Values() {
-		value, err := t.evaluateExpression(expr, true)
+		result, err := t.evaluateExpression(expr, true)
 
 		if err != nil {
-			return "", err
+			return expressionResult{}, err
 		}
-		values = append(values, value)
+		values = append(values, result.firstValue())
 	}
-	return t.converter.SliceInstantiation(values, valueUsed)
+	s, err := t.converter.SliceInstantiation(values, valueUsed)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	return newExpressionResult(s), nil
 }
 
-func (t *transpiler) evaluateInput(input parser.Input, valueUsed bool) (string, error) {
+func (t *transpiler) evaluateInput(input parser.Input, valueUsed bool) (expressionResult, error) {
 	promptString := ""
 	prompt := input.Prompt()
 
 	if prompt != nil {
-		var err error
-		promptString, err = t.evaluateExpression(prompt, valueUsed)
+		result, err := t.evaluateExpression(prompt, valueUsed)
 
 		if err != nil {
-			return "", err
+			return expressionResult{}, err
 		}
+		promptString = result.firstValue()
 	}
-	return t.converter.Input(promptString, valueUsed)
-}
-
-func (t *transpiler) evaluateLen(len parser.Len, valueUsed bool) (string, error) {
-	expr := len.Expression()
-	name, err := t.evaluateExpression(expr, true)
+	s, err := t.converter.Input(promptString, valueUsed)
 
 	if err != nil {
-		return "", err
+		return expressionResult{}, err
+	}
+	return newExpressionResult(s), nil
+}
+
+func (t *transpiler) evaluateLen(len parser.Len, valueUsed bool) (expressionResult, error) {
+	expr := len.Expression()
+	result, err := t.evaluateExpression(expr, true)
+
+	if err != nil {
+		return expressionResult{}, err
 	}
 	global := false
 
@@ -424,7 +496,12 @@ func (t *transpiler) evaluateLen(len parser.Len, valueUsed bool) (string, error)
 	case parser.SliceEvaluation:
 		global = t.Global()
 	}
-	return t.converter.SliceLen(name, valueUsed, global)
+	s, err := t.converter.SliceLen(result.firstValue(), valueUsed, global)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	return newExpressionResult(s), nil
 }
 
 func (t *transpiler) evaluate(statement parser.Statement) error {
@@ -464,7 +541,7 @@ func (t *transpiler) evaluate(statement parser.Statement) error {
 	}
 }
 
-func (t *transpiler) evaluateExpression(expression parser.Expression, valueUsed bool) (string, error) {
+func (t *transpiler) evaluateExpression(expression parser.Expression, valueUsed bool) (expressionResult, error) {
 	expressionType := expression.StatementType()
 
 	switch expressionType {
@@ -499,5 +576,5 @@ func (t *transpiler) evaluateExpression(expression parser.Expression, valueUsed 
 	case parser.STATEMENT_TYPE_LEN:
 		return t.evaluateLen(expression.(parser.Len), valueUsed)
 	}
-	return "", fmt.Errorf("unknown expression type %s", expressionType)
+	return expressionResult{}, fmt.Errorf("unknown expression type %s", expressionType)
 }

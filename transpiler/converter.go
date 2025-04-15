@@ -33,6 +33,19 @@ func (c Condition) Next() *Condition {
 	return c.next
 }
 
+type ReturnValue struct {
+	value     string
+	valueType parser.ValueType
+}
+
+func (rv ReturnValue) Value() string {
+	return rv.value
+}
+
+func (rv ReturnValue) ValueType() parser.ValueType {
+	return rv.valueType
+}
+
 type Converter interface {
 	// Common methods
 	BoolToString(value bool) string
@@ -46,9 +59,9 @@ type Converter interface {
 	VarDefinition(name string, value string, global bool) error
 	VarAssignment(name string, value string, global bool) error
 	SliceAssignment(name string, index string, value string, global bool) error
-	FuncStart(name string, params []string, returnType parser.ValueType) error
+	FuncStart(name string, params []string, returnTypes []parser.ValueType) error
 	FuncEnd() error
-	Return(value string, valueType parser.ValueType) error
+	Return(values []ReturnValue) error
 	IfStart(condition string) error
 	IfEnd() error
 	ElseIfStart(condition string) error
@@ -73,7 +86,7 @@ type Converter interface {
 	SliceEvaluation(name string, index string, valueUsed bool, global bool) (string, error)
 	SliceLen(name string, valueUsed bool, global bool) (string, error)
 	Group(value string, valueUsed bool) (string, error)
-	FuncCall(name string, args []string, valueType parser.ValueType, valueUsed bool) (string, error)
+	FuncCall(name string, args []string, returnTypes []parser.ValueType, valueUsed bool) ([]string, error)
 	AppCall(calls []AppCall, valueUsed bool) (string, error)
 	Input(prompt string, valueUsed bool) (string, error)
 }

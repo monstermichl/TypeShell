@@ -88,7 +88,6 @@ const (
 const (
 	DATA_TYPE_UNKNOWN  DataType = "unknown"
 	DATA_TYPE_MULTIPLE DataType = "multiple"
-	DATA_TYPE_VOID     DataType = "void"
 	DATA_TYPE_BOOLEAN  DataType = "bool"
 	DATA_TYPE_INTEGER  DataType = "int"
 	DATA_TYPE_STRING   DataType = "string"
