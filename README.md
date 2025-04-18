@@ -14,12 +14,14 @@ var a, b int
 ```golang
 // Variable definition with assigned value.
 var a int = 5
+var a, b int = divisionWithRemainder(5, 2)
 ```
 
 ```golang
 // Variable definition short form.
 a := 5
 a, b := 5, 6
+a, b := divisionWithRemainder(5, 2)
 ```
 
 ### Control flow
