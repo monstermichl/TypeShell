@@ -24,7 +24,9 @@ type ifInfo struct {
 }
 
 type converter struct {
-	code                          []string
+	globalCode                    []string
+	functionCode                  []string
+	endCode                       []string
 	varCounter                    int
 	ifCounter                     int
 	whileCounter                  int
@@ -40,9 +42,7 @@ type converter struct {
 }
 
 func New() *converter {
-	return &converter{
-		code: []string{},
-	}
+	return &converter{}
 }
 
 func (c *converter) BoolToString(value bool) string {
@@ -61,7 +61,11 @@ func (c *converter) StringToString(value string) string {
 }
 
 func (c *converter) Dump() (string, error) {
-	return strings.Join(c.code, "\n"), nil
+	return strings.Join([]string{
+		strings.Join(c.globalCode, "\n"),
+		strings.Join(c.functionCode, "\n"),
+		strings.Join(c.endCode, "\n"),
+	}, "\n"), nil
 }
 
 func (c *converter) ProgramStart() error {
@@ -73,42 +77,42 @@ func (c *converter) ProgramStart() error {
 
 func (c *converter) ProgramEnd() error {
 	if c.returnHelperRequired {
-		c.addLine(":: global var helper begin")
-		c.addLine("goto :_eo_gvh")
-		c.addLine(":_gvh")
-		c.addLine("set %1=%~2")
-		c.addLine("exit /B 0")
-		c.addLine(":_eo_gvh")
-		c.addLine(":: global var helper end")
+		c.addEndLine(":: global var helper begin")
+		c.addEndLine("goto :_eo_gvh")
+		c.addEndLine(":_gvh")
+		c.addEndLine("set %1=%~2")
+		c.addEndLine("exit /B 0")
+		c.addEndLine(":_eo_gvh")
+		c.addEndLine(":: global var helper end")
 	}
 
 	if c.sliceAssignmentHelperRequired {
 		// Add slice helper to batch file for easier slice processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
-		c.addLine(":: slice assignment helper begin")
-		c.addLine("goto :_esa")
-		c.addLine(":_sa")
-		c.addLine("set %1[%2]=%~3")
-		c.addLine("exit /B 0")
-		c.addLine(":_esa")
-		c.addLine(":: slice assignment helper end")
+		c.addEndLine(":: slice assignment helper begin")
+		c.addEndLine("goto :_esa")
+		c.addEndLine(":_sa")
+		c.addEndLine("set %1[%2]=%~3")
+		c.addEndLine("exit /B 0")
+		c.addEndLine(":_esa")
+		c.addEndLine(":: slice assignment helper end")
 	}
 
 	if c.sliceLenHelperRequired {
-		c.addLine(":: slice length helper begin")
-		c.addLine("goto :_esl")
-		c.addLine(":_sl")
-		c.addLine("set _l=0")
-		c.addLine(":_sll")
-		c.addLine("if not defined %1[%_l%] goto :_slle")
-		c.addLine("set /A _l=%_l%+1")
-		c.addLine("goto :_sll")
-		c.addLine(":_slle")
-		c.addLine("exit /B 0")
-		c.addLine(":_esl")
-		c.addLine(":: slice length helper end")
+		c.addEndLine(":: slice length helper begin")
+		c.addEndLine("goto :_esl")
+		c.addEndLine(":_sl")
+		c.addEndLine("set _l=0")
+		c.addEndLine(":_sll")
+		c.addEndLine("if not defined %1[%_l%] goto :_slle")
+		c.addEndLine("set /A _l=%_l%+1")
+		c.addEndLine("goto :_sll")
+		c.addEndLine(":_slle")
+		c.addEndLine("exit /B 0")
+		c.addEndLine(":_esl")
+		c.addEndLine(":: slice length helper end")
 	}
-	c.addLine(":exit")
-	c.addLine("endlocal")
+	c.addEndLine(":exit")
+	c.addEndLine("endlocal")
 	return nil
 }
 
@@ -540,7 +544,15 @@ func (c *converter) ifStart(condition string, startAddition string) error {
 }
 
 func (c *converter) addLine(line string) {
-	c.code = append(c.code, line)
+	if c.inFunction() {
+		c.functionCode = append(c.functionCode, line)
+	} else {
+		c.globalCode = append(c.globalCode, line)
+	}
+}
+
+func (c *converter) addEndLine(line string) {
+	c.endCode = append(c.endCode, line)
 }
 
 func (c *converter) nextWhileLabel() string {
