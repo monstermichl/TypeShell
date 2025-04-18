@@ -16,6 +16,7 @@ type funcInfo struct {
 
 type converter struct {
 	interpreter            string
+	startCode              []string
 	code                   []string
 	varCounter             int
 	funcs                  []funcInfo
@@ -46,26 +47,29 @@ func (c *converter) StringToString(value string) string {
 }
 
 func (c *converter) Dump() (string, error) {
-	return strings.Join(c.code, "\n"), nil
+	return strings.Join([]string{
+		strings.Join(c.startCode, "\n"),
+		strings.Join(c.code, "\n"),
+	}, "\n"), nil
 }
 
 func (c *converter) ProgramStart() error {
-	c.addLine(fmt.Sprintf("#!%s", c.interpreter))
+	c.addStartLine(fmt.Sprintf("#!%s", c.interpreter))
 	return nil
 }
 
 func (c *converter) ProgramEnd() error {
 	if c.sliceLenHelperRequired {
-		c.addLine("# slice length helper")
-		c.addLine("_sl() {")
-		c.addLine("local _l=0")
-		c.addLine("while true; do")
-		c.addLine("eval \"local _t=\\${$1_${_l}}\"")
-		c.addLine("if [ -z \"${_t}\" ]; then break; fi") // https://stackoverflow.com/a/13864829 (didn't work with +x (probably due to the underscore of the variable)).
-		c.addLine("_l=$(expr ${_l} + 1)")
-		c.addLine("done")
-		c.addLine("echo ${_l}")
-		c.addLine("}")
+		c.addStartLine("# slice length helper")
+		c.addStartLine("_sl() {")
+		c.addStartLine("local _l=0")
+		c.addStartLine("while true; do")
+		c.addStartLine("eval \"local _t=\\${$1_${_l}}\"")
+		c.addStartLine("if [ -z \"${_t}\" ]; then break; fi") // https://stackoverflow.com/a/13864829 (didn't work with +x (probably due to the underscore of the variable)).
+		c.addStartLine("_l=$(expr ${_l} + 1)")
+		c.addStartLine("done")
+		c.addStartLine("echo ${_l}")
+		c.addStartLine("}")
 	}
 	return nil
 }
@@ -453,8 +457,8 @@ func (c *converter) inFunction() bool {
 	return len(c.funcs) > 0
 }
 
-func (c *converter) mustCurrentFuncInfo() funcInfo {
-	return c.funcs[len(c.funcs)-1]
+func (c *converter) addStartLine(line string) {
+	c.startCode = append(c.startCode, line)
 }
 
 func (c *converter) addLine(line string) {
