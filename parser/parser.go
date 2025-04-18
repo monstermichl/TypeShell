@@ -59,6 +59,14 @@ func (c context) findScope(s scope) bool {
 	return false
 }
 
+func (c context) clone() context {
+	return context{
+		variables:  maps.Clone(c.variables),
+		functions:  maps.Clone(c.functions),
+		scopeStack: slices.Clone(c.scopeStack),
+	}
+}
+
 type evaluatedValues struct {
 	values []Expression
 }
@@ -385,8 +393,9 @@ func (p *Parser) evaluateBlockContent(terminationTokenType lexer.TokenType, call
 		}
 		return errTemp
 	}
-	// Store original variables.
-	variables := maps.Clone(ctx.variables) // TODO: Find out if this works properly to restore variables at the end of the block.
+
+	// Clone context to avoid modification of the original.
+	ctx = ctx.clone()
 
 	// Add scope to context.
 	ctx.scopeStack = append(ctx.scopeStack, scope)
@@ -453,9 +462,6 @@ func (p *Parser) evaluateBlockContent(terminationTokenType lexer.TokenType, call
 			break
 		}
 	}
-	// Restore original variables.
-	ctx.variables = variables
-
 	return statements, err
 }
 
@@ -825,8 +831,8 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 	openingBrace := p.peek()
 	params := []Variable{}
 
-	// Store original variables.
-	variables := maps.Clone(ctx.variables) // TODO: Find out if this works properly to restore variables at the end of the block.
+	// Clone context to avoid modification of the original.
+	ctx = ctx.clone()
 
 	// Remove all variables which are not global.
 	maps.DeleteFunc(ctx.variables, func(_ string, v Variable) bool {
@@ -927,9 +933,6 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// Restore original variables.
-	ctx.variables = variables
 
 	return FunctionDefinition{
 		name:        name,
@@ -1088,8 +1091,8 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 	nextToken := p.peek()
 	nextTokenType := nextToken.Type()
 
-	// Store original variables.
-	variables := maps.Clone(ctx.variables) // TODO: Find out if this works properly to restore variables at the end of the block.
+	// Clone context to avoid modification of the original.
+	ctx = ctx.clone()
 
 	// If next token is an identifier and the one after it a comma, parse a for-range statement.
 	if nextTokenType == lexer.IDENTIFIER && p.peekAt(1).Type() == lexer.COMMA {
@@ -1265,9 +1268,6 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 			body:      statements,
 		}
 	}
-	// Restore original variables.
-	ctx.variables = variables
-
 	return stmt, nil
 }
 
