@@ -40,20 +40,37 @@ func (v VariableAssignment) Value() Expression {
 }
 
 type VariableDefinition struct {
-	variable Variable
-	value    Expression
+	variables []Variable
+	values    []Expression
 }
 
 func (v VariableDefinition) StatementType() StatementType {
 	return STATEMENT_TYPE_VAR_DEFINITION
 }
 
-func (v VariableDefinition) Variable() Variable {
-	return v.variable
+func (v VariableDefinition) Variables() []Variable {
+	return v.variables
 }
 
-func (v VariableDefinition) Value() Expression {
-	return v.value
+func (v VariableDefinition) Values() []Expression {
+	return v.values
+}
+
+type VariableDefinitionCallAssignment struct {
+	variables []Variable
+	call      FunctionCall
+}
+
+func (v VariableDefinitionCallAssignment) StatementType() StatementType {
+	return STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT
+}
+
+func (v VariableDefinitionCallAssignment) Variables() []Variable {
+	return v.variables
+}
+
+func (v VariableDefinitionCallAssignment) Call() FunctionCall {
+	return v.call
 }
 
 type VariableEvaluation struct {

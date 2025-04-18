@@ -59,6 +59,25 @@ func (c context) findScope(s scope) bool {
 	return false
 }
 
+type evaluatedValues struct {
+	values []Expression
+}
+
+func (ev evaluatedValues) isMultiReturnFunc() (bool, FunctionCall) {
+	var call FunctionCall
+	values := ev.values
+	multi := false
+
+	if len(values) == 1 && values[0].StatementType() == STATEMENT_TYPE_FUNCTION_CALL {
+		callTemp := values[0].(FunctionCall)
+
+		if len(callTemp.ReturnTypes()) > 0 {
+			call = callTemp
+		}
+	}
+	return multi, call
+}
+
 type blockCallback func(statements []Statement, last bool) error
 
 type Parser struct {
@@ -147,7 +166,27 @@ func (p Parser) peekAt(add uint) lexer.Token {
 	return token
 }
 
-func (p Parser) findBefore(searchTokenType lexer.TokenType, before []lexer.TokenType) (lexer.Token, error) {
+func (p Parser) findAllowed(searchTokenType lexer.TokenType, allowed ...lexer.TokenType) (lexer.Token, error) {
+	tokens := p.tokens
+
+	for i := p.index; i < len(tokens); i++ {
+		token := tokens[i]
+		tokenType := token.Type()
+
+		if tokenType == searchTokenType {
+			return token, nil
+		}
+
+		for _, tokenTypeTemp := range allowed {
+			if tokenTypeTemp != tokenType {
+				return lexer.Token{}, fmt.Errorf("found illegal token \"%d\" before \"%d\"", tokenTypeTemp, tokenType)
+			}
+		}
+	}
+	return lexer.Token{}, fmt.Errorf("token type \"%d\" not found", searchTokenType)
+}
+
+func (p Parser) findBefore(searchTokenType lexer.TokenType, before ...lexer.TokenType) (lexer.Token, error) {
 	tokens := p.tokens
 
 	for i := p.index; i < len(tokens); i++ {
@@ -175,8 +214,10 @@ func (p *Parser) eat() lexer.Token {
 }
 
 func (p *Parser) isShortVarInit() bool {
-	// Short initialization is an identifier plus the short init operator (e.g. x := 123).
-	return p.peek().Type() == lexer.IDENTIFIER && p.peekAt(1).Type() == lexer.SHORT_INIT_OPERATOR
+	_, err := p.findAllowed(lexer.SHORT_INIT_OPERATOR, lexer.IDENTIFIER, lexer.COMMA)
+
+	// Short initialization is an arbitrary number of identifiers and commas plus the short init operator (e.g. x, y := ...).
+	return err == nil
 }
 
 func (p *Parser) checkNewVariableNameToken(token lexer.Token, ctx context) error {
@@ -187,6 +228,64 @@ func (p *Parser) checkNewVariableNameToken(token lexer.Token, ctx context) error
 		return fmt.Errorf("variable %s has already been defined at row %d, column %d", name, token.Row(), token.Column())
 	}
 	return nil
+}
+
+func (p *Parser) evaluateVarNames(ctx context) ([]lexer.Token, error) {
+	nameTokens := []lexer.Token{}
+
+	for {
+		nextToken := p.eat()
+
+		if nextToken.Type() != lexer.IDENTIFIER {
+			return nil, expectedError("variable name", nextToken)
+		}
+		nameTokens = append(nameTokens, nextToken)
+		nextToken = p.peek()
+
+		if nextToken.Type() != lexer.COMMA {
+			break
+		}
+		p.eat() // Eat comma token.
+	}
+	return nameTokens, nil
+}
+
+func (p *Parser) evaluateValues(ctx context) (evaluatedValues, error) {
+	expressions := []Expression{}
+
+	for {
+		exprToken := p.peek()
+		expr, err := p.evaluateExpression(ctx)
+
+		if err != nil {
+			return evaluatedValues{}, err
+		}
+		expressions = append(expressions, expr)
+		nextToken := p.peek()
+		returnValuesLength := -1
+
+		// If expression is a function, check if it returns a value.
+		if expr.StatementType() == STATEMENT_TYPE_FUNCTION_CALL {
+			returnValuesLength = len(expr.(FunctionCall).ReturnTypes())
+
+			if returnValuesLength == 0 {
+				return evaluatedValues{}, expectedError("return value from function \"%s\"", exprToken)
+			}
+		}
+		// Check if other values follow.
+		if nextToken.Type() != lexer.COMMA {
+			break
+		}
+		p.eat() // Eat comma token.
+
+		// If other values follow, function must only return one value.
+		if returnValuesLength > 1 {
+			return evaluatedValues{}, expectedError("only one return value from function \"%s\"", exprToken)
+		}
+	}
+	return evaluatedValues{
+		values: expressions,
+	}, nil
 }
 
 func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword string, minArgs int, maxArg int, ctx context, stmtCallout func(keywordToken lexer.Token, expressions []Expression) (Statement, error)) (Statement, error) {
@@ -429,17 +528,40 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 			return nil, expectedError("variable definition", varToken)
 		}
 	}
-	nameToken := p.eat()
-
-	if nameToken.Type() != lexer.IDENTIFIER {
-		return nil, expectedError("variable name", nameToken)
-	}
-	err := p.checkNewVariableNameToken(nameToken, ctx)
+	nameTokens, err := p.evaluateVarNames(ctx)
 
 	if err != nil {
 		return nil, err
 	}
-	name := nameToken.Value()
+	nameTokensLength := len(nameTokens)
+	firstNameToken := nameTokens[0]
+
+	// Check if all variables are already defined.
+	if nameTokensLength > 1 {
+		alreadyDefined := 0
+
+		for _, nameToken := range nameTokens {
+			err := p.checkNewVariableNameToken(nameToken, ctx)
+
+			if err != nil {
+				// Only allow "re-definition" of variable via the short init operator.
+				if !isShortVarInit {
+					return nil, err
+				}
+				alreadyDefined++
+			}
+		}
+
+		if alreadyDefined == nameTokensLength {
+			return nil, fmt.Errorf("no new variables at row %d, column %d", firstNameToken.Row(), firstNameToken.Column())
+		}
+	} else {
+		err := p.checkNewVariableNameToken(firstNameToken, ctx)
+
+		if err != nil {
+			return nil, err
+		}
+	}
 	specifiedType := NewValueType(DATA_TYPE_UNKNOWN, false)
 
 	if isShortVarInit {
@@ -473,23 +595,71 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 	}
 	nextToken := p.peek()
 	nextTokenType := nextToken.Type()
-	var value Expression
+	variables := []Variable{}
+	isMultiReturnFunc := false
 
-	// TODO: Improve check (avaid NEWLINE and EOF check).
+	// Build variables slice.
+
+	// TODO: Improve check (avoid NEWLINE and EOF check).
 	if nextTokenType != lexer.NEWLINE && nextTokenType != lexer.EOF {
-		value, err = p.evaluateExpression(ctx)
+		evaluatedVals, err := p.evaluateValues(ctx)
 
 		if err != nil {
 			return nil, err
 		}
-		valueType := value.ValueType()
+		valuesTemp := evaluatedVals.values
+		valuesTypes := []ValueType{}
+		isMultiReturnFuncTemp, function := evaluatedVals.isMultiReturnFunc()
+		isMultiReturnFunc = isMultiReturnFuncTemp
 
-		if specifiedType.DataType() != DATA_TYPE_UNKNOWN {
-			if !valueType.Equals(specifiedType) {
-				return nil, expectedError(fmt.Sprintf("%s but got %s", specifiedType.ToString(), valueType.ToString()), nextToken)
-			}
+		// If multi-return function, get function return types, else get value types.
+		if isMultiReturnFunc {
+			valuesTypes = function.ReturnTypes()
 		} else {
-			specifiedType = valueType
+			for _, valueTemp := range valuesTemp {
+				valuesTypes = append(valuesTypes, valueTemp.ValueType())
+			}
+		}
+		valuesTempLen := len(valuesTemp)
+		namesLen := len(nameTokens)
+
+		// Check if the amount of values is equal to the amount of variable names.
+		if valuesTempLen != namesLen {
+			return nil, fmt.Errorf("got %d initialisation values but %d variables at row %d, column %d", valuesTempLen, namesLen, nextToken.Row(), nextToken.Column())
+		}
+
+		// If a type has been specified, make sure the returned types fit this type.
+		if specifiedType.DataType() != DATA_TYPE_UNKNOWN {
+			for _, valueType := range valuesTypes {
+				if !valueType.Equals(specifiedType) {
+					return nil, expectedError(fmt.Sprintf("%s but got %s", specifiedType.ToString(), valueType.ToString()), nextToken)
+				}
+			}
+		}
+
+		// Check if variables exist and if, check if the types match.
+		for i, nameToken := range nameTokens {
+			name := nameToken.Value()
+			valueType := valuesTypes[i]
+			variable, exists := ctx.variables[name]
+
+			if exists {
+				variableValueType := variable.ValueType()
+
+				if !variableValueType.Equals(valueType) {
+					return nil, expectedError(fmt.Sprintf("%s but got %s for variable %s", variableValueType.ToString(), valueType.ToString(), name), nextToken)
+				}
+			}
+		}
+
+		// If it's a function call multi assignment, build return value here.
+		if isMultiReturnFunc {
+			
+		}
+
+		// Try to assign values.
+		for i, valueTemp := range valuesTemp {
+
 		}
 	}
 
@@ -960,7 +1130,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		// Therefore create a fake condition.
 		if nextTokenType == lexer.OPENING_CURLY_BRACKET {
 			condition = trueCondition
-		} else if _, err := p.findBefore(lexer.SEMICOLON, []lexer.TokenType{lexer.OPENING_CURLY_BRACKET}); err == nil {
+		} else if _, err := p.findBefore(lexer.SEMICOLON, lexer.OPENING_CURLY_BRACKET); err == nil {
 			// If a semicolon was found before the curly bracket, consider for as a three-part for-loop.
 			nextToken := p.peek()
 
