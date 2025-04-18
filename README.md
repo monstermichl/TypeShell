@@ -7,30 +7,36 @@ Supported variable types are *bool*, *int* and *string*.
 
 ```golang
 // Variable definition with default value.
-var i int
+var a int
+var a, b int
 ```
 
 ```golang
 // Variable definition with assigned value.
-var i int = 5
+var a int = 5
 ```
 
 ```golang
 // Variable definition short form.
-i := 5
+a := 5
+a, b := 5, 6
 ```
 
 ### Control flow
 ```golang
 // If-statement.
-if i == 5 {
+if a == 5 {
     // Do something.
 }
 ```
 
 ```golang
 // For-loop.
-for i == 5 {
+for {
+    // Do something.
+}
+
+for a == 5 {
     // Do something.
 }
 
@@ -114,20 +120,17 @@ true || true
 
 ### Programs
 ```golang
-// Programs get called by stating the program name followed by
-// curly brackets. Arguments to the program are passed within
-// the curly brackets.
+// Programs are called by stating the program name preceded by an @.
 @ls("-a")
 ```
 
 ```golang
-// Similar to Bash/Batch, the output can be piped into another
-// program.
+// Similar to Bash/Batch, the output can be piped into another program.
 @ls("-a") | @sort()
 ```
 
 ```golang
-// To capture the output, just the call chain to a variable.
+// To capture the output, just assign the call chain to a variable.
 x := @ls("-a") | @sort()
 ```
 
