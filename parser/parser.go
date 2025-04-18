@@ -861,7 +861,7 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 
 	for {
 		// Check if a return type has been specified.
-		if returnTypeToken.Type() == lexer.DATA_TYPE {
+		if slices.Contains([]lexer.TokenType{lexer.DATA_TYPE, lexer.OPENING_SQUARE_BRACKET}, returnTypeToken.Type()) {
 			returnTypeTemp, err := p.evaluateValueType(ctx)
 
 			if err != nil {
