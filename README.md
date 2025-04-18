@@ -48,9 +48,13 @@ for i := 0; i < 5; i++ {
 ### Functions
 ```golang
 // Function definition.
-func sum(a int, b int) int {
-    return a + b
-} 
+func division(a int, b int) int {
+    return a / b
+}
+
+func divisionWithRemainder(a int, b int) (int, int) {
+    return division(a, b), a % b
+}
 ```
 
 ```golang
