@@ -270,13 +270,44 @@ func (t *transpiler) evaluateFor(forStatement parser.For) error {
 }
 
 func (t *transpiler) evaluateVarDefinition(definition parser.VariableDefinition) error {
-	result, err := t.evaluateExpression(definition.Value(), true)
+	for i, variable := range definition.Variables() {
+		result, err := t.evaluateExpression(definition.Values()[i], true)
+
+		if err != nil {
+			return err
+		}
+		err = t.converter.VarDefinition(variable.Name(), result.firstValue(), variable.Global())
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *transpiler) evaluateVarDefinitionCallAssignment(definition parser.VariableDefinitionCallAssignment) error {
+	result, err := t.evaluateExpression(definition.Call(), true)
 
 	if err != nil {
 		return err
 	}
-	variable := definition.Variable()
-	return t.converter.VarDefinition(variable.Name(), result.firstValue(), variable.Global())
+	variables := definition.Variables()
+	variablesLen := len(variables)
+	values := result.values
+	valuesLen := len(values)
+
+	if valuesLen != variablesLen {
+		return fmt.Errorf("require %d values but got %d", variablesLen, valuesLen)
+	}
+
+	for i, variable := range variables {
+		err = t.converter.VarDefinition(variable.Name(), values[i], variable.Global())
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (t *transpiler) evaluateVarAssignment(assignment parser.VariableAssignment) error {
@@ -512,6 +543,8 @@ func (t *transpiler) evaluate(statement parser.Statement) error {
 		return t.evaluateProgram(statement.(parser.Program))
 	case parser.STATEMENT_TYPE_VAR_DEFINITION:
 		return t.evaluateVarDefinition(statement.(parser.VariableDefinition))
+	case parser.STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT:
+		return t.evaluateVarDefinitionCallAssignment(statement.(parser.VariableDefinitionCallAssignment))
 	case parser.STATEMENT_TYPE_VAR_ASSIGNMENT:
 		return t.evaluateVarAssignment(statement.(parser.VariableAssignment))
 	case parser.STATEMENT_TYPE_SLICE_ASSIGNMENT:

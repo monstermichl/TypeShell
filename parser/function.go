@@ -61,7 +61,7 @@ func functionValueType(returnTypes []ValueType) ValueType {
 	var valueType ValueType
 
 	if len(returnTypes) > 1 {
-		valueType = NewValueType(DATA_TYPE_MULTIPLE, returnTypes[0].IsSlice())
+		valueType = NewValueType(DATA_TYPE_MULTIPLE, false)
 	} else {
 		valueType = returnTypes[0]
 	}

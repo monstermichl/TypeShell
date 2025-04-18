@@ -63,7 +63,7 @@ type evaluatedValues struct {
 	values []Expression
 }
 
-func (ev evaluatedValues) isMultiReturnFunc() (bool, FunctionCall) {
+func (ev evaluatedValues) isMultiReturnFuncCall() (bool, FunctionCall) {
 	var call FunctionCall
 	values := ev.values
 	multi := false
@@ -71,7 +71,8 @@ func (ev evaluatedValues) isMultiReturnFunc() (bool, FunctionCall) {
 	if len(values) == 1 && values[0].StatementType() == STATEMENT_TYPE_FUNCTION_CALL {
 		callTemp := values[0].(FunctionCall)
 
-		if len(callTemp.ReturnTypes()) > 0 {
+		if len(callTemp.ReturnTypes()) > 1 {
+			multi = true
 			call = callTemp
 		}
 	}
@@ -177,10 +178,8 @@ func (p Parser) findAllowed(searchTokenType lexer.TokenType, allowed ...lexer.To
 			return token, nil
 		}
 
-		for _, tokenTypeTemp := range allowed {
-			if tokenTypeTemp != tokenType {
-				return lexer.Token{}, fmt.Errorf("found illegal token \"%d\" before \"%d\"", tokenTypeTemp, tokenType)
-			}
+		if !slices.Contains(allowed, tokenType) {
+			return lexer.Token{}, fmt.Errorf("found illegal token \"%d\" before \"%d\"", tokenType, searchTokenType)
 		}
 	}
 	return lexer.Token{}, fmt.Errorf("token type \"%d\" not found", searchTokenType)
@@ -412,8 +411,14 @@ func (p *Parser) evaluateBlockContent(terminationTokenType lexer.TokenType, call
 			switch stmt.StatementType() {
 			case STATEMENT_TYPE_VAR_DEFINITION:
 				// Store new variable.
-				variable := stmt.(VariableDefinition).variable
-				ctx.variables[variable.Name()] = variable
+				for _, variable := range stmt.(VariableDefinition).Variables() {
+					ctx.variables[variable.Name()] = variable
+				}
+			case STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT:
+				// Store new variable.
+				for _, variable := range stmt.(VariableDefinitionCallAssignment).Variables() {
+					ctx.variables[variable.Name()] = variable
+				}
 			case STATEMENT_TYPE_FUNCTION_DEFINITION:
 				// Store new function.
 				function := stmt.(FunctionDefinition)
@@ -482,7 +487,7 @@ func (p *Parser) evaluateBlock(callback blockCallback, ctx context, scope scope)
 	return statements, nil
 }
 
-func (p *Parser) evaluateValueType(ctx context) (ValueType, error) {
+func (p *Parser) evaluateValueType(_ context) (ValueType, error) {
 	nextToken := p.peek()
 	evaluatedType := NewValueType(DATA_TYPE_UNKNOWN, false)
 
@@ -596,9 +601,20 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 	nextToken := p.peek()
 	nextTokenType := nextToken.Type()
 	variables := []Variable{}
-	isMultiReturnFunc := false
 
-	// Build variables slice.
+	// Fill variables slice (might not contain the final type after this step).
+	for _, nameToken := range nameTokens {
+		name := nameToken.Value()
+		variable, exists := ctx.variables[name]
+		variableValueType := variable.ValueType()
+
+		// If the variable already exists, make sure it has the same type as the specified type.
+		if exists && specifiedType.DataType() != DATA_TYPE_UNKNOWN && !specifiedType.Equals(variableValueType) {
+			return nil, fmt.Errorf("variable \"%s\" already exists but has type %s at row %d, column %d", name, variableValueType.ToString(), nextToken.Row(), nextToken.Column())
+		}
+		variables = append(variables, NewVariable(name, specifiedType, ctx.global()))
+	}
+	values := []Expression{}
 
 	// TODO: Improve check (avoid NEWLINE and EOF check).
 	if nextTokenType != lexer.NEWLINE && nextTokenType != lexer.EOF {
@@ -607,25 +623,24 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 		if err != nil {
 			return nil, err
 		}
-		valuesTemp := evaluatedVals.values
+		values = evaluatedVals.values
 		valuesTypes := []ValueType{}
-		isMultiReturnFuncTemp, function := evaluatedVals.isMultiReturnFunc()
-		isMultiReturnFunc = isMultiReturnFuncTemp
+		isMultiReturnFuncCall, call := evaluatedVals.isMultiReturnFuncCall()
 
 		// If multi-return function, get function return types, else get value types.
-		if isMultiReturnFunc {
-			valuesTypes = function.ReturnTypes()
+		if isMultiReturnFuncCall {
+			valuesTypes = call.ReturnTypes()
 		} else {
-			for _, valueTemp := range valuesTemp {
+			for _, valueTemp := range values {
 				valuesTypes = append(valuesTypes, valueTemp.ValueType())
 			}
 		}
-		valuesTempLen := len(valuesTemp)
-		namesLen := len(nameTokens)
+		valuesTypesLen := len(valuesTypes)
+		variablesLen := len(variables)
 
 		// Check if the amount of values is equal to the amount of variable names.
-		if valuesTempLen != namesLen {
-			return nil, fmt.Errorf("got %d initialisation values but %d variables at row %d, column %d", valuesTempLen, namesLen, nextToken.Row(), nextToken.Column())
+		if valuesTypesLen != variablesLen {
+			return nil, fmt.Errorf("got %d initialisation values but %d variables at row %d, column %d", valuesTypesLen, variablesLen, nextToken.Row(), nextToken.Column())
 		}
 
 		// If a type has been specified, make sure the returned types fit this type.
@@ -638,42 +653,41 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 		}
 
 		// Check if variables exist and if, check if the types match.
-		for i, nameToken := range nameTokens {
-			name := nameToken.Value()
-			valueType := valuesTypes[i]
-			variable, exists := ctx.variables[name]
+		for i, variable := range variables {
+			valueValueType := valuesTypes[i]
+			variableValueType := variable.ValueType()
 
-			if exists {
-				variableValueType := variable.ValueType()
-
-				if !variableValueType.Equals(valueType) {
-					return nil, expectedError(fmt.Sprintf("%s but got %s for variable %s", variableValueType.ToString(), valueType.ToString(), name), nextToken)
-				}
+			if variableValueType.DataType() == DATA_TYPE_UNKNOWN {
+				variables[i].valueType = valueValueType // Use index here to make sure the original variable is modified, not the copy.
+			} else if !variableValueType.Equals(valueValueType) {
+				return nil, expectedError(fmt.Sprintf("%s but got %s for variable %s", variableValueType.ToString(), valueValueType.ToString(), variable.Name()), nextToken)
 			}
 		}
 
 		// If it's a function call multi assignment, build return value here.
-		if isMultiReturnFunc {
-			
-		}
-
-		// Try to assign values.
-		for i, valueTemp := range valuesTemp {
-
+		if isMultiReturnFuncCall {
+			call := VariableDefinitionCallAssignment{
+				variables,
+				call,
+			}
+			return call, nil
 		}
 	}
 
 	// If no value has been specified, define default value.
-	if value == nil {
-		value, err = defaultVarValue(specifiedType)
+	if len(values) == 0 {
+		for _, variable := range variables {
+			value, err := defaultVarValue(variable.ValueType())
 
-		if err != nil {
-			return nil, err
+			if err != nil {
+				return nil, err
+			}
+			values = append(values, value)
 		}
 	}
 	variable := VariableDefinition{
-		variable: NewVariable(name, specifiedType, ctx.global()),
-		value:    value,
+		variables,
+		values,
 	}
 	return variable, nil
 }
@@ -1144,8 +1158,14 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 				switch init.StatementType() {
 				case STATEMENT_TYPE_VAR_DEFINITION:
 					// Store new variable.
-					variable := init.(VariableDefinition).variable
-					ctx.variables[variable.Name()] = variable
+					for _, variable := range init.(VariableDefinition).Variables() {
+						ctx.variables[variable.Name()] = variable
+					}
+				case STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT:
+					// Store new variable.
+					for _, variable := range init.(VariableDefinitionCallAssignment).Variables() {
+						ctx.variables[variable.Name()] = variable
+					}
 				case STATEMENT_TYPE_VAR_ASSIGNMENT:
 				default:
 					return nil, expectedError("variable assignment or variable definition", nextToken)
@@ -1648,7 +1668,7 @@ func (p *Parser) evaluateFunctionCall(ctx context) (Call, error) {
 	return FunctionCall{
 		name:        name,
 		arguments:   args,
-		returnTypes: []ValueType{definedFunction.ValueType()},
+		returnTypes: definedFunction.ReturnTypes(),
 	}, nil
 }
 
