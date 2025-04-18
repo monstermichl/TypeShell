@@ -291,14 +291,15 @@ func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator,
 		switch operator {
 		case parser.BINARY_OPERATOR_MULTIPLICATION,
 			parser.BINARY_OPERATOR_DIVISION,
-			parser.BINARY_OPERATOR_MODULO,
 			parser.BINARY_OPERATOR_ADDITION,
 			parser.BINARY_OPERATOR_SUBTRACTION:
 			// These operations are fine.
+		case parser.BINARY_OPERATOR_MODULO:
+			operator = fmt.Sprintf("%%%s", operator) // Modulo needs to be escaped as "%" is used to dereference variables in Batch.
 		default:
 			return notAllowedError()
 		}
-		c.addLine(fmt.Sprintf("set /A %s= %s %s %s", c.varName(helper, false), left, operator, right))
+		c.addLine(fmt.Sprintf("set /A %s=%s%s%s", c.varName(helper, false), left, operator, right))
 	case parser.DATA_TYPE_STRING:
 		switch operator {
 		case parser.BINARY_OPERATOR_ADDITION:
