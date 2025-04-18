@@ -912,16 +912,16 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 			if last {
 				// TODO: Add token position to errors to raise clearer error messages.
 				if lastStatement == nil || lastStatement.StatementType() != STATEMENT_TYPE_RETURN {
-					errTemp = fmt.Errorf("function %s requires a return statement at the end of the block", name)
+					errTemp = fmt.Errorf("function \"%s\" requires a return statement at the end of the block", name)
 				} else if returnStatement := lastStatement.(Return); len(returnStatement.Values()) != len(returnTypes) {
-					errTemp = fmt.Errorf("function %s requires %d return values but returns %d", name, len(returnTypes), len(returnStatement.Values()))
+					errTemp = fmt.Errorf("function \"%s\" requires %d return values but returns %d", name, len(returnTypes), len(returnStatement.Values()))
 				} else {
 					for i, returnValue := range returnStatement.Values() {
 						returnType := returnTypes[i]
 						returnValueType := returnValue.ValueType()
 
 						if !returnValueType.Equals(returnType) {
-							errTemp = fmt.Errorf("function %s returns %s but expects %s", name, returnValueType.ToString(), returnType.ToString())
+							errTemp = fmt.Errorf("function \"%s\" returns %s but expects %s", name, returnValueType.ToString(), returnType.ToString())
 							break
 						}
 					}
