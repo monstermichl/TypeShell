@@ -951,25 +951,13 @@ func (p *Parser) evaluateReturn(ctx context) (Statement, error) {
 	if returnToken.Type() != lexer.RETURN {
 		return nil, expectedError("return-keyword", returnToken)
 	}
-	var values []Expression
+	evaluatedVals, err := p.evaluateValues(ctx)
 
-	for {
-		value, err := p.evaluateExpression(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-		values = append(values, value)
-		nextToken := p.peek()
-
-		// If next token is a comman, multiple values are returned.
-		if nextToken.Type() != lexer.COMMA {
-			break
-		}
-		p.eat()
+	if err != nil {
+		return nil, err
 	}
 	return Return{
-		values,
+		values: evaluatedVals.values,
 	}, nil
 }
 
