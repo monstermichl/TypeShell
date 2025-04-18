@@ -237,7 +237,7 @@ func (p *Parser) checkNewVariableNameToken(token lexer.Token, ctx context) error
 	return nil
 }
 
-func (p *Parser) evaluateVarNames(ctx context) ([]lexer.Token, error) {
+func (p *Parser) evaluateVarNames() ([]lexer.Token, error) {
 	nameTokens := []lexer.Token{}
 
 	for {
@@ -493,7 +493,7 @@ func (p *Parser) evaluateBlock(callback blockCallback, ctx context, scope scope)
 	return statements, nil
 }
 
-func (p *Parser) evaluateValueType(_ context) (ValueType, error) {
+func (p *Parser) evaluateValueType() (ValueType, error) {
 	nextToken := p.peek()
 	evaluatedType := NewValueType(DATA_TYPE_UNKNOWN, false)
 
@@ -539,7 +539,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 			return nil, expectedError("variable definition", varToken)
 		}
 	}
-	nameTokens, err := p.evaluateVarNames(ctx)
+	nameTokens, err := p.evaluateVarNames()
 
 	if err != nil {
 		return nil, err
@@ -586,7 +586,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 
 		// If next token starts a type definition, evaluate value type.
 		if slices.Contains([]lexer.TokenType{lexer.DATA_TYPE, lexer.OPENING_SQUARE_BRACKET}, nextToken.Type()) {
-			specifiedTypeTemp, err := p.evaluateValueType(ctx)
+			specifiedTypeTemp, err := p.evaluateValueType()
 
 			if err != nil {
 				return nil, err
@@ -699,7 +699,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 }
 
 func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
-	nameTokens, err := p.evaluateVarNames(ctx)
+	nameTokens, err := p.evaluateVarNames()
 
 	if err != nil {
 		return nil, err
@@ -788,7 +788,7 @@ func (p *Parser) evaluateParams(ctx context) ([]Variable, error) {
 		if exists {
 			return params, fmt.Errorf("scope already contains a variable with the name %s", name)
 		}
-		valueType, err := p.evaluateValueType(ctx)
+		valueType, err := p.evaluateValueType()
 
 		if err != nil {
 			return nil, err
@@ -868,7 +868,7 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 	for {
 		// Check if a return type has been specified.
 		if slices.Contains([]lexer.TokenType{lexer.DATA_TYPE, lexer.OPENING_SQUARE_BRACKET}, returnTypeToken.Type()) {
-			returnTypeTemp, err := p.evaluateValueType(ctx)
+			returnTypeTemp, err := p.evaluateValueType()
 
 			if err != nil {
 				return nil, err
@@ -1729,7 +1729,7 @@ func (p *Parser) evaluateAppCall(ctx context) (Call, error) {
 
 func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
 	nextToken := p.peek()
-	sliceValueType, err := p.evaluateValueType(ctx)
+	sliceValueType, err := p.evaluateValueType()
 
 	if err != nil {
 		return nil, err
