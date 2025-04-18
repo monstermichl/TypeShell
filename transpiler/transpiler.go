@@ -311,12 +311,44 @@ func (t *transpiler) evaluateVarDefinitionCallAssignment(definition parser.Varia
 }
 
 func (t *transpiler) evaluateVarAssignment(assignment parser.VariableAssignment) error {
-	result, err := t.evaluateExpression(assignment.Value(), true)
+	for i, variable := range assignment.Variables() {
+		result, err := t.evaluateExpression(assignment.Values()[i], true)
+
+		if err != nil {
+			return err
+		}
+		err = t.converter.VarDefinition(variable.Name(), result.firstValue(), variable.Global())
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *transpiler) evaluateVarAssignmentCallAssignment(assignment parser.VariableAssignmentCallAssignment) error {
+	result, err := t.evaluateExpression(assignment.Call(), true)
 
 	if err != nil {
 		return err
 	}
-	return t.converter.VarAssignment(assignment.Name(), result.firstValue(), assignment.Global())
+	variables := assignment.Variables()
+	variablesLen := len(variables)
+	values := result.values
+	valuesLen := len(values)
+
+	if valuesLen != variablesLen {
+		return fmt.Errorf("require %d values but got %d", variablesLen, valuesLen)
+	}
+
+	for i, variable := range variables {
+		err = t.converter.VarDefinition(variable.Name(), values[i], variable.Global())
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (t *transpiler) evaluateSliceAssignment(assignment parser.SliceAssignment) error {
@@ -547,6 +579,8 @@ func (t *transpiler) evaluate(statement parser.Statement) error {
 		return t.evaluateVarDefinitionCallAssignment(statement.(parser.VariableDefinitionCallAssignment))
 	case parser.STATEMENT_TYPE_VAR_ASSIGNMENT:
 		return t.evaluateVarAssignment(statement.(parser.VariableAssignment))
+	case parser.STATEMENT_TYPE_VAR_ASSIGNMENT_CALL_ASSIGNMENT:
+		return t.evaluateVarAssignmentCallAssignment(statement.(parser.VariableAssignmentCallAssignment))
 	case parser.STATEMENT_TYPE_SLICE_ASSIGNMENT:
 		return t.evaluateSliceAssignment(statement.(parser.SliceAssignment))
 	case parser.STATEMENT_TYPE_FUNCTION_DEFINITION:

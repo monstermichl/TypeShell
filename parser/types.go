@@ -66,6 +66,7 @@ const (
 	STATEMENT_TYPE_VAR_DEFINITION                 StatementType = "variable definition"
 	STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT StatementType = "variable definition func assignment"
 	STATEMENT_TYPE_VAR_ASSIGNMENT                 StatementType = "variable assignment"
+	STATEMENT_TYPE_VAR_ASSIGNMENT_CALL_ASSIGNMENT StatementType = "variable assignment func assignment"
 	STATEMENT_TYPE_VAR_EVALUATION                 StatementType = "variable evaluation"
 	STATEMENT_TYPE_GROUP                          StatementType = "group"
 	STATEMENT_TYPE_FUNCTION_DEFINITION            StatementType = "function definition"

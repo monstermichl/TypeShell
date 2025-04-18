@@ -692,40 +692,71 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 	return variable, nil
 }
 
-func (p *Parser) evaluateVarAssignment(ctx context) (Expression, error) {
-	nameToken := p.eat()
-
-	if nameToken.Type() != lexer.IDENTIFIER {
-		return nil, expectedError("variable name", nameToken)
-	}
-	name := nameToken.Value()
-
-	// Make sure variable has been defined.
-	definedVariable, exists := ctx.variables[name]
-
-	if !exists {
-		return nil, fmt.Errorf("variable %s has not been defined at row %d, column %d", name, nameToken.Row(), nameToken.Column())
-	}
-
-	// Check assign token.
-	if p.eat().Type() != lexer.ASSIGN_OPERATOR {
-		return nil, expectedError("\"=\"", nameToken)
-	}
-	valueToken := p.peek()
-	value, err := p.evaluateExpression(ctx)
+func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
+	nameTokens, err := p.evaluateVarNames(ctx)
 
 	if err != nil {
 		return nil, err
 	}
-	assignedValueType := value.ValueType()
-	expectedValueType := definedVariable.ValueType()
+	assignToken := p.eat()
 
-	if assignedValueType != expectedValueType {
-		return nil, expectedError(fmt.Sprintf("%s but got %s", expectedValueType.ToString(), assignedValueType.ToString()), valueToken)
+	// Check assign token.
+	if assignToken.Type() != lexer.ASSIGN_OPERATOR {
+		return nil, expectedError("\"=\"", assignToken)
+	}
+	valuesToken := p.peek()
+	evaluatedVals, err := p.evaluateValues(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	isMultiReturnFuncCall, call := evaluatedVals.isMultiReturnFuncCall()
+	valuesTypes := []ValueType{}
+
+	// If it's a multi return function call evaluate how many values are returned by the function.
+	if isMultiReturnFuncCall {
+		valuesTypes = call.ReturnTypes()
+	} else {
+		for _, value := range evaluatedVals.values {
+			valuesTypes = append(valuesTypes, value.ValueType())
+		}
+	}
+	namesLen := len(nameTokens)
+	valuesTypesLen := len(valuesTypes)
+
+	// Make sure variables and values match in length.
+	if namesLen != valuesTypesLen {
+		return nil, fmt.Errorf("got %d values but %d variables at row %d, column %d", valuesTypesLen, namesLen, valuesToken.Row(), valuesToken.Column())
+	}
+	variables := []Variable{}
+
+	for i, nameToken := range nameTokens {
+		name := nameToken.Value()
+
+		// Make sure variable has been defined.
+		definedVariable, exists := ctx.variables[name]
+
+		if !exists {
+			return nil, fmt.Errorf("variable %s has not been defined at row %d, column %d", name, nameToken.Row(), nameToken.Column())
+		}
+		valueType := valuesTypes[i]
+		expectedValueType := definedVariable.ValueType()
+
+		if valueType != expectedValueType {
+			return nil, expectedError(fmt.Sprintf("%s but got %s", expectedValueType.ToString(), valueType.ToString()), valuesToken)
+		}
+		variables = append(variables, NewVariable(name, valueType, ctx.global()))
+	}
+
+	if isMultiReturnFuncCall {
+		return VariableAssignmentCallAssignment{
+			variables,
+			call,
+		}, nil
 	}
 	return VariableAssignment{
-		Variable: definedVariable,
-		value:    value,
+		variables: variables,
+		values:    evaluatedVals.values,
 	}, nil
 }
 
@@ -1316,13 +1347,12 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 		nextToken := p.peekAt(1)
 
 		// If the current token is an identifier and the next is an opening
-		// brace, it's a function call, if the next is an assignment operator,
-		// it's an assignment, otherwise it's a variable evaluation.
+		// round bracket, it's a function call if the next is an opening
+		// square bracket, it's a slice evaluation, otherwise it's a
+		// variable evaluation.
 		switch nextToken.Type() {
 		case lexer.OPENING_ROUND_BRACKET:
 			expr, err = p.evaluateFunctionCall(ctx)
-		case lexer.ASSIGN_OPERATOR:
-			expr, err = p.evaluateVarAssignment(ctx)
 		case lexer.OPENING_SQUARE_BRACKET:
 			expr, err = p.evaluateSliceEvaluation(ctx)
 		default:
@@ -1438,6 +1468,8 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 				switch p.peekAt(1).Type() {
 				case lexer.INCREMENT_OPERATOR, lexer.DECREMENT_OPERATOR:
 					stmt, err = p.evaluateIncrementDecrement(ctx)
+				case lexer.ASSIGN_OPERATOR, lexer.COMMA:
+					stmt, err = p.evaluateVarAssignment(ctx)
 				default:
 					// Handle slice assignment.
 					variable, exists := ctx.variables[token.Value()]
@@ -1899,14 +1931,16 @@ func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
 		return nil, expectedError("\"++\" or \"--\"", operationToken)
 	}
 	return VariableAssignment{
-		Variable: definedVariable,
-		value: BinaryOperation{
-			left: VariableEvaluation{
-				Variable: definedVariable,
+		variables: []Variable{definedVariable},
+		values: []Expression{
+			BinaryOperation{
+				left: VariableEvaluation{
+					Variable: definedVariable,
+				},
+				operator:  operation,
+				right:     IntegerLiteral{value: 1},
+				valueType: valueType,
 			},
-			operator:  operation,
-			right:     IntegerLiteral{value: 1},
-			valueType: valueType,
 		},
 	}, nil
 }

@@ -26,19 +26,6 @@ func (v Variable) Global() bool {
 	return v.global
 }
 
-type VariableAssignment struct {
-	Variable
-	value Expression
-}
-
-func (v VariableAssignment) StatementType() StatementType {
-	return STATEMENT_TYPE_VAR_ASSIGNMENT
-}
-
-func (v VariableAssignment) Value() Expression {
-	return v.value
-}
-
 type VariableDefinition struct {
 	variables []Variable
 	values    []Expression
@@ -70,6 +57,40 @@ func (v VariableDefinitionCallAssignment) Variables() []Variable {
 }
 
 func (v VariableDefinitionCallAssignment) Call() FunctionCall {
+	return v.call
+}
+
+type VariableAssignment struct {
+	variables []Variable
+	values    []Expression
+}
+
+func (v VariableAssignment) StatementType() StatementType {
+	return STATEMENT_TYPE_VAR_ASSIGNMENT
+}
+
+func (v VariableAssignment) Variables() []Variable {
+	return v.variables
+}
+
+func (v VariableAssignment) Values() []Expression {
+	return v.values
+}
+
+type VariableAssignmentCallAssignment struct {
+	variables []Variable
+	call      FunctionCall
+}
+
+func (v VariableAssignmentCallAssignment) StatementType() StatementType {
+	return STATEMENT_TYPE_VAR_ASSIGNMENT_CALL_ASSIGNMENT
+}
+
+func (v VariableAssignmentCallAssignment) Variables() []Variable {
+	return v.variables
+}
+
+func (v VariableAssignmentCallAssignment) Call() FunctionCall {
 	return v.call
 }
 
