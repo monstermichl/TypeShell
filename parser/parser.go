@@ -15,6 +15,7 @@ var typeMapping = map[lexer.VarType]DataType{
 	lexer.DATA_TYPE_BOOLEAN: DATA_TYPE_BOOLEAN,
 	lexer.DATA_TYPE_INTEGER: DATA_TYPE_INTEGER,
 	lexer.DATA_TYPE_STRING:  DATA_TYPE_STRING,
+	lexer.DATA_TYPE_ERROR:   DATA_TYPE_STRING, // error is internally just a string to make heandling easier.
 }
 
 type scope string
@@ -1294,6 +1295,9 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 		expr = IntegerLiteral{
 			value: integer,
 		}
+	case lexer.NIL_LITERAL:
+		p.eat()                // Eat string token.
+		expr = StringLiteral{} // nil is an empty string literal.
 	case lexer.STRING_LITERAL:
 		p.eat() // Eat string token.
 		expr = StringLiteral{

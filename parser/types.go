@@ -59,6 +59,7 @@ const (
 	STATEMENT_TYPE_BOOL_LITERAL                   StatementType = "boolean"
 	STATEMENT_TYPE_INT_LITERAL                    StatementType = "integer"
 	STATEMENT_TYPE_STRING_LITERAL                 StatementType = "string"
+	STATEMENT_TYPE_NIL_LITERAL                    StatementType = "nil"
 	STATEMENT_TYPE_UNARY_OPERATION                StatementType = "unary operation"
 	STATEMENT_TYPE_BINARY_OPERATION               StatementType = "binary operation"
 	STATEMENT_TYPE_LOGICAL_OPERATION              StatementType = "logical operation"

@@ -38,6 +38,7 @@ const (
 	BOOL_LITERAL
 	NUMBER_LITERAL
 	STRING_LITERAL
+	NIL_LITERAL
 
 	// Types.
 	DATA_TYPE
@@ -77,6 +78,7 @@ const (
 	DATA_TYPE_BOOLEAN VarType = "bool"
 	DATA_TYPE_INTEGER VarType = "int"
 	DATA_TYPE_STRING  VarType = "string"
+	DATA_TYPE_ERROR   VarType = "error"
 )
 
 type Token struct {
@@ -166,11 +168,13 @@ var keywords = map[string]TokenType{
 	"print":    PRINT,
 	"echo":     PRINT,
 	"input":    INPUT,
+	"nil":      NIL_LITERAL,
 
 	// Types.
 	DATA_TYPE_BOOLEAN: DATA_TYPE,
 	DATA_TYPE_INTEGER: DATA_TYPE,
 	DATA_TYPE_STRING:  DATA_TYPE,
+	DATA_TYPE_ERROR:   DATA_TYPE,
 }
 
 func newToken(value string, tokenType TokenType, row int, column int) Token {
