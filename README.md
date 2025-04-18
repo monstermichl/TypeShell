@@ -150,3 +150,34 @@ x := input("number: ")
 // Output.
 print(x)
 ```
+
+## Caveats
+### Condition evaluation
+In contrast to many other programming languages, TypeShell evaluates all conditions before the actual statement. This is done to handle the limitations of Batch/Bash.
+
+```golang
+if a == 1 && b == 1 {
+    // Do something.
+}
+```
+
+```golang
+h1 := a == 1
+h2 := b == 2
+h3 := a && b
+
+if h3 {
+    // Do something.
+}
+```
+
+### Error and nil
+In TypeShell error is just a string type and nil is an empty string. However, they are still supported to provide developers with the possibility to use the typical Go workflow of error checking.
+
+```golang
+err := func()
+
+if err != nil {
+    // Do something.
+}
+```
