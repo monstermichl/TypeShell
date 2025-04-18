@@ -270,13 +270,16 @@ func (p *Parser) evaluateValues(ctx context) (evaluatedValues, error) {
 		expressions = append(expressions, expr)
 		nextToken := p.peek()
 		returnValuesLength := -1
+		funcName := ""
 
 		// If expression is a function, check if it returns a value.
 		if expr.StatementType() == STATEMENT_TYPE_FUNCTION_CALL {
-			returnValuesLength = len(expr.(FunctionCall).ReturnTypes())
+			call := expr.(FunctionCall)
+			returnValuesLength = len(call.ReturnTypes())
+			funcName = call.Name()
 
 			if returnValuesLength == 0 {
-				return evaluatedValues{}, expectedError("return value from function \"%s\"", exprToken)
+				return evaluatedValues{}, expectedError(fmt.Sprintf("return value from function \"%s\"", funcName), exprToken)
 			}
 		}
 		// Check if other values follow.
@@ -287,7 +290,7 @@ func (p *Parser) evaluateValues(ctx context) (evaluatedValues, error) {
 
 		// If other values follow, function must only return one value.
 		if returnValuesLength > 1 {
-			return evaluatedValues{}, expectedError("only one return value from function \"%s\"", exprToken)
+			return evaluatedValues{}, expectedError(fmt.Sprintf("only one return value from function \"%s\"", funcName), exprToken)
 		}
 	}
 	return evaluatedValues{
