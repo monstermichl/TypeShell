@@ -65,6 +65,7 @@ const (
 	CONTINUE
 	PRINT
 	INPUT
+	COPY
 
 	// App operators.
 	AT
@@ -162,13 +163,16 @@ var keywords = map[string]TokenType{
 	"else":     ELSE,
 	"for":      FOR,
 	"range":    RANGE,
-	"len":      LEN,
 	"break":    BREAK,
 	"continue": CONTINUE,
-	"print":    PRINT,
-	"echo":     PRINT,
-	"input":    INPUT,
 	"nil":      NIL_LITERAL,
+
+	// Builtin functions.
+	"len":   LEN,
+	"print": PRINT,
+	"echo":  PRINT,
+	"input": INPUT,
+	"copy":  COPY,
 
 	// Types.
 	DATA_TYPE_BOOLEAN: DATA_TYPE,

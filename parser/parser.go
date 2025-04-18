@@ -161,6 +161,27 @@ func defaultVarValue(valueType ValueType) (Expression, error) {
 	return nil, fmt.Errorf("no default value found for type %s", valueType.ToString())
 }
 
+func incrementDecrementStatement(variable Variable, increment bool) Statement {
+	operation := BINARY_OPERATOR_ADDITION
+
+	if !increment {
+		operation = BINARY_OPERATOR_SUBTRACTION
+	}
+	return VariableAssignment{
+		variables: []Variable{variable},
+		values: []Expression{
+			BinaryOperation{
+				left: VariableEvaluation{
+					Variable: variable,
+				},
+				operator:  operation,
+				right:     IntegerLiteral{value: 1},
+				valueType: NewValueType(DATA_TYPE_INTEGER, false),
+			},
+		},
+	}
+}
+
 func (p Parser) peek() lexer.Token {
 	return p.peekAt(0)
 }
@@ -1453,6 +1474,8 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 		stmt, err = p.evaluateContinue(ctx)
 	case lexer.PRINT:
 		stmt, err = p.evaluatePrint(ctx)
+	case lexer.COPY:
+		stmt, err = p.evaluateCopy(ctx)
 	default:
 		// Variable initialization also starts with identifier but is a statement (e.g. x := 1234).
 		if p.isShortVarInit() {
@@ -1914,30 +1937,18 @@ func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
 	if !valueType.IsInt() {
 		return nil, expectedError(fmt.Sprintf("%s but got %s", NewValueType(DATA_TYPE_INTEGER, false).ToString(), valueType.ToString()), identifierToken)
 	}
-	var operation BinaryOperator
 	operationToken := p.eat()
+	increment := true
 
 	switch operationToken.Type() {
 	case lexer.INCREMENT_OPERATOR:
-		operation = BINARY_OPERATOR_ADDITION
+		// Nothing to do.
 	case lexer.DECREMENT_OPERATOR:
-		operation = BINARY_OPERATOR_SUBTRACTION
+		increment = false
 	default:
 		return nil, expectedError("\"++\" or \"--\"", operationToken)
 	}
-	return VariableAssignment{
-		variables: []Variable{definedVariable},
-		values: []Expression{
-			BinaryOperation{
-				left: VariableEvaluation{
-					Variable: definedVariable,
-				},
-				operator:  operation,
-				right:     IntegerLiteral{value: 1},
-				valueType: valueType,
-			},
-		},
-	}, nil
+	return incrementDecrementStatement(definedVariable, increment), nil
 }
 
 func (p *Parser) evaluateLen(ctx context) (Expression, error) {
@@ -1982,4 +1993,68 @@ func (p *Parser) evaluatePrint(ctx context) (Statement, error) {
 			expressions: expressions,
 		}, nil
 	})
+}
+
+func (p *Parser) evaluateCopy(ctx context) (Statement, error) {
+	expr, err := p.evaluateBuiltInFunction(lexer.COPY, "copy", 2, 2, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
+		expressionsLen := len(expressions)
+
+		if expressionsLen < 1 {
+			return nil, expectedError("destination slice as first argument", keywordToken)
+		} else if expressionsLen < 2 {
+			return nil, expectedError("source slice as second argument", keywordToken)
+		}
+		dst := expressions[0]
+		src := expressions[1]
+		dstType := dst.ValueType()
+		srcType := src.ValueType()
+
+		if !dstType.IsSlice() || dst.StatementType() != STATEMENT_TYPE_VAR_EVALUATION {
+			return nil, expectedError("slice variable as first argument", keywordToken)
+		} else if !srcType.IsSlice() {
+			return nil, expectedError("slice as second argument", keywordToken)
+		} else if !dstType.Equals(srcType) {
+			return nil, fmt.Errorf("got %s as destination but %s as source at row %d, column %d", dstType.ToString(), srcType.ToString(), keywordToken.Row(), keywordToken.Column())
+		}
+		dstSlice := dst.(VariableEvaluation)
+		helperVar := NewVariable("_ci", NewValueType(DATA_TYPE_INTEGER, false), ctx.global()) // TODO: Find a better way. I'm not really happy with using a helper variable here as it might clash with other variables.
+
+		// To copy a slice, just create a for-loop.
+		return For{
+			init: VariableAssignment{
+				variables: []Variable{helperVar},
+				values:    []Expression{IntegerLiteral{0}},
+			},
+			condition: NewComparison(
+				VariableEvaluation{
+					Variable: helperVar,
+				},
+				COMPARE_OPERATOR_LESS,
+				Len{
+					expression: src,
+				},
+			),
+			increment: incrementDecrementStatement(helperVar, true),
+			body: []Statement{
+				SliceAssignment{
+					Variable: dstSlice.Variable,
+					index: VariableEvaluation{
+						Variable: helperVar,
+					},
+					value: SliceEvaluation{
+						Variable: dstSlice.Variable,
+						index: VariableEvaluation{
+							Variable: helperVar,
+						},
+						dataType: dstSlice.ValueType().DataType(),
+					},
+				},
+			},
+		}, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return expr.(For), nil
 }
