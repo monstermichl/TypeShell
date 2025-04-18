@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strings"
 )
 
 type TokenType int8
@@ -233,36 +234,20 @@ func Tokenize(source string) ([]Token, error) {
 				err = fmt.Errorf("string at row %d, column %d has not been terminated", ogRow, ogColumn)
 				break
 			}
-		} else if match := regexp.MustCompile(`^\/(\*|\/)`).FindString(source[i:]); match != "" {
-			// Evaluate comment.
-			oneLineComment := true
-
-			// If second char is a asterisk, it's a multiline comment.
-			if string(match[1]) == "*" {
-				oneLineComment = false
-			}
+		} else if matches := regexp.MustCompile(`(?s)^\/\*(.*)\*\/`).FindStringSubmatch(source[i:]); matches != nil {
+			// Multiline comment.
+			token = newToken(matches[1], COMMENT, ogRow, ogColumn)
+			match := matches[0]
+			lines := strings.Split(match, "\n")
+			lastLinesIndex := len(lines) - 1
+			row += lastLinesIndex
+			ogColumn = startIndex
 			i += len(match)
-			comment := ""
-
-			for i < sourceLength {
-				cancel := false
-				c0 = char(source, i)
-				c1 := char(source, i+1)
-
-				if oneLineComment && c0 == "\n" {
-					cancel = true
-				} else if !oneLineComment && c0 == "*" && c1 == "/" {
-					i++
-					cancel = true
-				}
-				i++
-
-				if cancel {
-					break
-				}
-				comment += c0
-			}
-			token = newToken(regexp.MustCompile(`\s+`).ReplaceAllString(comment, " "), COMMENT, ogRow, ogColumn)
+			ogI = i - len(lines[lastLinesIndex])
+		} else if matches := regexp.MustCompile(`^\/\/(.*)`).FindStringSubmatch(source[i:]); matches != nil {
+			// Single line comment.
+			token = newToken(matches[1], COMMENT, ogRow, ogColumn)
+			i += len(matches[0])
 		} else if match := regexp.MustCompile(`^(true|false)`).FindString(source[i:]); match != "" {
 			// Create bool token.
 			token = newToken(match, BOOL_LITERAL, ogRow, ogColumn)
