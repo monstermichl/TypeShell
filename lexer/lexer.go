@@ -163,6 +163,7 @@ var keywords = map[string]TokenType{
 	"break":    BREAK,
 	"continue": CONTINUE,
 	"print":    PRINT,
+	"echo":     PRINT,
 	"input":    INPUT,
 
 	// Types.
