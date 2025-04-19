@@ -77,39 +77,30 @@ func (c *converter) ProgramStart() error {
 
 func (c *converter) ProgramEnd() error {
 	if c.returnHelperRequired {
-		c.addEndLine(":: global var helper begin")
-		c.addEndLine("goto :_eo_gvh")
-		c.addEndLine(":_gvh")
-		c.addEndLine("set %1=%~2")
-		c.addEndLine("exit /B 0")
-		c.addEndLine(":_eo_gvh")
-		c.addEndLine(":: global var helper end")
+		c.addHelper("var", "_vh",
+			"set %1=%~2",
+			"exit /B 0",
+		)
 	}
 
 	if c.sliceAssignmentHelperRequired {
 		// Add slice helper to batch file for easier slice processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
-		c.addEndLine(":: slice assignment helper begin")
-		c.addEndLine("goto :_esa")
-		c.addEndLine(":_sa")
-		c.addEndLine("set %1[%2]=%~3")
-		c.addEndLine("exit /B 0")
-		c.addEndLine(":_esa")
-		c.addEndLine(":: slice assignment helper end")
+		c.addHelper("slice assignment", "_sah",
+			"set %1[%2]=%~3",
+			"exit /B 0",
+		)
 	}
 
 	if c.sliceLenHelperRequired {
-		c.addEndLine(":: slice length helper begin")
-		c.addEndLine("goto :_esl")
-		c.addEndLine(":_sl")
-		c.addEndLine("set _l=0")
-		c.addEndLine(":_sll")
-		c.addEndLine("if not defined %1[%_l%] goto :_slle")
-		c.addEndLine("set /A _l=%_l%+1")
-		c.addEndLine("goto :_sll")
-		c.addEndLine(":_slle")
-		c.addEndLine("exit /B 0")
-		c.addEndLine(":_esl")
-		c.addEndLine(":: slice length helper end")
+		c.addHelper("slice length", "_slh",
+			"set _l=0",
+			":_slhl",
+			"if not defined %1[%_l%] goto :_slhle",
+			"set /A _l=%_l%+1",
+			"goto :_slhl",
+			":_slhle",
+			"exit /B 0",
+		)
 	}
 	c.addEndLine(":exit")
 	c.addEndLine("endlocal")
@@ -454,7 +445,7 @@ func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, 
 	helper := c.nextHelperVar()
 	c.sliceLenHelperRequired = true
 
-	c.addLine(fmt.Sprintf("call :_sl %s", name))
+	c.addLine(fmt.Sprintf("call :_slh %s", name))
 	c.VarAssignment(helper, c.varEvaluationString("_l", false), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
@@ -569,6 +560,21 @@ func (c *converter) nextIfLabel() string {
 	return label
 }
 
+func (c *converter) addHelper(helperType string, label string, code ...string) {
+	label = strings.TrimLeft(label, ":")
+	endLabel := fmt.Sprintf(":_eo_%s", label)
+
+	c.addEndLine(fmt.Sprintf(":: global %s helper begin", helperType))
+	c.addEndLine(fmt.Sprintf("goto %s", endLabel))
+	c.addEndLine(fmt.Sprintf(":%s", label))
+
+	for _, line := range code {
+		c.addEndLine(line)
+	}
+	c.addEndLine(endLabel)
+	c.addEndLine(fmt.Sprintf(":: global %s helper end", helperType))
+}
+
 func (c *converter) inFunction() bool {
 	return len(c.funcs) > 0
 }
@@ -608,5 +614,5 @@ func (c *converter) nextHelperVar() string {
 func (c *converter) sliceAssignmentString(name string, index string, value string, global bool) string {
 	c.sliceAssignmentHelperRequired = true
 	// TODO: Handle global flag.
-	return fmt.Sprintf("call :_sa %s %s \"%s\"", name, index, value)
+	return fmt.Sprintf("call :_sah %s %s \"%s\"", name, index, value)
 }
