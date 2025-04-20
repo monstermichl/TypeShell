@@ -102,7 +102,6 @@ func (c *converter) ProgramEnd() error {
 			"exit /B 0",
 		)
 	}
-	c.addEndLine(":exit")
 	c.addEndLine("endlocal")
 	return nil
 }
