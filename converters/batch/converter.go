@@ -462,7 +462,7 @@ func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, 
 	c.sliceLenHelperRequired = true
 
 	c.addLine(fmt.Sprintf("call :_slh %s", name))
-	c.VarAssignment(helper, c.varEvaluationString("_l", false), false)
+	c.VarAssignment(helper, c.varEvaluationString("_l", true), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
 }
