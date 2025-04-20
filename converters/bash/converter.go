@@ -455,7 +455,7 @@ func (c *converter) Copy(destination string, source string, valueUsed bool, glob
 	c.sliceCopyHelperRequired = true
 
 	helper := c.nextHelperVar()
-	c.VarAssignment(helper, c.sliceLenString(c.varEvaluationString(destination, false)), false)
+	c.VarAssignment(helper, c.sliceLenString(c.varEvaluationString(destination, true)), false)
 
 	return c.varEvaluationString(helper, false), nil
 }
