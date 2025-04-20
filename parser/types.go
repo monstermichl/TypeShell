@@ -83,6 +83,7 @@ const (
 	STATEMENT_TYPE_PRINT                          StatementType = "print"
 	STATEMENT_TYPE_LEN                            StatementType = "len"
 	STATEMENT_TYPE_INPUT                          StatementType = "input"
+	STATEMENT_TYPE_COPY                           StatementType = "copy"
 	STATEMENT_TYPE_SLICE_INSTANTIATION            StatementType = "slice instantiation"
 	STATEMENT_TYPE_SLICE_ASSIGNMENT               StatementType = "slice assignment"
 	STATEMENT_TYPE_SLICE_EVALUATION               StatementType = "slice evaluation"

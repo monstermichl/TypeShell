@@ -1350,6 +1350,10 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 	case lexer.INPUT:
 		expr, err = p.evaluateInput(ctx)
 
+	// Handle copy.
+	case lexer.COPY:
+		expr, err = p.evaluateCopy(ctx)
+
 	// Handle len.
 	case lexer.LEN:
 		expr, err = p.evaluateLen(ctx)
@@ -1474,8 +1478,6 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 		stmt, err = p.evaluateContinue(ctx)
 	case lexer.PRINT:
 		stmt, err = p.evaluatePrint(ctx)
-	case lexer.COPY:
-		stmt, err = p.evaluateCopy(ctx)
 	default:
 		// Variable initialization also starts with identifier but is a statement (e.g. x := 1234).
 		if p.isShortVarInit() {
@@ -1995,7 +1997,7 @@ func (p *Parser) evaluatePrint(ctx context) (Statement, error) {
 	})
 }
 
-func (p *Parser) evaluateCopy(ctx context) (Statement, error) {
+func (p *Parser) evaluateCopy(ctx context) (Expression, error) {
 	expr, err := p.evaluateBuiltInFunction(lexer.COPY, "copy", 2, 2, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
 		expressionsLen := len(expressions)
 
@@ -2017,44 +2019,16 @@ func (p *Parser) evaluateCopy(ctx context) (Statement, error) {
 			return nil, fmt.Errorf("got %s as destination but %s as source at row %d, column %d", dstType.ToString(), srcType.ToString(), keywordToken.Row(), keywordToken.Column())
 		}
 		dstSlice := dst.(VariableEvaluation)
-		helperVar := NewVariable("_ci", NewValueType(DATA_TYPE_INTEGER, false), ctx.global()) // TODO: Find a better way. I'm not really happy with using a helper variable here as it might clash with other variables.
 
 		// To copy a slice, just create a for-loop.
-		return For{
-			init: VariableAssignment{
-				variables: []Variable{helperVar},
-				values:    []Expression{IntegerLiteral{0}},
-			},
-			condition: NewComparison(
-				VariableEvaluation{
-					Variable: helperVar,
-				},
-				COMPARE_OPERATOR_LESS,
-				Len{
-					expression: src,
-				},
-			),
-			increment: incrementDecrementStatement(helperVar, true),
-			body: []Statement{
-				SliceAssignment{
-					Variable: dstSlice.Variable,
-					index: VariableEvaluation{
-						Variable: helperVar,
-					},
-					value: SliceEvaluation{
-						Variable: dstSlice.Variable,
-						index: VariableEvaluation{
-							Variable: helperVar,
-						},
-						dataType: dstSlice.ValueType().DataType(),
-					},
-				},
-			},
+		return Copy{
+			destination: dstSlice.Variable,
+			source:      src,
 		}, nil
 	})
 
 	if err != nil {
 		return nil, err
 	}
-	return expr.(For), nil
+	return expr.(Copy), nil
 }

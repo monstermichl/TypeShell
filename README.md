@@ -140,15 +140,26 @@ true || true
 x := @ls("-a") | @sort()
 ```
 
-### Input/Output
+### Builtin
 ```golang
-// Read user input.
-x := input("number: ")
+// Returns the length of a slice.
+len(slice)
 ```
 
 ```golang
-// Output.
-print(x)
+// Prints the passed arguments to stdout.
+print()
+```
+
+```golang
+// Asks for user input.
+input()
+input("name: ")
+```
+
+```golang
+// Copies values from srcSlice to dstSlice. Returns the copied length.
+copy(dstSlice, srcSlice)
 ```
 
 ## Caveats

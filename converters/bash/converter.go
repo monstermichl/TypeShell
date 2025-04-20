@@ -15,13 +15,14 @@ type funcInfo struct {
 }
 
 type converter struct {
-	interpreter            string
-	startCode              []string
-	code                   []string
-	varCounter             int
-	funcs                  []funcInfo
-	funcCounter            int
-	sliceLenHelperRequired bool
+	interpreter             string
+	startCode               []string
+	code                    []string
+	varCounter              int
+	funcs                   []funcInfo
+	funcCounter             int
+	sliceLenHelperRequired  bool
+	sliceCopyHelperRequired bool
 }
 
 func New() *converter {
@@ -59,17 +60,31 @@ func (c *converter) ProgramStart() error {
 }
 
 func (c *converter) ProgramEnd() error {
+	if c.sliceCopyHelperRequired {
+		c.sliceLenHelperRequired = true
+
+		c.addHelper("slice copy", "_sch",
+			"local _i=0",
+			"local _l=$(_slh ${2})",
+			"local _n=$(eval \"echo \\${${1}}\")",
+			"while [ ${_i} -lt ${_l} ]; do",
+			fmt.Sprintf("local _v=%s", c.sliceEvaluationString("2", "${_i}", false)),
+			c.sliceAssignmentString("${_n}", "${_i}", "${_v}", false),
+			"_i=$(expr ${_i} + 1)",
+			"done",
+		)
+	}
+
 	if c.sliceLenHelperRequired {
-		c.addStartLine("# slice length helper")
-		c.addStartLine("_sl() {")
-		c.addStartLine("local _l=0")
-		c.addStartLine("while true; do")
-		c.addStartLine("eval \"local _t=\\${$1_${_l}}\"")
-		c.addStartLine("if [ -z \"${_t}\" ]; then break; fi") // https://stackoverflow.com/a/13864829 (didn't work with +x (probably due to the underscore of the variable)).
-		c.addStartLine("_l=$(expr ${_l} + 1)")
-		c.addStartLine("done")
-		c.addStartLine("echo ${_l}")
-		c.addStartLine("}")
+		c.addHelper("slice length", "_slh",
+			"local _l=0",
+			"while true; do",
+			"eval \"local _t=\\${$1_${_l}}\"",
+			"if [ -z \"${_t}\" ]; then break; fi", // https://stackoverflow.com/a/13864829 (didn't work with +x (probably due to the underscore of the variable)).
+			"_l=$(expr ${_l} + 1)",
+			"done",
+			"echo ${_l}",
+		)
 	}
 	return nil
 }
@@ -348,10 +363,7 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool, g
 	helper := c.nextHelperVar()
 	c.VarAssignment(
 		helper,
-		fmt.Sprintf("$(eval \"echo \\${%s_%s}\")",
-			c.varEvaluationString(name, global),
-			index,
-		),
+		c.sliceEvaluationString(name, index, global),
 		false,
 	) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 
@@ -362,7 +374,7 @@ func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, 
 	helper := c.nextHelperVar()
 	c.sliceLenHelperRequired = true
 	// TODO: Handle global flag.
-	c.VarAssignment(helper, fmt.Sprintf("$(_sl %s)", name), false) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+	c.VarAssignment(helper, c.sliceLenString(name), false) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 
 	return c.VarEvaluation(helper, valueUsed, false)
 }
@@ -436,6 +448,18 @@ func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
+func (c *converter) Copy(destination string, source string, valueUsed bool, global bool) (string, error) {
+	destination = c.varName(destination, global)
+
+	c.addLine(fmt.Sprintf("_sch %s %s", destination, source))
+	c.sliceCopyHelperRequired = true
+
+	helper := c.nextHelperVar()
+	c.VarAssignment(helper, c.sliceLenString(c.varEvaluationString(destination, false)), false)
+
+	return c.varEvaluationString(helper, false), nil
+}
+
 func (c *converter) varName(name string, global bool) string {
 	if c.inFunction() && !global {
 		name = fmt.Sprintf("f%d_%s", c.funcCounter, name)
@@ -452,6 +476,17 @@ func (c *converter) sliceAssignmentString(name string, index string, value strin
 	return fmt.Sprintf("eval %s_%s=\"%s\"", name, index, value)
 }
 
+func (c *converter) sliceEvaluationString(name string, index string, global bool) string {
+	return fmt.Sprintf("$(eval \"echo \\${%s_%s}\")",
+		c.varEvaluationString(name, global),
+		index,
+	)
+}
+
+func (c *converter) sliceLenString(name string) string {
+	return fmt.Sprintf("$(_slh %s)", name)
+}
+
 func (c *converter) ifStart(condition string, startWord string) error {
 	c.addLine(fmt.Sprintf("%s [ %s -eq %s ]; then", startWord, condition, c.BoolToString(true)))
 	return nil
@@ -459,6 +494,16 @@ func (c *converter) ifStart(condition string, startWord string) error {
 
 func (c *converter) inFunction() bool {
 	return len(c.funcs) > 0
+}
+
+func (c *converter) addHelper(helperType string, functionName string, code ...string) {
+	c.addStartLine(fmt.Sprintf("# global %s helper", helperType))
+	c.addStartLine(fmt.Sprintf("%s() {", functionName))
+
+	for _, line := range code {
+		c.addStartLine(line)
+	}
+	c.addStartLine("}")
 }
 
 func (c *converter) addStartLine(line string) {

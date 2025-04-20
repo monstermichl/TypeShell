@@ -546,6 +546,23 @@ func (t *transpiler) evaluateInput(input parser.Input, valueUsed bool) (expressi
 	return newExpressionResult(s), nil
 }
 
+func (t *transpiler) evaluateCopy(copy parser.Copy, valueUsed bool) (expressionResult, error) {
+	expr, err := t.evaluateExpression(copy.Source(), true)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	destination := copy.Destination()
+	amount, err := t.converter.Copy(destination.Name(), expr.firstValue(), valueUsed, destination.Global())
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	return expressionResult{
+		values: []string{amount},
+	}, nil
+}
+
 func (t *transpiler) evaluateLen(len parser.Len, valueUsed bool) (expressionResult, error) {
 	expr := len.Expression()
 	result, err := t.evaluateExpression(expr, true)
@@ -640,6 +657,8 @@ func (t *transpiler) evaluateExpression(expression parser.Expression, valueUsed 
 		return t.evaluateSliceInstantiation(expression.(parser.SliceInstantiation), valueUsed)
 	case parser.STATEMENT_TYPE_INPUT:
 		return t.evaluateInput(expression.(parser.Input), valueUsed)
+	case parser.STATEMENT_TYPE_COPY:
+		return t.evaluateCopy(expression.(parser.Copy), valueUsed)
 	case parser.STATEMENT_TYPE_LEN:
 		return t.evaluateLen(expression.(parser.Len), valueUsed)
 	}
