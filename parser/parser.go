@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -95,13 +97,38 @@ type Parser struct {
 	index  int
 }
 
-func New(tokens []lexer.Token) Parser {
-	return Parser{
-		tokens: tokens,
-	}
+func New() Parser {
+	return Parser{}
 }
 
-func (p *Parser) Parse() (Program, error) {
+func (p *Parser) Parse(path string) (Program, error) {
+	// If path is relative, make it absolute.
+	if !filepath.IsAbs(path) {
+		pathTemp, err := filepath.Abs(path)
+
+		if err != nil {
+			return Program{}, err
+		}
+		path = pathTemp
+	}
+
+	// Make sure path exists.
+	if _, err := os.Stat(path); err != nil {
+		return Program{}, err
+	}
+	source, err := os.ReadFile(path)
+
+	if err != nil {
+		return Program{}, err
+	}
+	tokens, err := lexer.Tokenize(string(source))
+
+	if err != nil {
+		return Program{}, err
+	}
+	p.index = 0
+	p.tokens = tokens
+
 	return p.evaluateProgram()
 }
 

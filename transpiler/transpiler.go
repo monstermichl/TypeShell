@@ -32,19 +32,22 @@ func (r expressionResult) firstValue() string {
 }
 
 type transpiler struct {
-	ast       parser.Statement
 	converter Converter
 }
 
-func New(ast parser.Statement) transpiler {
-	return transpiler{
-		ast: ast,
-	}
+func New() transpiler {
+	return transpiler{}
 }
 
-func (t *transpiler) Transpile(converter Converter) (string, error) {
+func (t *transpiler) Transpile(path string, converter Converter) (string, error) {
+	p := parser.New()
+	ast, err := p.Parse(path)
+
+	if err != nil {
+		return "", err
+	}
 	t.converter = converter
-	err := t.evaluate(t.ast)
+	err = t.evaluate(ast)
 
 	if err != nil {
 		return "", err
