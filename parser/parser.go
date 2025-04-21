@@ -70,6 +70,11 @@ func (c context) clone() context {
 	}
 }
 
+type evaluatedImport struct {
+	alias string
+	path  string
+}
+
 type evaluatedValues struct {
 	values []Expression
 }
@@ -95,6 +100,8 @@ type blockCallback func(statements []Statement, last bool) error
 type Parser struct {
 	tokens []lexer.Token
 	index  int
+	path   string
+	prefix string
 }
 
 func New() Parser {
@@ -102,6 +109,10 @@ func New() Parser {
 }
 
 func (p *Parser) Parse(path string) (Program, error) {
+	return p.parse(path, "")
+}
+
+func (p *Parser) parse(path string, prefix string) (Program, error) {
 	// If path is relative, make it absolute.
 	if !filepath.IsAbs(path) {
 		pathTemp, err := filepath.Abs(path)
@@ -128,6 +139,8 @@ func (p *Parser) Parse(path string) (Program, error) {
 	}
 	p.index = 0
 	p.tokens = tokens
+	p.path = path
+	p.prefix = strings.TrimSpace(prefix)
 
 	return p.evaluateProgram()
 }
@@ -209,6 +222,22 @@ func incrementDecrementStatement(variable Variable, increment bool) Statement {
 	}
 }
 
+func buildPrefixedName(alias string, funcName string) string {
+	if len(alias) > 0 {
+		prefix := fmt.Sprintf("%s_", alias)
+
+		// Only prefix if it doesn't already have the prefix.
+		if !strings.HasPrefix(funcName, prefix) {
+			funcName = fmt.Sprintf("%s%s", prefix, funcName)
+		}
+	}
+	return funcName
+}
+
+func (p *Parser) buildPrefixedName(funcName string) string {
+	return buildPrefixedName(p.prefix, funcName)
+}
+
 func (p Parser) peek() lexer.Token {
 	return p.peekAt(0)
 }
@@ -278,7 +307,7 @@ func (p *Parser) isShortVarInit() bool {
 
 func (p *Parser) checkNewVariableNameToken(token lexer.Token, ctx context) error {
 	name := token.Value()
-	_, exists := ctx.variables[name]
+	_, exists := ctx.variables[p.buildPrefixedName(name)]
 
 	if exists {
 		return fmt.Errorf("variable %s has already been defined at row %d, column %d", name, token.Row(), token.Column())
@@ -408,13 +437,115 @@ func (p *Parser) evaluateProgram() (Program, error) {
 		variables: map[string]Variable{},
 		functions: map[string]FunctionDefinition{},
 	}
-	statements, err := p.evaluateBlockContent(lexer.EOF, nil, ctx, SCOPE_PROGRAM)
+	statements, err := p.evaluateImports()
 
 	if err != nil {
 		return Program{}, err
 	}
+
+	// Add functions add variables.
+	for _, statement := range statements {
+		switch statement.StatementType() {
+		case STATEMENT_TYPE_VAR_DEFINITION:
+			definedVariable := statement.(VariableDefinition)
+
+			for _, variable := range definedVariable.Variables() {
+				ctx.variables[variable.Name()] = variable
+			}
+		case STATEMENT_TYPE_FUNCTION_DEFINITION:
+			definedFunction := statement.(FunctionDefinition)
+			ctx.functions[definedFunction.Name()] = definedFunction
+		}
+	}
+	statementsTemp, err := p.evaluateBlockContent(lexer.EOF, nil, ctx, SCOPE_PROGRAM)
+
+	if err != nil {
+		return Program{}, err
+	}
+	statements = append(statements, statementsTemp...)
+
 	return Program{
 		body: statements,
+	}, nil
+}
+
+func (p *Parser) evaluateImports() ([]Statement, error) {
+	nextToken := p.peek()
+	statements := []Statement{}
+
+	if nextToken.Type() == lexer.IMPORT {
+		p.eat()
+		nextToken := p.peek()
+		multiple := nextToken.Type() == lexer.OPENING_ROUND_BRACKET
+
+		if multiple {
+			p.eat()
+			nextToken = p.eat()
+
+			if nextToken.Type() != lexer.NEWLINE {
+				return nil, expectedError("newline", nextToken)
+			}
+		}
+
+		for {
+			imp, err := p.evaluateImport()
+
+			if err != nil {
+				return nil, err
+			}
+			path := imp.path
+
+			// If path is relative, create an absolute path by combining the loaded path with the import path.
+			if !filepath.IsAbs(path) {
+				path = filepath.Join(filepath.Dir(p.path), path)
+			}
+			importParser := New()
+			importedProg, err := importParser.parse(path, imp.alias)
+
+			if err != nil {
+				return nil, err
+			}
+			statements = append(statements, importedProg.Body()...)
+
+			nextToken = p.peek()
+			nextTokenType := nextToken.Type()
+
+			if !multiple {
+				break
+			} else if nextTokenType == lexer.CLOSING_ROUND_BRACKET {
+				p.eat()
+				break
+			} else if slices.Contains([]lexer.TokenType{lexer.IDENTIFIER, lexer.STRING_LITERAL}, nextTokenType) {
+				// Nothing to do, parse next import in the next cycle.
+			} else {
+				return nil, expectedError("\")\"", nextToken)
+			}
+		}
+	}
+	return statements, nil
+}
+
+func (p *Parser) evaluateImport() (evaluatedImport, error) {
+	nextToken := p.eat()
+	var alias string
+
+	if nextToken.Type() == lexer.IDENTIFIER {
+		alias = nextToken.Value()
+		nextToken = p.eat()
+	}
+
+	if nextToken.Type() != lexer.STRING_LITERAL {
+		return evaluatedImport{}, expectedError("import path", nextToken)
+	}
+	path := nextToken.Value()
+	nextToken = p.eat()
+
+	if !slices.Contains([]lexer.TokenType{lexer.NEWLINE, lexer.EOF}, nextToken.Type()) {
+		return evaluatedImport{}, expectedError("newline or end-of-file", nextToken)
+	}
+	return evaluatedImport{
+		alias,
+		path,
 	}, nil
 }
 
@@ -473,12 +604,12 @@ func (p *Parser) evaluateBlockContent(terminationTokenType lexer.TokenType, call
 			case STATEMENT_TYPE_VAR_DEFINITION:
 				// Store new variable.
 				for _, variable := range stmt.(VariableDefinition).Variables() {
-					ctx.variables[variable.Name()] = variable
+					ctx.variables[p.buildPrefixedName(variable.Name())] = variable
 				}
 			case STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT:
 				// Store new variable.
 				for _, variable := range stmt.(VariableDefinitionCallAssignment).Variables() {
-					ctx.variables[variable.Name()] = variable
+					ctx.variables[p.buildPrefixedName(variable.Name())] = variable
 				}
 			case STATEMENT_TYPE_FUNCTION_DEFINITION:
 				// Store new function.
@@ -663,14 +794,21 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 	// Fill variables slice (might not contain the final type after this step).
 	for _, nameToken := range nameTokens {
 		name := nameToken.Value()
-		variable, exists := ctx.variables[name]
+		prefixedName := p.buildPrefixedName(name)
+		variable, exists := ctx.variables[prefixedName]
 		variableValueType := variable.ValueType()
 
 		// If the variable already exists, make sure it has the same type as the specified type.
 		if exists && specifiedType.DataType() != DATA_TYPE_UNKNOWN && !specifiedType.Equals(variableValueType) {
-			return nil, fmt.Errorf("variable \"%s\" already exists but has type %s at row %d, column %d", name, variableValueType.ToString(), nextToken.Row(), nextToken.Column())
+			return nil, fmt.Errorf("variable \"%s\" already exists but has type %s at row %d, column %d", prefixedName, variableValueType.ToString(), nextToken.Row(), nextToken.Column())
 		}
-		variables = append(variables, NewVariable(name, specifiedType, ctx.global()))
+		storedName := name
+		global := ctx.global()
+
+		if global {
+			storedName = prefixedName
+		}
+		variables = append(variables, NewVariable(storedName, specifiedType, global))
 	}
 	values := []Expression{}
 
@@ -868,7 +1006,7 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 		return nil, expectedError("function definition", functionToken)
 	}
 	nameToken := p.eat()
-	name := nameToken.Value()
+	name := p.buildPrefixedName(nameToken.Value())
 
 	if nameToken.Type() != lexer.IDENTIFIER {
 		return nil, expectedError("function name", nameToken)
@@ -1394,18 +1532,18 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 		nextToken := p.peekAt(1)
 
 		// If the current token is an identifier and the next is an opening
-		// round bracket, it's a function call if the next is an opening
-		// square bracket, it's a slice evaluation, otherwise it's a
-		// variable evaluation.
+		// round bracket or a dot, it's a function call if the next is an
+		// opening square bracket, it's a slice evaluation, otherwise it's
+		// a variable evaluation.
 		switch nextToken.Type() {
-		case lexer.OPENING_ROUND_BRACKET:
+		case lexer.OPENING_ROUND_BRACKET, lexer.DOT:
 			expr, err = p.evaluateFunctionCall(ctx)
 		case lexer.OPENING_SQUARE_BRACKET:
 			expr, err = p.evaluateSliceEvaluation(ctx)
 		default:
 			p.eat() // Eat identifier token.
 			name := token.Value()
-			variable, exists := ctx.variables[name]
+			variable, exists := ctx.variables[p.buildPrefixedName(name)]
 
 			if !exists {
 				err = fmt.Errorf("variable %s has not been defined at row %d, column %d", name, nextToken.Row(), nextToken.Column())
@@ -1519,7 +1657,7 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 					stmt, err = p.evaluateVarAssignment(ctx)
 				default:
 					// Handle slice assignment.
-					variable, exists := ctx.variables[token.Value()]
+					variable, exists := ctx.variables[p.buildPrefixedName(token.Value())]
 
 					// If variable has been defined and is a slice, handles slice assignment.
 					if exists && variable.ValueType().IsSlice() {
@@ -1726,26 +1864,43 @@ func (p *Parser) evaluateArguments(typeName string, name string, params []Variab
 }
 
 func (p *Parser) evaluateFunctionCall(ctx context) (Call, error) {
-	nameToken := p.eat()
-	name := nameToken.Value()
+	nextToken := p.eat()
+	dotToken := p.peek()
+	alias := ""
 
-	if nameToken.Type() != lexer.IDENTIFIER {
-		return nil, expectedError("function identifier", nameToken)
+	// If next token is a dot, it's an include-function call.
+	if dotToken.Type() == lexer.DOT {
+		p.eat()
+		alias = nextToken.Value()
+		nextToken = p.eat()
+	}
+
+	if nextToken.Type() != lexer.IDENTIFIER {
+		return nil, expectedError("function identifier", nextToken)
+	}
+	name := nextToken.Value()
+	prefixedName := p.buildPrefixedName(name)
+	dotedName := name
+
+	// If it's an include-function call, use provided alias.
+	if len(alias) > 0 {
+		prefixedName = buildPrefixedName(alias, name)
+		dotedName = fmt.Sprintf("%s.%s", alias, name)
 	}
 
 	// Make sure function has been defined.
-	definedFunction, exists := ctx.functions[name]
+	definedFunction, exists := ctx.functions[prefixedName]
 
 	if !exists {
-		return nil, fmt.Errorf("function %s has not been defined at row %d, column %d", name, nameToken.Row(), nameToken.Column())
+		return nil, fmt.Errorf("function %s has not been defined at row %d, column %d", dotedName, nextToken.Row(), nextToken.Column())
 	}
-	args, err := p.evaluateArguments("function", name, definedFunction.params, ctx)
+	args, err := p.evaluateArguments("function", dotedName, definedFunction.params, ctx)
 
 	if err != nil {
 		return nil, err
 	}
 	return FunctionCall{
-		name:        name,
+		name:        definedFunction.Name(),
 		arguments:   args,
 		returnTypes: definedFunction.ReturnTypes(),
 	}, nil
@@ -1851,7 +2006,7 @@ func (p *Parser) evaluateSliceEvaluation(ctx context) (Expression, error) {
 		return nil, expectedError("slice variable", nameToken)
 	}
 	name := nameToken.Value()
-	variable, exists := ctx.variables[name]
+	variable, exists := ctx.variables[p.buildPrefixedName(name)]
 
 	if !exists {
 		return nil, fmt.Errorf("variable %s has not been defined at row %d, column %d", name, nameToken.Row(), nameToken.Column())
@@ -1894,7 +2049,7 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 		return nil, expectedError("slice variable", nameToken)
 	}
 	name := nameToken.Value()
-	variable, exists := ctx.variables[name]
+	variable, exists := ctx.variables[p.buildPrefixedName(name)]
 
 	if !exists {
 		return nil, fmt.Errorf("variable %s has not been defined at row %d, column %d", name, nameToken.Row(), nameToken.Column())
@@ -1956,7 +2111,7 @@ func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
 		return nil, expectedError("identifier", identifierToken)
 	}
 	name := identifierToken.Value()
-	definedVariable, exists := ctx.variables[name]
+	definedVariable, exists := ctx.variables[p.buildPrefixedName(name)]
 
 	if !exists {
 		return nil, fmt.Errorf("variable %s has not been defined at row %d, column %d", name, identifierToken.Row(), identifierToken.Column())

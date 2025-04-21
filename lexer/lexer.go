@@ -46,6 +46,7 @@ const (
 	// Separators.
 	COMMA
 	SEMICOLON
+	DOT
 	SPACE
 	NEWLINE
 
@@ -53,6 +54,7 @@ const (
 	IDENTIFIER
 
 	// Keywords.
+	IMPORT
 	VAR_DEFINITION
 	FUNCTION_DEFINITION
 	RETURN
@@ -145,6 +147,7 @@ var nonAlphabeticTokens = []tokenMapping{
 
 	{",", COMMA},
 	{";", SEMICOLON},
+	{".", DOT},
 	{" ", SPACE},
 	{"\t", SPACE},
 
@@ -156,6 +159,7 @@ var nonAlphabeticTokens = []tokenMapping{
 
 var keywords = map[string]TokenType{
 	// Common keywords.
+	"import":   IMPORT,
 	"var":      VAR_DEFINITION,
 	"func":     FUNCTION_DEFINITION,
 	"return":   RETURN,
