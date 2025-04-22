@@ -40,6 +40,7 @@ type converter struct {
 	sliceAssignmentHelperRequired bool
 	sliceLenHelperRequired        bool
 	sliceCopyHelperRequired       bool
+	stringSubscriptHelperRequired bool
 }
 
 func New() *converter {
@@ -465,6 +466,15 @@ func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, 
 	c.VarAssignment(helper, c.varEvaluationString("_l", true), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
+}
+
+func (c *converter) StringSubscript(name string, index string, valueUsed bool, global bool) (string, error) {
+	helper := c.nextHelperVar()
+
+	c.VarAssignment(helper, c.varEvaluationString(name, global), false)
+	c.addLine(fmt.Sprintf("set %s=%%%s:~%s,1%%", helper, helper, index)) // https://stackoverflow.com/a/636391
+
+	return c.varEvaluationString(helper, false), nil
 }
 
 func (c *converter) Group(value string, valueUsed bool) (string, error) {

@@ -15,14 +15,15 @@ type funcInfo struct {
 }
 
 type converter struct {
-	interpreter             string
-	startCode               []string
-	code                    []string
-	varCounter              int
-	funcs                   []funcInfo
-	funcCounter             int
-	sliceLenHelperRequired  bool
-	sliceCopyHelperRequired bool
+	interpreter                   string
+	startCode                     []string
+	code                          []string
+	varCounter                    int
+	funcs                         []funcInfo
+	funcCounter                   int
+	sliceLenHelperRequired        bool
+	sliceCopyHelperRequired       bool
+	stringSubscriptHelperRequired bool
 }
 
 func New() *converter {
@@ -84,6 +85,12 @@ func (c *converter) ProgramEnd() error {
 			"_l=$(expr ${_l} + 1)",
 			"done",
 			"echo ${_l}",
+		)
+	}
+
+	if c.stringSubscriptHelperRequired {
+		c.addHelper("substring", "_ssh",
+			"echo \"${1}\" | cut -c $(expr ${2} \\+ 1)", // Cut index starts at 1, therefore 1 must be added to 0-based subscript.
 		)
 	}
 	return nil
@@ -377,6 +384,15 @@ func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, 
 	c.VarAssignment(helper, c.sliceLenString(name), false) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 
 	return c.VarEvaluation(helper, valueUsed, false)
+}
+
+func (c *converter) StringSubscript(name string, index string, valueUsed bool, global bool) (string, error) {
+	helper := c.nextHelperVar()
+
+	c.VarAssignment(helper, fmt.Sprintf("$(_ssh %s %s)", c.varEvaluationString(name, global), index), false) // https://www.baeldung.com/linux/bash-substring#1-using-thecut-command
+	c.stringSubscriptHelperRequired = true
+
+	return c.varEvaluationString(helper, false), nil
 }
 
 func (c *converter) Group(value string, valueUsed bool) (string, error) {

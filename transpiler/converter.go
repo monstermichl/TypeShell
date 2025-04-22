@@ -85,6 +85,7 @@ type Converter interface {
 	SliceInstantiation(values []string, valueUsed bool) (string, error)
 	SliceEvaluation(name string, index string, valueUsed bool, global bool) (string, error)
 	SliceLen(name string, valueUsed bool, global bool) (string, error)
+	StringSubscript(name string, index string, valueUsed bool, global bool) (string, error)
 	Group(value string, valueUsed bool) (string, error)
 	FuncCall(name string, args []string, returnTypes []parser.ValueType, valueUsed bool) ([]string, error)
 	AppCall(calls []AppCall, valueUsed bool) (string, error)

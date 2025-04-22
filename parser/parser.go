@@ -1539,7 +1539,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 		case lexer.OPENING_ROUND_BRACKET, lexer.DOT:
 			expr, err = p.evaluateFunctionCall(ctx)
 		case lexer.OPENING_SQUARE_BRACKET:
-			expr, err = p.evaluateSliceEvaluation(ctx)
+			expr, err = p.evaluateSubscript(ctx)
 		default:
 			p.eat() // Eat identifier token.
 			name := token.Value()
@@ -1999,11 +1999,11 @@ func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
 	}, nil
 }
 
-func (p *Parser) evaluateSliceEvaluation(ctx context) (Expression, error) {
+func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 	nameToken := p.eat()
 
 	if nameToken.Type() != lexer.IDENTIFIER {
-		return nil, expectedError("slice variable", nameToken)
+		return nil, expectedError("identifier", nameToken)
 	}
 	name := nameToken.Value()
 	variable, exists := ctx.variables[p.buildPrefixedName(name)]
@@ -2011,8 +2011,11 @@ func (p *Parser) evaluateSliceEvaluation(ctx context) (Expression, error) {
 	if !exists {
 		return nil, fmt.Errorf("variable %s has not been defined at row %d, column %d", name, nameToken.Row(), nameToken.Column())
 	}
-	if !variable.ValueType().IsSlice() {
-		return nil, expectedError(fmt.Sprintf("slice but variable is of type %s", variable.ValueType().ToString()), nameToken)
+	valueType := variable.ValueType()
+	isSlice := valueType.IsSlice()
+
+	if !isSlice && valueType.DataType() != DATA_TYPE_STRING {
+		return nil, expectedError(fmt.Sprintf("slice or string but variable is of type %s", valueType.ToString()), nameToken)
 	}
 	nextToken := p.eat()
 
@@ -2034,6 +2037,13 @@ func (p *Parser) evaluateSliceEvaluation(ctx context) (Expression, error) {
 
 	if nextToken.Type() != lexer.CLOSING_SQUARE_BRACKET {
 		return nil, expectedError("\"]\"", nextToken)
+	}
+
+	if !isSlice {
+		return StringSubscript{
+			Variable: variable,
+			index:    index,
+		}, nil
 	}
 	return SliceEvaluation{
 		Variable: variable,

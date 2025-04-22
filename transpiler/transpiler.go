@@ -391,6 +391,20 @@ func (t *transpiler) evaluateSliceEvaluation(evaluation parser.SliceEvaluation, 
 	return newExpressionResult(s), err
 }
 
+func (t *transpiler) evaluateStringSubscript(subscript parser.StringSubscript, valueUsed bool) (expressionResult, error) {
+	indexResult, err := t.evaluateIndex(subscript.Index(), true)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	s, err := t.converter.StringSubscript(subscript.Name(), indexResult.firstValue(), valueUsed, subscript.Global())
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	return newExpressionResult(s), err
+}
+
 func (t *transpiler) evaluateGroup(group parser.Group, valueUsed bool) (expressionResult, error) {
 	return t.evaluateExpression(group.Child(), valueUsed)
 }
@@ -650,6 +664,8 @@ func (t *transpiler) evaluateExpression(expression parser.Expression, valueUsed 
 		return t.evaluateVarEvaluation(expression.(parser.VariableEvaluation), valueUsed)
 	case parser.STATEMENT_TYPE_SLICE_EVALUATION:
 		return t.evaluateSliceEvaluation(expression.(parser.SliceEvaluation), valueUsed)
+	case parser.STATEMENT_TYPE_STRING_SUBSCRIPT:
+		return t.evaluateStringSubscript(expression.(parser.StringSubscript), valueUsed)
 	case parser.STATEMENT_TYPE_GROUP:
 		return t.evaluateGroup(expression.(parser.Group), valueUsed)
 	case parser.STATEMENT_TYPE_FUNCTION_CALL:
