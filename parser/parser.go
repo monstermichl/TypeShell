@@ -514,7 +514,7 @@ func (p *Parser) evaluateProgram() (Program, error) {
 
 func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 	nextToken := p.peek()
-	statements := []Statement{}
+	statementsTemp := []Statement{}
 
 	if nextToken.Type() == lexer.IMPORT {
 		p.eat()
@@ -554,7 +554,7 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 				return nil, fmt.Errorf("import alias \"%s\" already exists", alias)
 			}
 			ctx.imports[alias] = importParser.prefix
-			statements = append(statements, importedProg.Body()...)
+			statementsTemp = append(statementsTemp, importedProg.Body()...)
 
 			nextToken = p.peek()
 			nextTokenType := nextToken.Type()
@@ -571,19 +571,35 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 			}
 		}
 	}
+	statements := []Statement{}
 
 	// Add functions add variables.
-	for _, statement := range statements {
+	for _, statement := range statementsTemp {
+		exists := false
+
 		switch statement.StatementType() {
 		case STATEMENT_TYPE_VAR_DEFINITION:
 			definedVariable := statement.(VariableDefinition)
 
 			for _, variable := range definedVariable.Variables() {
-				ctx.variables[variable.Name()] = variable
+				name := variable.Name()
+
+				if _, exists = ctx.variables[name]; !exists {
+					ctx.variables[name] = variable
+				}
 			}
 		case STATEMENT_TYPE_FUNCTION_DEFINITION:
 			definedFunction := statement.(FunctionDefinition)
-			ctx.functions[definedFunction.Name()] = definedFunction
+			name := definedFunction.Name()
+
+			if _, exists = ctx.functions[name]; !exists {
+				ctx.functions[name] = definedFunction
+			}
+		}
+
+		// Prevent code duplication.
+		if !exists {
+			statements = append(statements, statement)
 		}
 	}
 	return statements, nil
