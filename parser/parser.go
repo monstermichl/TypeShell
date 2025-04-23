@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"maps"
@@ -40,6 +41,7 @@ func scopesToString(scopes []scope) []string {
 }
 
 type context struct {
+	imports    map[string]string
 	variables  map[string]Variable
 	functions  map[string]FunctionDefinition
 	scopeStack []scope
@@ -62,8 +64,49 @@ func (c context) findScope(s scope) bool {
 	return false
 }
 
+func (c context) buildPrefixedName(name string, prefix string) (string, error) {
+	name = strings.TrimSpace(name)
+	prefix = strings.TrimSpace(prefix)
+
+	if len(prefix) > 0 {
+		hash, exists := c.imports[prefix]
+
+		if !exists {
+			return "", fmt.Errorf("prefix \"%s\" not found", prefix)
+		}
+		name = buildPrefixedName(hash, name)
+	}
+	return name, nil
+}
+
+func (c context) findImport(alias string) (string, bool) {
+	hash, exists := c.imports[alias]
+	return hash, exists
+}
+
+func (c context) findVariable(name string, prefix string) (Variable, bool) {
+	prefixedName, err := c.buildPrefixedName(name, prefix)
+
+	if err != nil {
+		return Variable{}, false
+	}
+	variable, exists := c.variables[prefixedName]
+	return variable, exists
+}
+
+func (c context) findFunction(name string, prefix string) (FunctionDefinition, bool) {
+	prefixedName, err := c.buildPrefixedName(name, prefix)
+
+	if err != nil {
+		return FunctionDefinition{}, false
+	}
+	function, exists := c.functions[prefixedName]
+	return function, exists
+}
+
 func (c context) clone() context {
 	return context{
+		imports:    maps.Clone(c.imports),
 		variables:  maps.Clone(c.variables),
 		functions:  maps.Clone(c.functions),
 		scopeStack: slices.Clone(c.scopeStack),
@@ -109,10 +152,10 @@ func New() Parser {
 }
 
 func (p *Parser) Parse(path string) (Program, error) {
-	return p.parse(path, "")
+	return p.parse(path, false)
 }
 
-func (p *Parser) parse(path string, prefix string) (Program, error) {
+func (p *Parser) parse(path string, imported bool) (Program, error) {
 	// If path is relative, make it absolute.
 	if !filepath.IsAbs(path) {
 		pathTemp, err := filepath.Abs(path)
@@ -140,6 +183,16 @@ func (p *Parser) parse(path string, prefix string) (Program, error) {
 	p.index = 0
 	p.tokens = tokens
 	p.path = path
+
+	// Create prefix.
+	prefix := ""
+
+	if imported {
+		h := sha256.New()
+		h.Write(source)
+
+		prefix = fmt.Sprintf("%x", h.Sum(nil))[0:7] // Only use the 7 first characters (inspired by Git).
+	}
 	p.prefix = strings.TrimSpace(prefix)
 
 	return p.evaluateProgram()
@@ -307,7 +360,7 @@ func (p *Parser) isShortVarInit() bool {
 
 func (p *Parser) checkNewVariableNameToken(token lexer.Token, ctx context) error {
 	name := token.Value()
-	_, exists := ctx.variables[p.buildPrefixedName(name)]
+	_, exists := ctx.findVariable(name, "")
 
 	if exists {
 		return fmt.Errorf("variable %s has already been defined at row %d, column %d", name, token.Row(), token.Column())
@@ -434,28 +487,14 @@ func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword stri
 
 func (p *Parser) evaluateProgram() (Program, error) {
 	ctx := context{
+		imports:   map[string]string{},
 		variables: map[string]Variable{},
 		functions: map[string]FunctionDefinition{},
 	}
-	statements, err := p.evaluateImports()
+	statements, err := p.evaluateImports(ctx)
 
 	if err != nil {
 		return Program{}, err
-	}
-
-	// Add functions add variables.
-	for _, statement := range statements {
-		switch statement.StatementType() {
-		case STATEMENT_TYPE_VAR_DEFINITION:
-			definedVariable := statement.(VariableDefinition)
-
-			for _, variable := range definedVariable.Variables() {
-				ctx.variables[variable.Name()] = variable
-			}
-		case STATEMENT_TYPE_FUNCTION_DEFINITION:
-			definedFunction := statement.(FunctionDefinition)
-			ctx.functions[definedFunction.Name()] = definedFunction
-		}
 	}
 	statementsTemp, err := p.evaluateBlockContent(lexer.EOF, nil, ctx, SCOPE_PROGRAM)
 
@@ -469,7 +508,7 @@ func (p *Parser) evaluateProgram() (Program, error) {
 	}, nil
 }
 
-func (p *Parser) evaluateImports() ([]Statement, error) {
+func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 	nextToken := p.peek()
 	statements := []Statement{}
 
@@ -500,11 +539,17 @@ func (p *Parser) evaluateImports() ([]Statement, error) {
 				path = filepath.Join(filepath.Dir(p.path), path)
 			}
 			importParser := New()
-			importedProg, err := importParser.parse(path, imp.alias)
+			importedProg, err := importParser.parse(path, true)
 
 			if err != nil {
 				return nil, err
 			}
+			alias := imp.alias
+
+			if _, exists := ctx.findImport(alias); exists {
+				return nil, fmt.Errorf("import alias \"%s\" already exists", alias)
+			}
+			ctx.imports[alias] = importParser.prefix
 			statements = append(statements, importedProg.Body()...)
 
 			nextToken = p.peek()
@@ -520,6 +565,21 @@ func (p *Parser) evaluateImports() ([]Statement, error) {
 			} else {
 				return nil, expectedError("\")\"", nextToken)
 			}
+		}
+	}
+
+	// Add functions add variables.
+	for _, statement := range statements {
+		switch statement.StatementType() {
+		case STATEMENT_TYPE_VAR_DEFINITION:
+			definedVariable := statement.(VariableDefinition)
+
+			for _, variable := range definedVariable.Variables() {
+				ctx.variables[variable.Name()] = variable
+			}
+		case STATEMENT_TYPE_FUNCTION_DEFINITION:
+			definedFunction := statement.(FunctionDefinition)
+			ctx.functions[definedFunction.Name()] = definedFunction
 		}
 	}
 	return statements, nil
@@ -795,7 +855,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 	for _, nameToken := range nameTokens {
 		name := nameToken.Value()
 		prefixedName := p.buildPrefixedName(name)
-		variable, exists := ctx.variables[prefixedName]
+		variable, exists := ctx.findVariable(name, p.prefix)
 		variableValueType := variable.ValueType()
 
 		// If the variable already exists, make sure it has the same type as the specified type.
@@ -1006,14 +1066,14 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 		return nil, expectedError("function definition", functionToken)
 	}
 	nameToken := p.eat()
-	name := p.buildPrefixedName(nameToken.Value())
 
 	if nameToken.Type() != lexer.IDENTIFIER {
 		return nil, expectedError("function name", nameToken)
 	}
+	name := nameToken.Value()
 
 	// Make sure no function exists with the same name.
-	_, exists := ctx.functions[name]
+	_, exists := ctx.findFunction(name, p.prefix)
 
 	if exists {
 		return nil, expectedError("unique function name", nameToken)
@@ -1125,7 +1185,7 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 	}
 
 	return FunctionDefinition{
-		name:        name,
+		name:        p.buildPrefixedName(name),
 		returnTypes: returnTypes,
 		params:      params,
 		body:        statements,
@@ -1543,7 +1603,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 		default:
 			p.eat() // Eat identifier token.
 			name := token.Value()
-			variable, exists := ctx.variables[p.buildPrefixedName(name)]
+			variable, exists := ctx.findVariable(name, p.prefix)
 
 			if !exists {
 				err = fmt.Errorf("variable %s has not been defined at row %d, column %d", name, nextToken.Row(), nextToken.Column())
@@ -1657,7 +1717,7 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 					stmt, err = p.evaluateVarAssignment(ctx)
 				default:
 					// Handle slice assignment.
-					variable, exists := ctx.variables[p.buildPrefixedName(token.Value())]
+					variable, exists := ctx.findVariable(token.Value(), p.prefix)
 
 					// If variable has been defined and is a slice, handles slice assignment.
 					if exists && variable.ValueType().IsSlice() {
@@ -1879,17 +1939,17 @@ func (p *Parser) evaluateFunctionCall(ctx context) (Call, error) {
 		return nil, expectedError("function identifier", nextToken)
 	}
 	name := nextToken.Value()
-	prefixedName := p.buildPrefixedName(name)
+	prefix := p.prefix
 	dotedName := name
 
 	// If it's an include-function call, use provided alias.
 	if len(alias) > 0 {
-		prefixedName = buildPrefixedName(alias, name)
+		prefix = alias
 		dotedName = fmt.Sprintf("%s.%s", alias, name)
 	}
 
 	// Make sure function has been defined.
-	definedFunction, exists := ctx.functions[prefixedName]
+	definedFunction, exists := ctx.findFunction(name, prefix)
 
 	if !exists {
 		return nil, fmt.Errorf("function %s has not been defined at row %d, column %d", dotedName, nextToken.Row(), nextToken.Column())
@@ -2006,7 +2066,7 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 		return nil, expectedError("identifier", nameToken)
 	}
 	name := nameToken.Value()
-	variable, exists := ctx.variables[p.buildPrefixedName(name)]
+	variable, exists := ctx.findVariable(name, p.prefix)
 
 	if !exists {
 		return nil, fmt.Errorf("variable %s has not been defined at row %d, column %d", name, nameToken.Row(), nameToken.Column())
@@ -2059,7 +2119,7 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 		return nil, expectedError("slice variable", nameToken)
 	}
 	name := nameToken.Value()
-	variable, exists := ctx.variables[p.buildPrefixedName(name)]
+	variable, exists := ctx.findVariable(name, p.prefix)
 
 	if !exists {
 		return nil, fmt.Errorf("variable %s has not been defined at row %d, column %d", name, nameToken.Row(), nameToken.Column())
@@ -2121,7 +2181,7 @@ func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
 		return nil, expectedError("identifier", identifierToken)
 	}
 	name := identifierToken.Value()
-	definedVariable, exists := ctx.variables[p.buildPrefixedName(name)]
+	definedVariable, exists := ctx.findVariable(name, p.prefix)
 
 	if !exists {
 		return nil, fmt.Errorf("variable %s has not been defined at row %d, column %d", name, identifierToken.Row(), identifierToken.Column())
