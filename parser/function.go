@@ -5,6 +5,7 @@ type FunctionDefinition struct {
 	returnTypes []ValueType
 	params      []Variable
 	body        []Statement
+	public      bool
 }
 
 func (e FunctionDefinition) StatementType() StatementType {
@@ -29,6 +30,10 @@ func (e FunctionDefinition) Params() []Variable {
 
 func (e FunctionDefinition) Body() []Statement {
 	return e.body
+}
+
+func (e FunctionDefinition) Public() bool {
+	return e.public
 }
 
 type FunctionCall struct {

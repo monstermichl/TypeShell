@@ -4,13 +4,15 @@ type Variable struct {
 	name      string
 	valueType ValueType
 	global    bool
+	public    bool
 }
 
-func NewVariable(name string, valueType ValueType, global bool) Variable {
+func NewVariable(name string, valueType ValueType, global bool, public bool) Variable {
 	return Variable{
 		name,
 		valueType,
 		global,
+		public,
 	}
 }
 
@@ -24,6 +26,10 @@ func (v Variable) ValueType() ValueType {
 
 func (v Variable) Global() bool {
 	return v.global
+}
+
+func (v Variable) Public() bool {
+	return v.public
 }
 
 type VariableDefinition struct {
