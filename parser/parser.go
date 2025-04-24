@@ -656,18 +656,43 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 				return nil, err
 			}
 			path := imp.path
+			alias := imp.alias
+			absPath := path
 
 			// If path is relative, create an absolute path by combining the loaded path with the import path.
-			if !filepath.IsAbs(path) {
-				path = filepath.Join(filepath.Dir(p.path), path)
+			if !filepath.IsAbs(absPath) {
+				absPath = filepath.Join(filepath.Dir(p.path), absPath)
+			}
+			aliasLen := len(alias)
+
+			// If path doesn't exist, try to find it in the standard library.
+			if _, err := os.Stat(absPath); err != nil {
+				ex, err := os.Executable()
+
+				if err != nil {
+					return nil, err
+				}
+				pathWithoutExt := strings.TrimSuffix(path, filepath.Ext(path))
+				absPathTemp := filepath.Join(filepath.Dir(ex), "std", fmt.Sprintf("%s.tsh", pathWithoutExt)) // Standart library is at <executable-path>/std.
+
+				// If path exists, use it.
+				if _, err := os.Stat(absPath); err != nil {
+					absPath = absPathTemp
+
+					if aliasLen == 0 {
+						alias = filepath.Base(pathWithoutExt)
+					}
+				}
+			} else if aliasLen == 0 {
+				// If it's not a standard library path, an alias must be provided.
+				return nil, fmt.Errorf("an alias must be provided for the local import \"%s\" in \"%s\"", path, p.path)
 			}
 			importParser := New()
-			importedProg, err := importParser.parse(path, true)
+			importedProg, err := importParser.parse(absPath, true)
 
 			if err != nil {
 				return nil, err
 			}
-			alias := imp.alias
 
 			if _, exists := ctx.findImport(alias); exists {
 				return nil, fmt.Errorf("import alias \"%s\" already exists", alias)
