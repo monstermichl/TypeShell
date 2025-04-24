@@ -42,10 +42,10 @@ func scopesToString(scopes []scope) []string {
 }
 
 type context struct {
-	imports    map[string]string
-	variables  map[string]Variable
-	functions  map[string]FunctionDefinition
-	scopeStack []scope
+	imports    map[string]string             // Maps import aliases to file hashes.
+	variables  map[string]Variable           // Stores the variable name to variable relation.
+	functions  map[string]FunctionDefinition // Stores the function name to function relation.
+	scopeStack []scope                       // Stores the current scopes.
 }
 
 func (c context) currentScope() scope {
@@ -530,6 +530,14 @@ func (p *Parser) evaluateProgram() (Program, error) {
 		functions: map[string]FunctionDefinition{},
 	}
 	statements, err := p.evaluateImports(ctx)
+
+	if err != nil {
+		return Program{}, err
+	}
+
+	// Add own hash to imports for easier mapping handling.
+	prefix := p.prefix
+	err = ctx.addImport(prefix, prefix)
 
 	if err != nil {
 		return Program{}, err
