@@ -453,18 +453,30 @@ func (p *Parser) checkNewVariableNameToken(token lexer.Token, ctx context) error
 }
 
 func (p *Parser) cleanProgram(program Program) (Program, error) {
-	// Delete all unused public functions.
-	statements, err := deleteFunctions(true, program.Body())
+	statements := program.Body()
 
-	if err != nil {
-		return Program{}, err
-	}
+	for {
+		var err error
+		statementsLen := len(statements)
 
-	// Delete all unused private functions.
-	statements, err = deleteFunctions(false, statements)
+		// Delete all unused public functions.
+		statements, err = deleteFunctions(true, statements)
 
-	if err != nil {
-		return Program{}, err
+		if err != nil {
+			return Program{}, err
+		}
+
+		// Delete all unused private functions.
+		statements, err = deleteFunctions(false, statements)
+
+		if err != nil {
+			return Program{}, err
+		}
+
+		// If code has not further been cleaned, break loop.
+		if len(statements) == statementsLen {
+			break
+		}
 	}
 	return Program{
 		body: statements,
