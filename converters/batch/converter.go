@@ -111,7 +111,7 @@ func (c *converter) ProgramEnd() error {
 	if c.sliceAssignmentHelperRequired {
 		// Add slice helper to batch file for easier slice processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
 		c.addHelper("slice assignment", "_sah",
-			"set %1[%2]=%~3",
+			"set \"%1[%2]=%~3\"",
 		)
 	}
 
