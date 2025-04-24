@@ -131,7 +131,7 @@ func (c *converter) ProgramEnd() error {
 			"set _l=0",
 			"set _s=%~1",
 			":_stlhl",
-			"if \"!_s:~%_l%!\" equ \"\" goto :_stlhle",
+			"if \"!_s:~%_l%!\" equ \"\" goto :_stlhle", // https://www.geeksforgeeks.org/batch-script-string-length/
 			"set /A _l=%_l%+1",
 			"goto :_stlhl",
 			":_stlhle",
