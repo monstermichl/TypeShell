@@ -399,7 +399,7 @@ func (c *converter) StringLen(value string, valueUsed bool, global bool) (string
 	helper := c.nextHelperVar()
 
 	c.VarAssignment(helper, value, false)
-	c.VarAssignment(helper, fmt.Sprintf("${#%s}", helper), false)
+	c.VarAssignment(helper, fmt.Sprintf("${#%s}", c.varName(helper, false)), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
 }
