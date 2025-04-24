@@ -622,7 +622,7 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 			for _, variable := range definedVariable.Variables() {
 				name := variable.Name()
 
-				if _, exists = ctx.variables[name]; !exists {
+				if _, exists = ctx.variables[name]; !exists && variable.Public() {
 					ctx.variables[name] = variable
 				}
 			}
@@ -630,7 +630,7 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 			definedFunction := statement.(FunctionDefinition)
 			name := definedFunction.Name()
 
-			if _, exists = ctx.functions[name]; !exists {
+			if _, exists = ctx.functions[name]; !exists && definedFunction.Public() {
 				ctx.functions[name] = definedFunction
 			}
 		}
