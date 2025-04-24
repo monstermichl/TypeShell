@@ -41,6 +41,7 @@ type converter struct {
 	sliceAssignmentHelperRequired bool
 	sliceLenHelperRequired        bool
 	sliceCopyHelperRequired       bool
+	stringLenHelperRequired       bool
 }
 
 func New() *converter {
@@ -88,7 +89,7 @@ func (c *converter) ProgramEnd() error {
 	if c.sliceCopyHelperRequired {
 		c.addHelper("slice copy", "_sch",
 			"set _i=0",
-			"call :_slh %2", // Call slice length helper.
+			"call :_sllh %2", // Call slice length helper.
 			":_schl",
 			"if !_i! lss !_l! (",
 			"for /f \"delims=\" %%i in (\"%2[!_i!]\") do set _v=!%%i!",
@@ -104,7 +105,6 @@ func (c *converter) ProgramEnd() error {
 	if c.returnHelperRequired {
 		c.addHelper("var", "_vh",
 			"set %1=%~2",
-			"exit /B 0",
 		)
 	}
 
@@ -112,19 +112,29 @@ func (c *converter) ProgramEnd() error {
 		// Add slice helper to batch file for easier slice processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
 		c.addHelper("slice assignment", "_sah",
 			"set %1[%2]=%~3",
-			"exit /B 0",
 		)
 	}
 
 	if c.sliceLenHelperRequired {
-		c.addHelper("slice length", "_slh",
+		c.addHelper("slice length", "_sllh",
 			"set _l=0",
-			":_slhl",
-			"if not defined %1[%_l%] goto :_slhle",
+			":_sllhl",
+			"if not defined %1[%_l%] goto :_sllhle",
 			"set /A _l=%_l%+1",
-			"goto :_slhl",
-			":_slhle",
-			"exit /B 0",
+			"goto :_sllhl",
+			":_sllhle",
+		)
+	}
+
+	if c.stringLenHelperRequired {
+		c.addHelper("string length", "_stlh",
+			"set _l=0",
+			"set _s=%~1",
+			":_stlhl",
+			"if \"!_s:~%_l%!\" equ \"\" goto :_stlhle",
+			"set /A _l=%_l%+1",
+			"goto :_stlhl",
+			":_stlhle",
 		)
 	}
 	c.addEndLine("endlocal")
@@ -469,7 +479,7 @@ func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, 
 	helper := c.nextHelperVar()
 	c.sliceLenHelperRequired = true
 
-	c.addLine(fmt.Sprintf("call :_slh %s", name))
+	c.addLine(fmt.Sprintf("call :_sllh %s", name))
 	c.VarAssignment(helper, c.varEvaluationString("_l", true), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
@@ -482,6 +492,16 @@ func (c *converter) StringSubscript(name string, index string, valueUsed bool, g
 	c.addLine(fmt.Sprintf("set %s=%%%s:~%s,1%%", helper, helper, index)) // https://stackoverflow.com/a/636391
 
 	return c.varEvaluationString(helper, false), nil
+}
+
+func (c *converter) StringLen(value string, valueUsed bool, global bool) (string, error) {
+	helper := c.nextHelperVar()
+	c.stringLenHelperRequired = true
+
+	c.addLine(fmt.Sprintf("call :_stlh \"%s\"", value))
+	c.VarAssignment(helper, c.varEvaluationString("_l", true), false)
+
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
 func (c *converter) Group(value string, valueUsed bool) (string, error) {
@@ -622,6 +642,7 @@ func (c *converter) addHelper(helperType string, label string, code ...string) {
 		c.addEndLine(line)
 	}
 	c.addEndLine(endLabel)
+	c.addEndLine("exit /B 0")
 	c.addEndLine(fmt.Sprintf(":: global %s helper end", helperType))
 }
 

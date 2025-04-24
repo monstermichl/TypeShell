@@ -582,6 +582,7 @@ func (t *transpiler) evaluateCopy(copy parser.Copy, valueUsed bool) (expressionR
 
 func (t *transpiler) evaluateLen(len parser.Len, valueUsed bool) (expressionResult, error) {
 	expr := len.Expression()
+	valueType := expr.ValueType()
 	result, err := t.evaluateExpression(expr, true)
 
 	if err != nil {
@@ -589,11 +590,17 @@ func (t *transpiler) evaluateLen(len parser.Len, valueUsed bool) (expressionResu
 	}
 	global := false
 
-	switch t := expr.(type) {
-	case parser.SliceEvaluation:
+	// If expression implements Global interface, is global value.
+	if t, ok := expr.(parser.Global); ok {
 		global = t.Global()
 	}
-	s, err := t.converter.SliceLen(result.firstValue(), valueUsed, global)
+	s := ""
+
+	if valueType.IsString() {
+		s, err = t.converter.StringLen(result.firstValue(), valueUsed, global)
+	} else {
+		s, err = t.converter.SliceLen(result.firstValue(), valueUsed, global)
+	}
 
 	if err != nil {
 		return expressionResult{}, err

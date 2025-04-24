@@ -2371,9 +2371,10 @@ func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
 func (p *Parser) evaluateLen(ctx context) (Expression, error) {
 	expr, err := p.evaluateBuiltInFunction(lexer.LEN, "len", 1, 1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
 		expr := expressions[0]
+		valueType := expr.ValueType()
 
-		if !expr.ValueType().isSlice {
-			return nil, p.expectedError("slice", keywordToken)
+		if !valueType.IsSlice() && !valueType.IsString() {
+			return nil, p.expectedError("slice or string", keywordToken)
 		}
 		return Len{
 			expression: expr,

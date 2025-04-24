@@ -395,6 +395,15 @@ func (c *converter) StringSubscript(name string, index string, valueUsed bool, g
 	return c.varEvaluationString(helper, false), nil
 }
 
+func (c *converter) StringLen(value string, valueUsed bool, global bool) (string, error) {
+	helper := c.nextHelperVar()
+
+	c.VarAssignment(helper, value, false)
+	c.VarAssignment(helper, fmt.Sprintf("${#%s}", helper), false)
+
+	return c.VarEvaluation(helper, valueUsed, false)
+}
+
 func (c *converter) Group(value string, valueUsed bool) (string, error) {
 	return fmt.Sprintf("(%s)", value), nil
 }

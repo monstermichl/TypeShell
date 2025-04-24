@@ -50,6 +50,10 @@ func (vt ValueType) IsInt() bool {
 	return vt.isNonSliceType(DATA_TYPE_INTEGER)
 }
 
+func (vt ValueType) IsString() bool {
+	return vt.isNonSliceType(DATA_TYPE_STRING)
+}
+
 func (vt ValueType) isNonSliceType(dataType DataType) bool {
 	return vt.DataType() == dataType && !vt.IsSlice()
 }
