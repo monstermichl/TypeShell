@@ -25,7 +25,8 @@ type ifInfo struct {
 
 type converter struct {
 	globalCode                    []string
-	functionCode                  []string
+	previousFunctionName          string
+	functionsCode                 [][]string
 	endCode                       []string
 	varCounter                    int
 	ifCounter                     int
@@ -40,7 +41,6 @@ type converter struct {
 	sliceAssignmentHelperRequired bool
 	sliceLenHelperRequired        bool
 	sliceCopyHelperRequired       bool
-	stringSubscriptHelperRequired bool
 }
 
 func New() *converter {
@@ -63,9 +63,16 @@ func (c *converter) StringToString(value string) string {
 }
 
 func (c *converter) Dump() (string, error) {
+	functionsCode := []string{}
+
+	// Append function code in the reverse order because Batch only
+	// knows "function"-labels that are further down the code.
+	for i := len(c.functionsCode) - 1; i >= 0; i-- {
+		functionsCode = append(functionsCode, c.functionsCode[i]...)
+	}
 	return strings.Join([]string{
 		strings.Join(c.globalCode, "\n"),
-		strings.Join(c.functionCode, "\n"),
+		strings.Join(functionsCode, "\n"),
 		strings.Join(c.endCode, "\n"),
 	}, "\n"), nil
 }
@@ -570,7 +577,16 @@ func (c *converter) ifStart(condition string, startAddition string) error {
 
 func (c *converter) addLine(line string) {
 	if c.inFunction() {
-		c.functionCode = append(c.functionCode, line)
+		currFunc := c.mustCurrentFuncInfo()
+		currFuncName := currFunc.name
+		prevFuncName := c.previousFunctionName
+
+		if currFuncName != prevFuncName {
+			c.previousFunctionName = currFuncName
+			c.functionsCode = append(c.functionsCode, []string{})
+		}
+		index := len(c.functionsCode) - 1
+		c.functionsCode[index] = append(c.functionsCode[index], line)
 	} else {
 		c.globalCode = append(c.globalCode, line)
 	}
