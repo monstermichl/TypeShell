@@ -175,11 +175,10 @@ func (ev evaluatedValues) isMultiReturnFuncCall() (bool, FunctionCall) {
 type blockCallback func(statements []Statement, last bool) error
 
 type Parser struct {
-	tokens        []lexer.Token
-	index         int
-	path          string
-	prefix        string
-	usedFunctions []string // Used functions.
+	tokens []lexer.Token
+	index  int
+	path   string
+	prefix string
 }
 
 func New() Parser {
@@ -332,6 +331,42 @@ func buildPrefixedName(prefix string, funcName string) string {
 	return funcName
 }
 
+func usedFunctions(statements []Statement) ([]string, error) {
+	calls := []string{}
+
+	for _, stmt := range statements {
+		if stmt.StatementType() == STATEMENT_TYPE_FUNCTION_CALL {
+			calls = append(calls, stmt.(FunctionCall).Name())
+		} else if block, ok := stmt.(Block); ok {
+			callsTemp, err := usedFunctions(block.Body())
+
+			if err != nil {
+				return nil, err
+			}
+			calls = append(calls, callsTemp...)
+		}
+	}
+	return calls, nil
+}
+
+func deleteFunctions(public bool, statements []Statement) ([]Statement, error) {
+	used, err := usedFunctions(statements) // Firstly, get all used functions.
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Remove all functions that are not being used.
+	return slices.DeleteFunc(statements, func(stmt Statement) bool {
+		switch stmt.StatementType() {
+		case STATEMENT_TYPE_FUNCTION_DEFINITION:
+			function := stmt.(FunctionDefinition)
+			return function.Public() == public && !slices.Contains(used, function.Name())
+		}
+		return false
+	}), nil
+}
+
 func (p *Parser) atError(what string, token lexer.Token) error {
 	return fmt.Errorf("%s at row %d, column %d: %s", what, token.Row(), token.Column(), p.path)
 }
@@ -418,31 +453,19 @@ func (p *Parser) checkNewVariableNameToken(token lexer.Token, ctx context) error
 }
 
 func (p *Parser) cleanProgram(program Program) (Program, error) {
-	statements := program.Body()
-	usedFunctions := p.usedFunctions
+	// Delete all unused public functions.
+	statements, err := deleteFunctions(true, program.Body())
 
-	// Collect used functions.
-	for _, statement := range statements {
-		switch statement.StatementType() {
-		case STATEMENT_TYPE_FUNCTION_CALL:
-			function := statement.(FunctionCall)
-			name := function.Name()
-
-			if !slices.Contains(usedFunctions, name) {
-				usedFunctions = append(usedFunctions, name)
-			}
-		}
+	if err != nil {
+		return Program{}, err
 	}
 
-	// Filter unused functions.
-	statements = slices.DeleteFunc(statements, func(stmt Statement) bool {
-		switch stmt.StatementType() {
-		case STATEMENT_TYPE_FUNCTION_DEFINITION:
-			function := stmt.(FunctionDefinition)
-			return !slices.Contains(usedFunctions, function.Name())
-		}
-		return false
-	})
+	// Delete all unused private functions.
+	statements, err = deleteFunctions(false, statements)
+
+	if err != nil {
+		return Program{}, err
+	}
 	return Program{
 		body: statements,
 	}, nil
@@ -591,16 +614,6 @@ func (p *Parser) evaluateProgram() (Program, error) {
 	}
 	statements = append(statements, statementsTemp...)
 
-	// Remove private functions that are not being used.
-	statements = slices.DeleteFunc(statements, func(stmt Statement) bool {
-		switch stmt.StatementType() {
-		case STATEMENT_TYPE_FUNCTION_DEFINITION:
-			function := stmt.(FunctionDefinition)
-			return !function.Public() && !slices.Contains(p.usedFunctions, function.Name())
-		}
-		return false
-	})
-
 	return Program{
 		body: statements,
 	}, nil
@@ -643,7 +656,6 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 				return nil, err
 			}
 			alias := imp.alias
-			p.usedFunctions = append(p.usedFunctions, importParser.usedFunctions...)
 
 			if _, exists := ctx.findImport(alias); exists {
 				return nil, fmt.Errorf("import alias \"%s\" already exists", alias)
@@ -2097,15 +2109,9 @@ func (p *Parser) evaluateFunctionCall(ctx context) (Call, error) {
 	if err != nil {
 		return nil, err
 	}
-	name = definedFunction.Name()
-
-	// Mark function as called.
-	if !slices.Contains(p.usedFunctions, name) {
-		p.usedFunctions = append(p.usedFunctions, name)
-	}
 
 	return FunctionCall{
-		name:        name,
+		name:        definedFunction.Name(),
 		arguments:   args,
 		returnTypes: definedFunction.ReturnTypes(),
 	}, nil
