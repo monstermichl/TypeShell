@@ -175,10 +175,11 @@ func (ev evaluatedValues) isMultiReturnFuncCall() (bool, FunctionCall) {
 type blockCallback func(statements []Statement, last bool) error
 
 type Parser struct {
-	tokens []lexer.Token
-	index  int
-	path   string
-	prefix string
+	tokens        []lexer.Token
+	index         int
+	path          string
+	prefix        string
+	usedFunctions []string // Used functions.
 }
 
 func New() Parser {
@@ -548,6 +549,16 @@ func (p *Parser) evaluateProgram() (Program, error) {
 		return Program{}, err
 	}
 	statements = append(statements, statementsTemp...)
+
+	// Remove private functions that are not being used.
+	statements = slices.DeleteFunc(statements, func(stmt Statement) bool {
+		switch stmt.StatementType() {
+		case STATEMENT_TYPE_FUNCTION_DEFINITION:
+			function := stmt.(FunctionDefinition)
+			return !function.Public() && !slices.Contains(p.usedFunctions, function.Name())
+		}
+		return false
+	})
 
 	return Program{
 		body: statements,
@@ -2044,8 +2055,15 @@ func (p *Parser) evaluateFunctionCall(ctx context) (Call, error) {
 	if err != nil {
 		return nil, err
 	}
+	name = definedFunction.Name()
+
+	// Mark function as called.
+	if !slices.Contains(p.usedFunctions, name) {
+		p.usedFunctions = append(p.usedFunctions, name)
+	}
+
 	return FunctionCall{
-		name:        definedFunction.Name(),
+		name:        name,
 		arguments:   args,
 		returnTypes: definedFunction.ReturnTypes(),
 	}, nil
