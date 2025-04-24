@@ -227,7 +227,17 @@ func (p *Parser) parse(path string, imported bool) (Program, error) {
 
 		p.prefix = fmt.Sprintf("%x", h.Sum(nil))[0:7] // Only use the 7 first characters (inspired by Git).
 	}
-	return p.evaluateProgram()
+	program, err := p.evaluateProgram()
+
+	if err != nil {
+		return Program{}, err
+	}
+
+	// If this is the original program, removed unused stuff.
+	if !imported {
+		return p.cleanProgram(program)
+	}
+	return program, nil
 }
 
 func allowedBinaryOperators(t ValueType) []BinaryOperator {
@@ -405,6 +415,37 @@ func (p *Parser) checkNewVariableNameToken(token lexer.Token, ctx context) error
 		return p.atError(fmt.Sprintf("variable %s has already been defined", name), token)
 	}
 	return nil
+}
+
+func (p *Parser) cleanProgram(program Program) (Program, error) {
+	statements := program.Body()
+	usedFunctions := p.usedFunctions
+
+	// Collect used functions.
+	for _, statement := range statements {
+		switch statement.StatementType() {
+		case STATEMENT_TYPE_FUNCTION_CALL:
+			function := statement.(FunctionCall)
+			name := function.Name()
+
+			if !slices.Contains(usedFunctions, name) {
+				usedFunctions = append(usedFunctions, name)
+			}
+		}
+	}
+
+	// Filter unused functions.
+	statements = slices.DeleteFunc(statements, func(stmt Statement) bool {
+		switch stmt.StatementType() {
+		case STATEMENT_TYPE_FUNCTION_DEFINITION:
+			function := stmt.(FunctionDefinition)
+			return !slices.Contains(usedFunctions, function.Name())
+		}
+		return false
+	})
+	return Program{
+		body: statements,
+	}, nil
 }
 
 func (p *Parser) evaluateVarNames() ([]lexer.Token, error) {
@@ -602,6 +643,7 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 				return nil, err
 			}
 			alias := imp.alias
+			p.usedFunctions = append(p.usedFunctions, importParser.usedFunctions...)
 
 			if _, exists := ctx.findImport(alias); exists {
 				return nil, fmt.Errorf("import alias \"%s\" already exists", alias)
