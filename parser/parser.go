@@ -175,14 +175,18 @@ func (ev evaluatedValues) isMultiReturnFuncCall() (bool, FunctionCall) {
 type blockCallback func(statements []Statement, last bool) error
 
 type Parser struct {
-	tokens []lexer.Token
-	index  int
-	path   string
-	prefix string
+	tokens    []lexer.Token
+	index     int
+	path      string
+	prefix    string
+	currFunc  string
+	usedFuncs map[string][]string // Stores which function (key) calls which functions (values).
 }
 
 func New() Parser {
-	return Parser{}
+	return Parser{
+		usedFuncs: map[string][]string{},
+	}
 }
 
 func (p *Parser) Parse(path string) (Program, error) {
@@ -452,32 +456,44 @@ func (p *Parser) checkNewVariableNameToken(token lexer.Token, ctx context) error
 	return nil
 }
 
-func (p *Parser) cleanProgram(program Program) (Program, error) {
-	statements := program.Body()
+func (p *Parser) getUsedFuncs(startFunc string) []string {
+	usedFuncs := []string{}
+	startFunc = strings.TrimSpace(startFunc)
 
-	for {
-		var err error
-		statementsLen := len(statements)
-
-		// Delete all unused public functions.
-		statements, err = deleteFunctions(true, statements)
-
-		if err != nil {
-			return Program{}, err
+	if usedFuncsTemp, exists := p.usedFuncs[startFunc]; exists {
+		if len(startFunc) > 0 && !slices.Contains(usedFuncs, startFunc) {
+			usedFuncs = append(usedFuncs, startFunc)
 		}
 
-		// Delete all unused private functions.
-		statements, err = deleteFunctions(false, statements)
+		for _, usedFuncTemp := range usedFuncsTemp {
+			if !slices.Contains(usedFuncs, usedFuncTemp) {
+				usedFuncs = append(usedFuncs, usedFuncTemp)
+			}
+			usedSubFuncs := p.getUsedFuncs(usedFuncTemp)
 
-		if err != nil {
-			return Program{}, err
-		}
-
-		// If code has not further been cleaned, break loop.
-		if len(statements) == statementsLen {
-			break
+			for _, usedSubFunc := range usedSubFuncs {
+				if !slices.Contains(usedFuncs, usedSubFunc) {
+					usedFuncs = append(usedFuncs, usedSubFunc)
+				}
+			}
 		}
 	}
+	return usedFuncs
+}
+
+func (p *Parser) cleanProgram(program Program) (Program, error) {
+	statements := program.Body()
+	usedFuncs := p.getUsedFuncs("")
+
+	// Remove all functions that are not being used.
+	statements = slices.DeleteFunc(statements, func(stmt Statement) bool {
+		switch stmt.StatementType() {
+		case STATEMENT_TYPE_FUNCTION_DEFINITION:
+			function := stmt.(FunctionDefinition)
+			return !slices.Contains(usedFuncs, function.Name())
+		}
+		return false
+	})
 	return Program{
 		body: statements,
 	}, nil
@@ -703,6 +719,19 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 				return nil, err
 			}
 			statementsTemp = append(statementsTemp, importedProg.Body()...)
+
+			// Import-parser funcs with current parser funcs.
+			for funcName, usedFuncs := range importParser.usedFuncs {
+				if foundUsedFuncs, exists := p.usedFuncs[funcName]; !exists {
+					p.usedFuncs[funcName] = usedFuncs
+				} else {
+					for _, usedFunc := range foundUsedFuncs {
+						if !slices.Contains(foundUsedFuncs, usedFunc) {
+							p.usedFuncs[funcName] = append(p.usedFuncs[funcName], usedFunc)
+						}
+					}
+				}
+			}
 
 			nextToken = p.peek()
 			nextTokenType := nextToken.Type()
@@ -1326,6 +1355,10 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 			return nil, err
 		}
 	}
+	prefixedName := buildPrefixedName(p.prefix, name)
+
+	// Make sure sub-statements know in which function they are currently in.
+	p.currFunc = prefixedName
 
 	statements, err := p.evaluateBlock(func(statements []Statement, last bool) error {
 		var errTemp error
@@ -1365,9 +1398,10 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 	if err != nil {
 		return nil, err
 	}
+	p.currFunc = ""
 
 	return FunctionDefinition{
-		name:        buildPrefixedName(p.prefix, name),
+		name:        prefixedName,
 		returnTypes: returnTypes,
 		params:      params,
 		body:        statements,
@@ -2146,9 +2180,19 @@ func (p *Parser) evaluateFunctionCall(ctx context) (Call, error) {
 	if err != nil {
 		return nil, err
 	}
+	name = definedFunction.Name()
+	currFunc := p.currFunc
+
+	// Keep track of used functions.
+	if _, exists := p.usedFuncs[currFunc]; !exists {
+		p.usedFuncs[currFunc] = []string{}
+	}
+	if !slices.Contains(p.usedFuncs[currFunc], name) {
+		p.usedFuncs[currFunc] = append(p.usedFuncs[currFunc], name)
+	}
 
 	return FunctionCall{
-		name:        definedFunction.Name(),
+		name:        name,
 		arguments:   args,
 		returnTypes: definedFunction.ReturnTypes(),
 	}, nil
