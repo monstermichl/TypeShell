@@ -41,6 +41,7 @@ type converter struct {
 	sliceAssignmentHelperRequired bool
 	sliceLenHelperRequired        bool
 	sliceCopyHelperRequired       bool
+	stringSubscriptHelperRequired bool
 	stringLenHelperRequired       bool
 }
 
@@ -123,6 +124,13 @@ func (c *converter) ProgramEnd() error {
 			"set /A _l=%_l%+1",
 			"goto :_sllhl",
 			":_sllhle",
+		)
+	}
+
+	if c.stringSubscriptHelperRequired {
+		c.addHelper("string subscript", "_stsh",
+			"set _s=%~1",
+			"set \"_sub=!_s:~%2,1!\"", // https://stackoverflow.com/a/636391
 		)
 	}
 
@@ -487,9 +495,10 @@ func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, 
 
 func (c *converter) StringSubscript(name string, index string, valueUsed bool, global bool) (string, error) {
 	helper := c.nextHelperVar()
+	c.stringSubscriptHelperRequired = true
 
-	c.VarAssignment(helper, c.varEvaluationString(name, global), false)
-	c.addLine(fmt.Sprintf("set %s=%%%s:~%s,1%%", helper, helper, index)) // https://stackoverflow.com/a/636391
+	c.addLine(fmt.Sprintf("call :_stsh \"%s\" %s", c.varEvaluationString(name, global), index))
+	c.VarAssignment(helper, c.varEvaluationString("_sub", true), global)
 
 	return c.varEvaluationString(helper, false), nil
 }
