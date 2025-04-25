@@ -192,3 +192,7 @@ if err != nil {
     // Do something.
 }
 ```
+
+### Functions
+- Functions must be defined before being used.
+- Recursions are not supported yet.
