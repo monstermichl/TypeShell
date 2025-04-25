@@ -1,12 +1,12 @@
-func Contains(s string, substr string) bool {
+func Index(s string, substr string) int {
 	sul := len(substr)
-	c := false
+	ind := -1
 
 	for i := 0; i < len(s); i++ {
 		j := 0
 
 		for ; j < sul; j++ {
-			si := i+j
+			si := i + j
 			char := s[si]
 
 			if s[i+j] != substr[j] {
@@ -15,9 +15,27 @@ func Contains(s string, substr string) bool {
 		}
 
 		if j == sul {
-			c = true
+			ind = i
 			break
 		}
 	}
-	return c
+	return ind
+}
+
+func Contains(s string, substr string) bool {
+	return Index(s, substr) >= 0
+}
+
+func Join(elems []string, sep string) string {
+	s := ""
+	l := len(elems)
+
+	for i := 0; i < l; i++ {
+		s = s + elems[i]
+
+		if i < (l - 1) {
+			s = s + sep
+		}
+	}
+	return s
 }
