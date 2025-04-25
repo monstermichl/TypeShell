@@ -485,6 +485,12 @@ func (c *converter) Copy(destination string, source string, valueUsed bool, glob
 	return c.varEvaluationString(helper, false), nil
 }
 
+func (c *converter) ReadFile(path string, valueUsed bool) (string, error) {
+	helper := c.nextHelperVar()
+	c.VarAssignment(helper, fmt.Sprintf("$(cat \"%s\")", path), false)
+	return c.VarEvaluation(helper, valueUsed, false)
+}
+
 func (c *converter) varName(name string, global bool) string {
 	if c.inFunction() && !global {
 		name = fmt.Sprintf("f%d_%s", c.funcCounter, name)

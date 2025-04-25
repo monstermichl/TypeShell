@@ -1796,6 +1796,10 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 	case lexer.INPUT:
 		expr, err = p.evaluateInput(ctx)
 
+	// Handle read.
+	case lexer.READ:
+		expr, err = p.evaluateRead(ctx)
+
 	// Handle copy.
 	case lexer.COPY:
 		expr, err = p.evaluateCopy(ctx)
@@ -2516,4 +2520,17 @@ func (p *Parser) evaluateCopy(ctx context) (Expression, error) {
 		return nil, err
 	}
 	return expr.(Copy), nil
+}
+
+func (p *Parser) evaluateRead(ctx context) (Expression, error) {
+	expr, err := p.evaluateBuiltInFunction(lexer.READ, "read", 1, 1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
+		return Read{
+			path: expressions[0],
+		}, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return expr.(Read), nil
 }

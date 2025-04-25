@@ -68,6 +68,7 @@ const (
 	PRINT
 	INPUT
 	COPY
+	READ
 
 	// App operators.
 	AT
@@ -177,6 +178,7 @@ var keywords = map[string]TokenType{
 	"echo":  PRINT,
 	"input": INPUT,
 	"copy":  COPY,
+	"read":  READ,
 
 	// Types.
 	DATA_TYPE_BOOLEAN: DATA_TYPE,

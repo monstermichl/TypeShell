@@ -89,6 +89,7 @@ const (
 	STATEMENT_TYPE_LEN                            StatementType = "len"
 	STATEMENT_TYPE_INPUT                          StatementType = "input"
 	STATEMENT_TYPE_COPY                           StatementType = "copy"
+	STATEMENT_TYPE_READ                           StatementType = "read"
 	STATEMENT_TYPE_SLICE_INSTANTIATION            StatementType = "slice instantiation"
 	STATEMENT_TYPE_SLICE_ASSIGNMENT               StatementType = "slice assignment"
 	STATEMENT_TYPE_SLICE_EVALUATION               StatementType = "slice evaluation"
@@ -100,6 +101,7 @@ const (
 	DATA_TYPE_BOOLEAN  DataType = "bool"
 	DATA_TYPE_INTEGER  DataType = "int"
 	DATA_TYPE_STRING   DataType = "string"
+	DATA_TYPE_ERROR    DataType = DATA_TYPE_STRING
 )
 
 const (

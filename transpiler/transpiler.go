@@ -608,6 +608,26 @@ func (t *transpiler) evaluateLen(len parser.Len, valueUsed bool) (expressionResu
 	return newExpressionResult(s), nil
 }
 
+func (t *transpiler) evaluateRead(read parser.Read, valueUsed bool) (expressionResult, error) {
+	path := read.Path()
+	valueType := path.ValueType()
+
+	if !valueType.IsString() {
+		return expressionResult{}, fmt.Errorf("expected string but got %s as read path", valueType.ToString())
+	}
+	result, err := t.evaluateExpression(path, true)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	s, err := t.converter.ReadFile(result.firstValue(), valueUsed)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	return newExpressionResult(s), nil
+}
+
 func (t *transpiler) evaluate(statement parser.Statement) error {
 	statementType := statement.StatementType()
 
@@ -687,6 +707,8 @@ func (t *transpiler) evaluateExpression(expression parser.Expression, valueUsed 
 		return t.evaluateCopy(expression.(parser.Copy), valueUsed)
 	case parser.STATEMENT_TYPE_LEN:
 		return t.evaluateLen(expression.(parser.Len), valueUsed)
+	case parser.STATEMENT_TYPE_READ:
+		return t.evaluateRead(expression.(parser.Read), valueUsed)
 	}
 	return expressionResult{}, fmt.Errorf("unknown expression type %s", expressionType)
 }

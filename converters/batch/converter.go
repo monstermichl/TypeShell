@@ -38,6 +38,8 @@ type converter struct {
 	ifs                           []ifInfo
 	lfSet                         bool
 	returnHelperRequired          bool
+	appCallHelperRequired         bool
+	readHelperRequired            bool
 	sliceAssignmentHelperRequired bool
 	sliceLenHelperRequired        bool
 	sliceCopyHelperRequired       bool
@@ -87,6 +89,26 @@ func (c *converter) ProgramStart() error {
 }
 
 func (c *converter) ProgramEnd() error {
+	if c.appCallHelperRequired {
+		c.addHelper("app call", "_ach",
+			"set _h=",
+			"for /f \"delims=\" %%i in ('call %~1') do (",
+			"if defined _h set \"_h=!_h!!LF!\"",
+			"set \"_h=!_h!%%i\"",
+			")",
+		)
+	}
+
+	if c.readHelperRequired {
+		c.addHelper("read", "_rh",
+			"set _h=",
+			"for /f \"delims=\" %%i in (%~1) do (",
+			"if defined _h set \"_h=!_h!!LF!\"",
+			"set \"_h=!_h!%%i\"",
+			")",
+		)
+	}
+
 	if c.sliceCopyHelperRequired {
 		c.addHelper("slice copy", "_sch",
 			"set _i=0",
@@ -145,6 +167,7 @@ func (c *converter) ProgramEnd() error {
 			":_stlhle",
 		)
 	}
+
 	c.addEndLine("endlocal")
 	return nil
 }
@@ -534,7 +557,6 @@ func (c *converter) FuncCall(name string, args []string, returnTypes []parser.Va
 
 func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) (string, error) {
 	callsCopy := calls
-	helper := c.nextHelperVar()
 	callStrings := []string{}
 
 	for _, call := range callsCopy {
@@ -552,17 +574,12 @@ func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) (string,
 	}
 
 	if valueUsed {
-		if !c.lfSet {
-			c.addLine("(set LF=^") // https://stackoverflow.com/a/60389149
-			c.addLine("")
-			c.addLine(")")
+		helper := c.nextHelperVar()
+		c.appCallHelperRequired = true
 
-			c.lfSet = true
-		}
-		c.addLine(fmt.Sprintf("for /f \"delims=\" %%%%i in ('call %s') do (", strings.Join(callStrings, " ^| ")))
-		c.addLine(fmt.Sprintf("if defined %s set \"%s=!%s!!LF!\"", helper, helper, helper))
-		c.addLine(fmt.Sprintf("set \"%s=!%s!%%%%i\"", helper, helper))
-		c.addLine(")")
+		c.addLf()
+		c.addLine(fmt.Sprintf("call :_ach  \"%s\"", strings.Join(callStrings, " ^| ")))
+		c.VarAssignment(helper, c.varEvaluationString("_h", true), false)
 
 		return c.VarEvaluation(helper, valueUsed, false)
 	}
@@ -577,11 +594,26 @@ func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 }
 
 func (c *converter) Copy(destination string, source string, valueUsed bool, global bool) (string, error) {
-
 	c.addLine(fmt.Sprintf("call :_sch %s %s", c.varName(destination, global), source))
 	c.sliceCopyHelperRequired = true
 
 	return c.varEvaluationString("_l", true), nil
+}
+
+func (c *converter) ReadFile(path string, valueUsed bool) (string, error) {
+	helper := c.nextHelperVar()
+	c.readHelperRequired = true
+
+	// c.addLine(fmt.Sprintf("for /F \"tokens=* delims=\" %%%%i in (%s) do set \"%s=%%%%i\"", path, c.varName(helper, false)))
+	// c.addLine(fmt.Sprintf("for /f \"delims=\" %%%%i in (%s) do (", path))
+	// c.addLine(fmt.Sprintf("if defined %s set \"%s=!%s!!LF!\"", varName, varName, varName))
+	// c.addLine(fmt.Sprintf("set \"%s=!%s!%%%%i\"", varName, varName))
+	// c.addLine(")")
+	c.addLf()
+	c.addLine(fmt.Sprintf("call :_rh \"%s\"", path))
+	c.VarAssignment(helper, c.varEvaluationString("_h", true), false)
+
+	return c.VarEvaluation(helper, valueUsed, false)
 }
 
 func (c *converter) varName(name string, global bool) string {
@@ -695,4 +727,12 @@ func (c *converter) sliceAssignmentString(name string, index string, value strin
 	c.sliceAssignmentHelperRequired = true
 	// TODO: Handle global flag.
 	return fmt.Sprintf("call :_sah %s %s \"%s\"", name, index, value)
+}
+
+func (c *converter) addLf() {
+	if !c.lfSet {
+		c.addLine("(set LF=^") // https://stackoverflow.com/a/60389149
+		c.addLine("")
+		c.addLine(")")
+	}
 }
