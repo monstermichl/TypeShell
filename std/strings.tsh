@@ -39,3 +39,24 @@ func Join(elems []string, sep string) string {
 	}
 	return s
 }
+
+func HasPrefix(s string, prefix string) bool {
+	has := false
+	sl := len(s)
+	pl := len(prefix)
+
+	if sl >= pl {
+		i := 0
+
+		for ; i < pl; i++ {
+			if s[i] != prefix[i] {
+				break
+			}
+		}
+
+		if i == pl {
+			has = true
+		}
+	}
+	return has
+}
