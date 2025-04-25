@@ -1,0 +1,23 @@
+func Contains(s string, substr string) bool {
+	sul := len(substr)
+	c := false
+
+	for i := 0; i < len(s); i++ {
+		j := 0
+
+		for ; j < sul; j++ {
+			si := i+j
+			char := s[si]
+
+			if s[i+j] != substr[j] {
+				break
+			}
+		}
+
+		if j == sul {
+			c = true
+			break
+		}
+	}
+	return c
+}
