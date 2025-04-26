@@ -753,5 +753,7 @@ func (c *converter) addLf() {
 		c.addLine("(set LF=^") // https://stackoverflow.com/a/60389149
 		c.addLine("")
 		c.addLine(")")
+
+		c.lfSet = true
 	}
 }
