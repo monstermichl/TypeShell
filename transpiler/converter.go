@@ -74,6 +74,7 @@ type Converter interface {
 	Break() error
 	Continue() error
 	Print(value []string) error
+	WriteFile(path string, content string, append string) error
 	Nop() error
 
 	// Expression methods

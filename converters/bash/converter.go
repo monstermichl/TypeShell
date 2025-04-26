@@ -206,6 +206,12 @@ func (c *converter) Print(values []string) error {
 	return nil
 }
 
+func (c *converter) WriteFile(path string, content string, append string) error {
+	// TODO: Consider append.
+	c.addLine(fmt.Sprintf("echo \"%s\" %s %s", content, ">", path))
+	return nil
+}
+
 func (c *converter) Nop() error {
 	c.addLine(": # No operation")
 	return nil

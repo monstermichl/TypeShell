@@ -69,6 +69,7 @@ const (
 	INPUT
 	COPY
 	READ
+	WRITE
 
 	// App operators.
 	AT
@@ -179,6 +180,7 @@ var keywords = map[string]TokenType{
 	"input": INPUT,
 	"copy":  COPY,
 	"read":  READ,
+	"write": WRITE,
 
 	// Types.
 	DATA_TYPE_BOOLEAN: DATA_TYPE,

@@ -1928,6 +1928,8 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 		stmt, err = p.evaluateContinue(ctx)
 	case lexer.PRINT:
 		stmt, err = p.evaluatePrint(ctx)
+	case lexer.WRITE:
+		stmt, err = p.evaluateWrite(ctx)
 	default:
 		// Variable initialization also starts with identifier but is a statement (e.g. x := 1234).
 		if p.isShortVarInit() {
@@ -2524,8 +2526,13 @@ func (p *Parser) evaluateCopy(ctx context) (Expression, error) {
 
 func (p *Parser) evaluateRead(ctx context) (Expression, error) {
 	expr, err := p.evaluateBuiltInFunction(lexer.READ, "read", 1, 1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
+		path := expressions[0]
+
+		if !path.ValueType().IsString() {
+			return nil, p.expectedError("file path string as first parameter", keywordToken)
+		}
 		return Read{
-			path: expressions[0],
+			path: path,
 		}, nil
 	})
 
@@ -2533,4 +2540,38 @@ func (p *Parser) evaluateRead(ctx context) (Expression, error) {
 		return nil, err
 	}
 	return expr.(Read), nil
+}
+
+func (p *Parser) evaluateWrite(ctx context) (Expression, error) {
+	expr, err := p.evaluateBuiltInFunction(lexer.WRITE, "write", 2, 3, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
+		path := expressions[0]
+
+		if !path.ValueType().IsString() {
+			return nil, p.expectedError("file path string as first parameter", keywordToken)
+		}
+		data := expressions[1]
+
+		if !path.ValueType().IsString() {
+			return nil, p.expectedError("data string as second parameter", keywordToken)
+		}
+		var append Expression = BooleanLiteral{false}
+
+		if len(expressions) > 2 {
+			append = expressions[2]
+
+			if !append.ValueType().IsBool() {
+				return nil, p.expectedError("append boolean as third parameter", keywordToken)
+			}
+		}
+		return Write{
+			path:   path,
+			data:   data,
+			append: append,
+		}, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return expr.(Write), nil
 }

@@ -45,6 +45,7 @@ type converter struct {
 	sliceCopyHelperRequired       bool
 	stringSubscriptHelperRequired bool
 	stringLenHelperRequired       bool
+	fileWriteHelperRequired       bool
 }
 
 func New() *converter {
@@ -89,6 +90,18 @@ func (c *converter) ProgramStart() error {
 }
 
 func (c *converter) ProgramEnd() error {
+	if c.fileWriteHelperRequired {
+		c.addHelper("file write", "_fwh",
+			"set _a=",
+			"for /f \"delims=\" %%i in (\"!_h!\") do (",
+			"if defined _a (echo %%i >> %~1) else (",
+			"echo %%i > %~1",
+			"set _a=1",
+			")",
+			")",
+		)
+	}
+
 	if c.appCallHelperRequired {
 		c.addHelper("app call", "_ach",
 			"set _h=",
@@ -309,6 +322,17 @@ func (c *converter) Continue() error {
 
 func (c *converter) Print(values []string) error {
 	c.addLine(fmt.Sprintf("echo %s", strings.Join(values, " ")))
+	return nil
+}
+
+func (c *converter) WriteFile(path string, content string, append string) error {
+	c.fileWriteHelperRequired = true
+	// TODO: Consider append.
+	// Use global variable to pass content to write file helper because Batch doesn't
+	// support newline passing because it splits arguments at newlines.
+	c.VarAssignment("_h", content, true)
+	c.addLine(fmt.Sprintf("call :_fwh \"%s\"", path))
+
 	return nil
 }
 
@@ -604,11 +628,6 @@ func (c *converter) ReadFile(path string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	c.readHelperRequired = true
 
-	// c.addLine(fmt.Sprintf("for /F \"tokens=* delims=\" %%%%i in (%s) do set \"%s=%%%%i\"", path, c.varName(helper, false)))
-	// c.addLine(fmt.Sprintf("for /f \"delims=\" %%%%i in (%s) do (", path))
-	// c.addLine(fmt.Sprintf("if defined %s set \"%s=!%s!!LF!\"", varName, varName, varName))
-	// c.addLine(fmt.Sprintf("set \"%s=!%s!%%%%i\"", varName, varName))
-	// c.addLine(")")
 	c.addLf()
 	c.addLine(fmt.Sprintf("call :_rh \"%s\"", path))
 	c.VarAssignment(helper, c.varEvaluationString("_h", true), false)

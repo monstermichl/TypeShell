@@ -161,6 +161,51 @@ func (t *transpiler) evaluatePrint(print parser.Print) error {
 	return t.converter.Print(values)
 }
 
+func (t *transpiler) evaluateWrite(write parser.Write) error {
+	path := write.Path()
+	valueType := path.ValueType()
+
+	if !valueType.IsString() {
+		return fmt.Errorf("expected string but got %s as read path", valueType.ToString())
+	}
+	result, err := t.evaluateExpression(path, true)
+
+	if err != nil {
+		return err
+	}
+	pathString := result.firstValue()
+	data := write.Data()
+	valueType = data.ValueType()
+
+	if !valueType.IsString() {
+		return fmt.Errorf("expected string but got %s as data", valueType.ToString())
+	}
+	result, err = t.evaluateExpression(data, true)
+
+	if err != nil {
+		return err
+	}
+	dataString := result.firstValue()
+	appendExpr := write.Append()
+	appendString := t.converter.BoolToString(false)
+
+	if appendExpr != nil {
+		append := write.Append()
+		valueType = append.ValueType()
+
+		if !valueType.IsBool() {
+			return fmt.Errorf("expected bool but got %s as append flag", valueType.ToString())
+		}
+		result, err = t.evaluateExpression(append, true)
+
+		if err != nil {
+			return err
+		}
+		appendString = result.firstValue()
+	}
+	return t.converter.WriteFile(pathString, dataString, appendString)
+}
+
 func (t *transpiler) evaluateIf(ifStatement parser.If) error {
 	conv := t.converter
 	ifBranch := ifStatement.IfBranch()
@@ -658,6 +703,8 @@ func (t *transpiler) evaluate(statement parser.Statement) error {
 		return t.evaluateContinue(statement.(parser.Continue))
 	case parser.STATEMENT_TYPE_PRINT:
 		return t.evaluatePrint(statement.(parser.Print))
+	case parser.STATEMENT_TYPE_WRITE:
+		return t.evaluateWrite(statement.(parser.Write))
 	default:
 		expression, ok := statement.(parser.Expression)
 
