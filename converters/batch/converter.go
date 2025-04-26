@@ -11,6 +11,18 @@ import (
 	"github.com/monstermichl/typeshell/transpiler"
 )
 
+type helperName = string
+
+const (
+	appCallHelper         helperName = "_ach"  // App call
+	fileReadHelper        helperName = "_frh"  // File write
+	fileWriteHelper       helperName = "_fwh"  // File read
+	sliceCopyHelper       helperName = "_sch"  // Slice copy
+	sliceLengthHelper     helperName = "_sllh" // Slice length
+	stringSubscriptHelper helperName = "_stsh" // String subscript
+	stringLengthHelper    helperName = "_stlh" // String length
+)
+
 type funcInfo struct {
 	name string
 }
@@ -37,10 +49,8 @@ type converter struct {
 	fors                          []forInfo
 	ifs                           []ifInfo
 	lfSet                         bool
-	returnHelperRequired          bool
 	appCallHelperRequired         bool
 	readHelperRequired            bool
-	sliceAssignmentHelperRequired bool
 	sliceLenHelperRequired        bool
 	sliceCopyHelperRequired       bool
 	stringSubscriptHelperRequired bool
@@ -50,6 +60,14 @@ type converter struct {
 
 func New() *converter {
 	return &converter{}
+}
+
+func returnValVar(subscript int) string {
+	return fmt.Sprintf("_rv%d", subscript)
+}
+
+func funcArgVar(subscript int) string {
+	return fmt.Sprintf("_fa%d", subscript)
 }
 
 func (c *converter) BoolToString(value bool) string {
@@ -94,9 +112,9 @@ func (c *converter) ProgramStart() error {
 
 func (c *converter) ProgramEnd() error {
 	if c.fileWriteHelperRequired {
-		c.addHelper("file write", "_fwh",
+		c.addHelper("file write", fileWriteHelper,
 			"set _a=",
-			"for /f \"delims=\" %%i in (\"!_h!\") do (",
+			fmt.Sprintf("for /f \"delims=\" %%%%i in (\"!%s!\") do (", funcArgVar(0)),
 			"if defined _a (echo %%i >> %~1) else (",
 			"echo %%i > %~1",
 			"set _a=1",
@@ -106,9 +124,9 @@ func (c *converter) ProgramEnd() error {
 	}
 
 	if c.appCallHelperRequired {
-		c.addHelper("app call", "_ach",
+		c.addHelper("app call", appCallHelper,
 			"set _h=",
-			"for /f \"delims=\" %%i in ('call %~1') do (",
+			fmt.Sprintf("for /f \"delims=\" %%%%i in ('call !%s!') do (", funcArgVar(0)),
 			"if defined _h set \"_h=!_h!!LF!\"",
 			"set \"_h=!_h!%%i\"",
 			")",
@@ -116,7 +134,7 @@ func (c *converter) ProgramEnd() error {
 	}
 
 	if c.readHelperRequired {
-		c.addHelper("read", "_rh",
+		c.addHelper("read", fileReadHelper,
 			"set _h=",
 			"for /f \"delims=\" %%i in (%~1) do (",
 			"if defined _h set \"_h=!_h!!LF!\"",
@@ -126,36 +144,22 @@ func (c *converter) ProgramEnd() error {
 	}
 
 	if c.sliceCopyHelperRequired {
-		c.addHelper("slice copy", "_sch",
+		c.addHelper("slice copy", sliceCopyHelper,
 			"set _i=0",
 			"call :_sllh %2", // Call slice length helper.
 			":_schl",
 			"if !_i! lss !_l! (",
 			"for /f \"delims=\" %%i in (\"%2[!_i!]\") do set _v=!%%i!",
-			"call :_sah !%1! !_i! \"!_v!\"", // Call slice assignment helper.
+			c.sliceAssignmentString("!%1!", "!_i!", "!_v!", false),
 			"set /A _i=!_i!+1",
 			"goto :_schl",
 			")",
 		)
 		c.sliceLenHelperRequired = true
-		c.sliceAssignmentHelperRequired = true
-	}
-
-	if c.returnHelperRequired {
-		c.addHelper("var", "_vh",
-			"set %1=%~2",
-		)
-	}
-
-	if c.sliceAssignmentHelperRequired {
-		// Add slice helper to batch file for easier slice processing (inspired by https://www.geeksforgeeks.org/batch-script-length-of-an-array/).
-		c.addHelper("slice assignment", "_sah",
-			"set \"%1[%2]=%~3\"",
-		)
 	}
 
 	if c.sliceLenHelperRequired {
-		c.addHelper("slice length", "_sllh",
+		c.addHelper("slice length", sliceLengthHelper,
 			"set _l=0",
 			":_sllhl",
 			"if not defined %1[%_l%] goto :_sllhle",
@@ -166,18 +170,16 @@ func (c *converter) ProgramEnd() error {
 	}
 
 	if c.stringSubscriptHelperRequired {
-		c.addHelper("string subscript", "_stsh",
-			"set _s=%~1",
-			"set \"_sub=!_s:~%2,1!\"", // https://stackoverflow.com/a/636391
+		c.addHelper("string subscript", stringSubscriptHelper,
+			fmt.Sprintf("set \"_sub=!%s:~%%1%%,1!\"", funcArgVar(0)), // https://stackoverflow.com/a/636391
 		)
 	}
 
 	if c.stringLenHelperRequired {
-		c.addHelper("string length", "_stlh",
+		c.addHelper("string length", stringLengthHelper,
 			"set _l=0",
-			"set _s=%~1",
 			":_stlhl",
-			"if \"!_s:~%_l%!\" equ \"\" goto :_stlhle", // https://www.geeksforgeeks.org/batch-script-string-length/
+			fmt.Sprintf("if \"!%s:~%%_l%%!\" equ \"\" goto :_stlhle", funcArgVar(0)), // https://www.geeksforgeeks.org/batch-script-string-length/
 			"set /A _l=%_l%+1",
 			"goto :_stlhl",
 			":_stlhle",
@@ -205,9 +207,6 @@ func (c *converter) SliceAssignment(name string, index string, value string, glo
 }
 
 func (c *converter) FuncStart(name string, params []string, returnTypes []parser.ValueType) error {
-	if len(returnTypes) > 0 {
-		c.returnHelperRequired = true
-	}
 	c.funcCounter++
 	c.funcs = append(c.funcs, funcInfo{
 		name: name,
@@ -217,7 +216,7 @@ func (c *converter) FuncStart(name string, params []string, returnTypes []parser
 	c.addLine(fmt.Sprintf(":%s", name))
 
 	for i, param := range params {
-		c.addLine(c.varAssignmentString(param, c.varEvaluationString(fmt.Sprintf("_fa%d", i), true), false))
+		c.addLine(c.varAssignmentString(param, c.varEvaluationString(funcArgVar(i), true), false))
 	}
 	return nil
 }
@@ -239,7 +238,7 @@ func (c *converter) Return(values []transpiler.ReturnValue) error {
 	currFunc := c.mustCurrentFuncInfo()
 
 	for i, value := range values {
-		c.VarDefinition(fmt.Sprintf("_rv%d", i), value.Value(), true)
+		c.VarDefinition(returnValVar(i), value.Value(), true)
 	}
 	c.addLine(fmt.Sprintf("goto :_ret_%s", currFunc.name))
 	return nil
@@ -333,8 +332,7 @@ func (c *converter) WriteFile(path string, content string, append string) error 
 	// TODO: Consider append.
 	// Use global variable to pass content to write file helper because Batch doesn't
 	// support newline passing because it splits arguments at newlines.
-	c.VarAssignment("_h", content, true)
-	c.addLine(fmt.Sprintf("call :_fwh \"%s\"", path))
+	c.callFunc(fileWriteHelper, []string{content}, path)
 
 	return nil
 }
@@ -537,7 +535,7 @@ func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, 
 	helper := c.nextHelperVar()
 	c.sliceLenHelperRequired = true
 
-	c.addLine(fmt.Sprintf("call :_sllh %s", name))
+	c.callFunc(sliceLengthHelper, []string{}, name)
 	c.VarAssignment(helper, c.varEvaluationString("_l", true), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
@@ -547,7 +545,7 @@ func (c *converter) StringSubscript(name string, index string, valueUsed bool, g
 	helper := c.nextHelperVar()
 	c.stringSubscriptHelperRequired = true
 
-	c.addLine(fmt.Sprintf("call :_stsh \"%s\" %s", c.varEvaluationString(name, global), index))
+	c.callFunc(stringSubscriptHelper, []string{c.varEvaluationString(name, global)}, index)
 	c.VarAssignment(helper, c.varEvaluationString("_sub", true), global)
 
 	return c.varEvaluationString(helper, false), nil
@@ -557,7 +555,7 @@ func (c *converter) StringLen(value string, valueUsed bool, global bool) (string
 	helper := c.nextHelperVar()
 	c.stringLenHelperRequired = true
 
-	c.addLine(fmt.Sprintf("call :_stlh \"%s\"", value))
+	c.callFunc(stringLengthHelper, []string{value})
 	c.VarAssignment(helper, c.varEvaluationString("_l", true), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
@@ -574,7 +572,7 @@ func (c *converter) FuncCall(name string, args []string, returnTypes []parser.Va
 	if valueUsed {
 		for i := range returnTypes {
 			helper := c.nextHelperVar()
-			c.VarDefinition(helper, c.varEvaluationString(fmt.Sprintf("_rv%d", i), true), false)
+			c.VarDefinition(helper, c.varEvaluationString(returnValVar(i), true), false)
 			eval, _ := c.VarEvaluation(helper, valueUsed, false)
 			returnValues = append(returnValues, eval)
 		}
@@ -605,7 +603,7 @@ func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) (string,
 		c.appCallHelperRequired = true
 
 		c.addLf()
-		c.addLine(fmt.Sprintf("call :_ach  \"%s\"", strings.Join(callStrings, " ^| ")))
+		c.callFunc(appCallHelper, []string{strings.Join(callStrings, " ^| ")})
 		c.VarAssignment(helper, c.varEvaluationString("_h", true), false)
 
 		return c.VarEvaluation(helper, valueUsed, false)
@@ -621,8 +619,8 @@ func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 }
 
 func (c *converter) Copy(destination string, source string, valueUsed bool, global bool) (string, error) {
-	c.addLine(fmt.Sprintf("call :_sch %s %s", c.varName(destination, global), source))
 	c.sliceCopyHelperRequired = true
+	c.callFunc(sliceCopyHelper, []string{}, c.varName(destination, global), source)
 
 	return c.varEvaluationString("_l", true), nil
 }
@@ -632,17 +630,17 @@ func (c *converter) ReadFile(path string, valueUsed bool) (string, error) {
 	c.readHelperRequired = true
 
 	c.addLf()
-	c.addLine(fmt.Sprintf("call :_rh \"%s\"", path))
+	c.callFunc(fileReadHelper, []string{}, path)
 	c.VarAssignment(helper, c.varEvaluationString("_h", true), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
-func (c *converter) callFunc(name string, args []string) {
-	for i, arg := range args {
-		c.VarAssignment(fmt.Sprintf("_fa%d", i), arg, true)
+func (c *converter) callFunc(name string, globalArgs []string, args ...string) {
+	for i, arg := range globalArgs {
+		c.VarAssignment(funcArgVar(i), arg, true)
 	}
-	c.addLine(fmt.Sprintf("call :%s", strings.TrimLeft(name, ":")))
+	c.addLine(fmt.Sprintf("call :%s %s", strings.TrimLeft(name, ":"), strings.Join(args, " ")))
 }
 
 func (c *converter) varName(name string, global bool) string {
@@ -753,9 +751,8 @@ func (c *converter) nextHelperVar() string {
 }
 
 func (c *converter) sliceAssignmentString(name string, index string, value string, global bool) string {
-	c.sliceAssignmentHelperRequired = true
 	// TODO: Handle global flag.
-	return fmt.Sprintf("call :_sah %s %s \"%s\"", name, index, value)
+	return fmt.Sprintf("set \"%s[%s]=%s\"", name, index, value)
 }
 
 func (c *converter) addLf() {
