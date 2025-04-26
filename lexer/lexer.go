@@ -231,19 +231,25 @@ func Tokenize(source string) ([]Token, error) {
 
 			for i < sourceLength {
 				c0 = char(source, i)
+				appended := false
 
-				if regexp.MustCompile(`^\\.`).MatchString(source[i:]) {
+				if match := regexp.MustCompile(`^\\.`).FindString(source[i:]); match != "" {
 					// Skip escaped character.
-					str += char(source, i)
-					i++
+					str += match
+
+					i += len(match)
+					appended = true
 				} else if c0 == "\"" {
 					// Detected string end.
 					i++
 					token = newToken(str, STRING_LITERAL, ogRow, ogColumn)
 					break
 				}
-				str += c0
-				i++
+
+				if !appended {
+					str += c0
+					i++
+				}
 			}
 
 			if token.tokenType == UNKNOWN {
