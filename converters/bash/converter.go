@@ -45,7 +45,8 @@ func (c *converter) IntToString(value int) string {
 }
 
 func (c *converter) StringToString(value string) string {
-	return value
+	// Replace "\\n" with "\n".
+	return strings.ReplaceAll(value, "\\n", "\n")
 }
 
 func (c *converter) Dump() (string, error) {

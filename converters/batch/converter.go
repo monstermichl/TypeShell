@@ -64,7 +64,10 @@ func (c *converter) IntToString(value int) string {
 }
 
 func (c *converter) StringToString(value string) string {
-	return value
+	c.addLf()
+
+	// Replace "\n" with Batch newline value.
+	return strings.ReplaceAll(value, "\\n", "!LF!")
 }
 
 func (c *converter) Dump() (string, error) {
