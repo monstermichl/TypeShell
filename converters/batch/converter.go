@@ -217,7 +217,7 @@ func (c *converter) FuncStart(name string, params []string, returnTypes []parser
 	c.addLine(fmt.Sprintf(":%s", name))
 
 	for i, param := range params {
-		c.addLine(c.varAssignmentString(param, fmt.Sprintf("%%~%d", i+1), false))
+		c.addLine(c.varAssignmentString(param, c.varEvaluationString(fmt.Sprintf("_fa%d", i), true), false))
 	}
 	return nil
 }
@@ -569,7 +569,7 @@ func (c *converter) Group(value string, valueUsed bool) (string, error) {
 
 func (c *converter) FuncCall(name string, args []string, returnTypes []parser.ValueType, valueUsed bool) ([]string, error) {
 	returnValues := []string{}
-	c.addLine(fmt.Sprintf("call :%s %s", name, fmt.Sprintf("\"%s\"", strings.Join(args, "\" \""))))
+	c.callFunc(name, args)
 
 	if valueUsed {
 		for i := range returnTypes {
@@ -636,6 +636,13 @@ func (c *converter) ReadFile(path string, valueUsed bool) (string, error) {
 	c.VarAssignment(helper, c.varEvaluationString("_h", true), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
+}
+
+func (c *converter) callFunc(name string, args []string) {
+	for i, arg := range args {
+		c.VarAssignment(fmt.Sprintf("_fa%d", i), arg, true)
+	}
+	c.addLine(fmt.Sprintf("call :%s", strings.TrimLeft(name, ":")))
 }
 
 func (c *converter) varName(name string, global bool) string {
