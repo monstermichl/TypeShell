@@ -70,6 +70,21 @@ func funcArgVar(subscript int) string {
 	return fmt.Sprintf("_fa%d", subscript)
 }
 
+func escapeString(s string) string {
+	escapes := []string{"%", "^", "&", "<", ">", "|", "'", "`", ",", ";", "=", "(", ")"}
+	updated := ""
+
+	for i := range s {
+		char := string(s[i])
+
+		if slices.Contains(escapes, char) {
+			char = fmt.Sprintf("^%s", char)
+		}
+		updated = fmt.Sprintf("%s%s", updated, char)
+	}
+	return updated
+}
+
 func (c *converter) BoolToString(value bool) string {
 	if value {
 		return "1"
@@ -323,7 +338,7 @@ func (c *converter) Continue() error {
 }
 
 func (c *converter) Print(values []string) error {
-	c.addLine(fmt.Sprintf("echo %s", strings.Join(values, " ")))
+	c.addLine(fmt.Sprintf("echo %s", escapeString(strings.Join(values, " "))))
 	return nil
 }
 
