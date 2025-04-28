@@ -164,7 +164,7 @@ func (c *converter) ProgramEnd() error {
 			"call :_sllh %2", // Call slice length helper.
 			":_schl",
 			"if !_i! lss !_l! (",
-			"for /f \"delims=\" %%i in (\"%2[!_i!]\") do set _v=!%%i!",
+			"for /f \"delims=\" %%i in (\"%2[!_i!]\") do set \"_v=!%%i!\"",
 			c.sliceAssignmentString("!%1!", "!_i!", "!_v!", false),
 			"set /A \"_i=!_i!+1\"",
 			"goto :_schl",
