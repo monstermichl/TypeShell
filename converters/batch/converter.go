@@ -151,7 +151,7 @@ func (c *converter) ProgramEnd() error {
 			"if !_i! lss !_l! (",
 			"for /f \"delims=\" %%i in (\"%2[!_i!]\") do set _v=!%%i!",
 			c.sliceAssignmentString("!%1!", "!_i!", "!_v!", false),
-			"set /A _i=!_i!+1",
+			"set /A \"_i=!_i!+1\"",
 			"goto :_schl",
 			")",
 		)
@@ -163,7 +163,7 @@ func (c *converter) ProgramEnd() error {
 			"set _l=0",
 			":_sllhl",
 			"if not defined %1[%_l%] goto :_sllhle",
-			"set /A _l=%_l%+1",
+			"set /A \"_l=%_l%+1\"",
 			"goto :_sllhl",
 			":_sllhle",
 		)
@@ -180,7 +180,7 @@ func (c *converter) ProgramEnd() error {
 			"set _l=0",
 			":_stlhl",
 			fmt.Sprintf("if \"!%s:~%%_l%%!\" equ \"\" goto :_stlhle", funcArgVar(0)), // https://www.geeksforgeeks.org/batch-script-string-length/
-			"set /A _l=%_l%+1",
+			"set /A \"_l=%_l%+1\"",
 			"goto :_stlhl",
 			":_stlhle",
 		)
@@ -384,7 +384,7 @@ func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator,
 		default:
 			return notAllowedError()
 		}
-		c.addLine(fmt.Sprintf("set /A %s=%s%s%s", c.varName(helper, false), left, operator, right))
+		c.addLine(fmt.Sprintf("set /A \"%s=%s%s%s\"", c.varName(helper, false), left, operator, right))
 	case parser.DATA_TYPE_STRING:
 		switch operator {
 		case parser.BINARY_OPERATOR_ADDITION:
@@ -521,7 +521,7 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool, g
 	// _h0[0], not 4. Batch scripts do not support indirect variable expansion in a straightforward
 	// way. However, you can work around this by using for /f to evaluate the variable dynamically
 	c.addLine(
-		fmt.Sprintf("for /f \"delims=\" %%%%i in (\"%s[%s]\") do set %s=!%%%%i!",
+		fmt.Sprintf("for /f \"delims=\" %%%%i in (\"%s[%s]\") do set \"%s=!%%%%i!\"",
 			// TODO: Find out if global is used correctly here.
 			c.varEvaluationString(name, global),
 			index,
@@ -614,7 +614,7 @@ func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) (string,
 
 func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
-	c.addLine(fmt.Sprintf("set /p %s=%s", helper, prompt))
+	c.addLine(fmt.Sprintf("set /p \"%s=%s\"", helper, prompt))
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
@@ -651,7 +651,7 @@ func (c *converter) varName(name string, global bool) string {
 }
 
 func (c *converter) varAssignmentString(name string, value string, global bool) string {
-	return fmt.Sprintf("set %s=%s", c.varName(name, global), value)
+	return fmt.Sprintf("set \"%s=%s\"", c.varName(name, global), value)
 }
 
 func (c *converter) varEvaluationString(name string, global bool) string {
