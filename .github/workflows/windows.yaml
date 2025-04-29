@@ -1,10 +1,10 @@
-name: TypeShell Linux
+name: TypeShell Windows
 
 on: [ push ]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
         - uses: actions/checkout@v4
         - name: Setup Go
@@ -22,6 +22,6 @@ jobs:
             go build main.go
         
         - name: Test
-          shell: bash
+          shell: cmd
           run: |
             go test ./tests -v
