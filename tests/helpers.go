@@ -2,7 +2,6 @@ package tests
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,25 +32,20 @@ func transpile(t *testing.T, source string, targetFileName string, converter tra
 	code, err := trans.Transpile(file, converter)
 	output := []byte{}
 
-	fmt.Println("========================== input =========================")
-	fmt.Println(source)
-
 	// If transpilation was successful, run the code.
 	if err == nil {
-		fmt.Println("========================== code ==========================")
-		fmt.Println(code)
-
 		targetFile := filepath.Join(dir, targetFileName)
 		err = os.WriteFile(targetFile, []byte(code), 0x777)
 
 		require.Nil(t, err)
 		cmd := exec.Command(targetFile)
 		output, err = cmd.Output()
-
-		fmt.Println("========================== output ========================")
-		fmt.Println(string(output))
 	}
-	compare(strings.TrimSpace(string(output)), err)
+	outputString := string(output)
+	outputString = strings.ReplaceAll(outputString, "\r\n", "\n")
+	outputString = strings.TrimSpace(outputString)
+
+	compare(outputString, err)
 }
 
 func transpileBash(t *testing.T, source string, compare compareCallout) {
