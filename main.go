@@ -5,30 +5,16 @@ import (
 
 	"github.com/monstermichl/typeshell/converters/bash"
 	"github.com/monstermichl/typeshell/converters/batch"
-	"github.com/monstermichl/typeshell/lexer"
-	"github.com/monstermichl/typeshell/parser"
 	"github.com/monstermichl/typeshell/transpiler"
 )
 
 func main() {
 	testFile := "test.mss"
-	data, _ := os.ReadFile(testFile)
-	tokens, err := lexer.Tokenize(string(data))
-
-	if err != nil {
-		panic(err)
-	}
-	p := parser.New(tokens)
-	prog, err := p.Parse()
-	//fmt.Println(prog)
-	if err != nil {
-		panic(err)
-	}
-	i := transpiler.New(prog)
+	t := transpiler.New()
 
 	// Dump batch file.
 	batchConv := batch.New()
-	dump, err := i.Transpile(batchConv)
+	dump, err := t.Transpile(testFile, batchConv)
 
 	if err != nil {
 		panic(err)
@@ -37,7 +23,7 @@ func main() {
 
 	// Dump bash file.
 	bashConv := bash.New()
-	dump, err = i.Transpile(bashConv)
+	dump, err = t.Transpile(testFile, bashConv)
 
 	if err != nil {
 		panic(err)
