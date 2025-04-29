@@ -31,6 +31,17 @@ func testDefineVariablesSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	})
 }
 
+func testDefineSliceVariable(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		var a = []int{1, 2}
+
+		print(a[0], a[1])
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "1 2", output)
+	})
+}
+
 func testDefineSameVariableFail(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		var a int
@@ -53,6 +64,21 @@ func testAssignSuccessful(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		var a, b int
 		a, b = 1, 2
+
+		print(a, b)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "1 2", output)
+	})
+}
+
+func testAssignFromFunctionSuccessful(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		func two() (int, int) {
+			return 1, 2
+		}
+		var a, b int
+		a, b = two()
 
 		print(a, b)
 	`, func(output string, err error) {
