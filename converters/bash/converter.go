@@ -70,7 +70,7 @@ func (c *converter) ProgramEnd() error {
 			"local _l=$(_slh ${2})",
 			"local _n=$(eval \"echo \\${${1}}\")",
 			"while [ ${_i} -lt ${_l} ]; do",
-			fmt.Sprintf("local _v=%s", c.sliceEvaluationString("2", "${_i}", false)),
+			fmt.Sprintf("local _v=%s", c.sliceEvaluationString("${2}", "${_i}", false)),
 			c.sliceAssignmentString("${_n}", "${_i}", "${_v}", false),
 			"_i=$(expr ${_i} + 1)",
 			"done",
@@ -379,24 +379,24 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool, g
 		helper,
 		c.sliceEvaluationString(name, index, global),
 		false,
-	) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
-
+	)
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
 func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, error) {
 	helper := c.nextHelperVar()
 	c.sliceLenHelperRequired = true
-	// TODO: Handle global flag.
-	c.VarAssignment(helper, c.sliceLenString(name), false) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+	// TODO: Is global flag even required here? Because value is already passed to function.
+	c.VarAssignment(helper, c.sliceLenString(name), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
-func (c *converter) StringSubscript(name string, index string, valueUsed bool, global bool) (string, error) {
+func (c *converter) StringSubscript(value string, index string, valueUsed bool, global bool) (string, error) {
 	helper := c.nextHelperVar()
 
-	c.VarAssignment(helper, fmt.Sprintf("$(_ssh %s %s)", c.varEvaluationString(name, global), index), false) // https://www.baeldung.com/linux/bash-substring#1-using-thecut-command
+	// TODO: Is global flag even required here? Because value is already passed to function.
+	c.VarAssignment(helper, fmt.Sprintf("$(_ssh %s %s)", value, index), false) // https://www.baeldung.com/linux/bash-substring#1-using-thecut-command
 	c.stringSubscriptHelperRequired = true
 
 	return c.varEvaluationString(helper, false), nil
@@ -510,13 +510,13 @@ func (c *converter) varEvaluationString(name string, global bool) string {
 }
 
 func (c *converter) sliceAssignmentString(name string, index string, value string, global bool) string {
-	// TODO: Handle global flag.
+	// TODO: Is global flag even required here? Because value is already passed to function.
 	return fmt.Sprintf("eval %s_%s=\"%s\"", name, index, value)
 }
 
 func (c *converter) sliceEvaluationString(name string, index string, global bool) string {
 	return fmt.Sprintf("$(eval \"echo \\${%s_%s}\")",
-		c.varEvaluationString(name, global),
+		name, // TODO: Is global flag even required here? Because value is already passed to function.
 		index,
 	)
 }

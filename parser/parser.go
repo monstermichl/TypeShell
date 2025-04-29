@@ -1730,6 +1730,23 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 	return stmt, nil
 }
 
+func (p *Parser) evaluateVarEvaluation(ctx context) (Expression, error) {
+	identifierToken := p.eat() // Eat identifier token.
+
+	if identifierToken.Type() != lexer.IDENTIFIER {
+		return nil, p.expectedError("identifier", identifierToken)
+	}
+	name := identifierToken.Value()
+	variable, exists := ctx.findVariable(name, p.prefix, ctx.global())
+
+	if !exists {
+		return nil, p.atError(fmt.Sprintf("variable %s has not been defined", name), identifierToken)
+	}
+	return VariableEvaluation{
+		Variable: variable,
+	}, nil
+}
+
 func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 	var err error
 	var expr Expression
@@ -1826,17 +1843,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 		case lexer.OPENING_SQUARE_BRACKET:
 			expr, err = p.evaluateSubscript(ctx)
 		default:
-			p.eat() // Eat identifier token.
-			name := token.Value()
-			variable, exists := ctx.findVariable(name, p.prefix, ctx.global())
-
-			if !exists {
-				err = p.atError(fmt.Sprintf("variable %s has not been defined", name), nextToken)
-			} else {
-				expr = VariableEvaluation{
-					Variable: variable,
-				}
-			}
+			expr, err = p.evaluateVarEvaluation(ctx)
 		}
 
 	default:
@@ -2298,24 +2305,30 @@ func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
 }
 
 func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
-	nameToken := p.eat()
+	var value Expression
+	var err error
 
-	if nameToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedError("identifier", nameToken)
-	}
-	name := nameToken.Value()
-	variable, exists := ctx.findVariable(name, p.prefix, ctx.global())
+	nextToken := p.peek()
 
-	if !exists {
-		return nil, p.atError(fmt.Sprintf("variable %s has not been defined", name), nameToken)
+	switch nextToken.Type() {
+	case lexer.IDENTIFIER:
+		value, err = p.evaluateVarEvaluation(ctx)
+	case lexer.STRING_LITERAL:
+		value, err = p.evaluateExpression(ctx)
+	default:
+		return nil, p.expectedError("string or variable", nextToken)
 	}
-	valueType := variable.ValueType()
+
+	if err != nil {
+		return nil, err
+	}
+	valueType := value.ValueType()
 	isSlice := valueType.IsSlice()
 
 	if !isSlice && valueType.DataType() != DATA_TYPE_STRING {
-		return nil, p.expectedError(fmt.Sprintf("slice or string but variable is of type %s", valueType.ToString()), nameToken)
+		return nil, p.expectedError("slice or string", nextToken)
 	}
-	nextToken := p.eat()
+	nextToken = p.eat()
 
 	if nextToken.Type() != lexer.OPENING_SQUARE_BRACKET {
 		return nil, p.expectedError("\"[\"", nextToken)
@@ -2339,14 +2352,14 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 
 	if !isSlice {
 		return StringSubscript{
-			Variable: variable,
-			index:    index,
+			value: value,
+			index: index,
 		}, nil
 	}
 	return SliceEvaluation{
-		Variable: variable,
+		value:    value,
 		index:    index,
-		dataType: variable.ValueType().DataType(),
+		dataType: valueType.DataType(),
 	}, nil
 }
 

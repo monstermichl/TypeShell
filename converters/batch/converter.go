@@ -71,7 +71,7 @@ func funcArgVar(subscript int) string {
 }
 
 func escapeString(s string) string {
-	escapes := []string{"%", "^", "&", "<", ">", "|", "'", "`", ",", ";", "=", "(", ")"}
+	escapes := []string{"%", "^", "&", "<", ">", "|", "'", "`", ",", ";", "=", "(", ")"} // https://www.robvanderwoude.com/escapechars.php
 	updated := ""
 
 	for i := range s {
@@ -537,12 +537,11 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool, g
 	// way. However, you can work around this by using for /f to evaluate the variable dynamically
 	c.addLine(
 		fmt.Sprintf("for /f \"delims=\" %%%%i in (\"%s[%s]\") do set \"%s=!%%%%i!\"",
-			// TODO: Find out if global is used correctly here.
-			c.varEvaluationString(name, global),
+			name, // TODO: Is global flag even required here? Because value is already passed to function.
 			index,
-			c.varName(helper, global),
+			c.varName(helper, false),
 		),
-	) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+	)
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
@@ -556,12 +555,12 @@ func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, 
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
-func (c *converter) StringSubscript(name string, index string, valueUsed bool, global bool) (string, error) {
+func (c *converter) StringSubscript(value string, index string, valueUsed bool, global bool) (string, error) {
 	helper := c.nextHelperVar()
 	c.stringSubscriptHelperRequired = true
 
-	c.callFunc(stringSubscriptHelper, []string{c.varEvaluationString(name, global)}, index)
-	c.VarAssignment(helper, c.varEvaluationString("_sub", true), global)
+	c.callFunc(stringSubscriptHelper, []string{value}, index)
+	c.VarAssignment(helper, c.varEvaluationString("_sub", true), false) // TODO: Is global flag even required here? Because value is already passed to function.
 
 	return c.varEvaluationString(helper, false), nil
 }
@@ -766,7 +765,7 @@ func (c *converter) nextHelperVar() string {
 }
 
 func (c *converter) sliceAssignmentString(name string, index string, value string, global bool) string {
-	// TODO: Handle global flag.
+	// TODO: Is global flag even required here? Because value is already passed to function.
 	return fmt.Sprintf("set \"%s[%s]=%s\"", name, index, value)
 }
 

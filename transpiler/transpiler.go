@@ -39,6 +39,16 @@ func New() transpiler {
 	return transpiler{}
 }
 
+func expressionGlobal(expr parser.Expression) bool {
+	global := false
+
+	// If expression implements Global interface, is global value.
+	if t, ok := expr.(parser.Global); ok {
+		global = t.Global()
+	}
+	return global
+}
+
 func (t *transpiler) Transpile(path string, converter Converter) (string, error) {
 	p := parser.New()
 	ast, err := p.Parse(path)
@@ -423,12 +433,20 @@ func (t *transpiler) evaluateVarEvaluation(evaluation parser.VariableEvaluation,
 }
 
 func (t *transpiler) evaluateSliceEvaluation(evaluation parser.SliceEvaluation, valueUsed bool) (expressionResult, error) {
-	result, err := t.evaluateIndex(evaluation.Index(), true)
+	value := evaluation.Value()
+	result, err := t.evaluateExpression(value, true)
 
 	if err != nil {
 		return expressionResult{}, err
 	}
-	s, err := t.converter.SliceEvaluation(evaluation.Name(), result.firstValue(), valueUsed, evaluation.Global())
+	valueString := result.firstValue()
+	result, err = t.evaluateIndex(evaluation.Index(), true)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	global := expressionGlobal(value)
+	s, err := t.converter.SliceEvaluation(valueString, result.firstValue(), valueUsed, global)
 
 	if err != nil {
 		return expressionResult{}, err
@@ -442,7 +460,14 @@ func (t *transpiler) evaluateStringSubscript(subscript parser.StringSubscript, v
 	if err != nil {
 		return expressionResult{}, err
 	}
-	s, err := t.converter.StringSubscript(subscript.Name(), indexResult.firstValue(), valueUsed, subscript.Global())
+	value := subscript.Value()
+	str, err := t.evaluateExpression(value, true)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	global := expressionGlobal(value)
+	s, err := t.converter.StringSubscript(str.firstValue(), indexResult.firstValue(), valueUsed, global)
 
 	if err != nil {
 		return expressionResult{}, err
@@ -633,12 +658,7 @@ func (t *transpiler) evaluateLen(len parser.Len, valueUsed bool) (expressionResu
 	if err != nil {
 		return expressionResult{}, err
 	}
-	global := false
-
-	// If expression implements Global interface, is global value.
-	if t, ok := expr.(parser.Global); ok {
-		global = t.Global()
-	}
+	global := expressionGlobal(expr)
 	s := ""
 
 	if valueType.IsString() {

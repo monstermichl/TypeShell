@@ -1,7 +1,7 @@
 package parser
 
 type StringSubscript struct {
-	Variable
+	value Expression
 	index Expression
 }
 
@@ -13,10 +13,10 @@ func (s StringSubscript) ValueType() ValueType {
 	return NewValueType(DATA_TYPE_STRING, false)
 }
 
-func (s StringSubscript) Index() Expression {
-	return s.index
+func (s StringSubscript) Value() Expression {
+	return s.value
 }
 
-func (s StringSubscript) Global() bool {
-	return s.global
+func (s StringSubscript) Index() Expression {
+	return s.index
 }
