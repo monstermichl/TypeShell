@@ -1,9 +1,11 @@
 package tests
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -13,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type compareCallout func(output string)
+type compareCallout func(output string, err error)
 type transpilerFunc func(t *testing.T, source string, compare compareCallout)
 
 func transpile(t *testing.T, source string, targetFileName string, converter transpiler.Converter, compare compareCallout) {
@@ -28,17 +30,18 @@ func transpile(t *testing.T, source string, targetFileName string, converter tra
 
 	require.Nil(t, err)
 	code, err := trans.Transpile(file, converter)
+	output := []byte{}
 
-	require.Nil(t, err)
-	targetFile := filepath.Join(dir, targetFileName)
-	err = os.WriteFile(targetFile, []byte(code), 0x777)
+	// If transpilation was successful, run the code.
+	if err == nil {
+		targetFile := filepath.Join(dir, targetFileName)
+		err = os.WriteFile(targetFile, []byte(code), 0x777)
 
-	require.Nil(t, err)
-	cmd := exec.Command(targetFile)
-	output, err := cmd.Output()
-
-	require.Nil(t, err)
-	compare(strings.TrimSpace(string(output)))
+		require.Nil(t, err)
+		cmd := exec.Command(targetFile)
+		output, err = cmd.Output()
+	}
+	compare(strings.TrimSpace(string(output)), err)
 }
 
 func transpileBash(t *testing.T, source string, compare compareCallout) {
@@ -47,4 +50,16 @@ func transpileBash(t *testing.T, source string, compare compareCallout) {
 
 func transpileBatch(t *testing.T, source string, compare compareCallout) {
 	transpile(t, source, "test.bat", batch.New(), compare)
+}
+
+func shortenError(err error) error {
+	if err != nil {
+		s := err.Error()
+
+		if matches := regexp.MustCompile(`(.+)\s+at row`).FindStringSubmatch(s); matches != nil {
+			s = matches[1]
+		}
+		err = errors.New(s)
+	}
+	return err
 }
