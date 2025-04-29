@@ -519,7 +519,7 @@ func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string,
 	return helper, nil
 }
 
-func (c *converter) SliceEvaluation(name string, index string, valueUsed bool, global bool) (string, error) {
+func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
 	// A for-loop is required because the evaluation wouldn't work with the following code as expected.
@@ -545,7 +545,7 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool, g
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
-func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, error) {
+func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	c.sliceLenHelperRequired = true
 
@@ -555,7 +555,7 @@ func (c *converter) SliceLen(name string, valueUsed bool, global bool) (string, 
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
-func (c *converter) StringSubscript(value string, index string, valueUsed bool, global bool) (string, error) {
+func (c *converter) StringSubscript(value string, index string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	c.stringSubscriptHelperRequired = true
 
@@ -565,7 +565,7 @@ func (c *converter) StringSubscript(value string, index string, valueUsed bool, 
 	return c.varEvaluationString(helper, false), nil
 }
 
-func (c *converter) StringLen(value string, valueUsed bool, global bool) (string, error) {
+func (c *converter) StringLen(value string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	c.stringLenHelperRequired = true
 

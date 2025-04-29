@@ -39,16 +39,6 @@ func New() transpiler {
 	return transpiler{}
 }
 
-func expressionGlobal(expr parser.Expression) bool {
-	global := false
-
-	// If expression implements Global interface, is global value.
-	if t, ok := expr.(parser.Global); ok {
-		global = t.Global()
-	}
-	return global
-}
-
 func (t *transpiler) Transpile(path string, converter Converter) (string, error) {
 	p := parser.New()
 	ast, err := p.Parse(path)
@@ -445,8 +435,7 @@ func (t *transpiler) evaluateSliceEvaluation(evaluation parser.SliceEvaluation, 
 	if err != nil {
 		return expressionResult{}, err
 	}
-	global := expressionGlobal(value)
-	s, err := t.converter.SliceEvaluation(valueString, result.firstValue(), valueUsed, global)
+	s, err := t.converter.SliceEvaluation(valueString, result.firstValue(), valueUsed)
 
 	if err != nil {
 		return expressionResult{}, err
@@ -466,8 +455,7 @@ func (t *transpiler) evaluateStringSubscript(subscript parser.StringSubscript, v
 	if err != nil {
 		return expressionResult{}, err
 	}
-	global := expressionGlobal(value)
-	s, err := t.converter.StringSubscript(str.firstValue(), indexResult.firstValue(), valueUsed, global)
+	s, err := t.converter.StringSubscript(str.firstValue(), indexResult.firstValue(), valueUsed)
 
 	if err != nil {
 		return expressionResult{}, err
@@ -658,13 +646,12 @@ func (t *transpiler) evaluateLen(len parser.Len, valueUsed bool) (expressionResu
 	if err != nil {
 		return expressionResult{}, err
 	}
-	global := expressionGlobal(expr)
 	s := ""
 
 	if valueType.IsString() {
-		s, err = t.converter.StringLen(result.firstValue(), valueUsed, global)
+		s, err = t.converter.StringLen(result.firstValue(), valueUsed)
 	} else {
-		s, err = t.converter.SliceLen(result.firstValue(), valueUsed, global)
+		s, err = t.converter.SliceLen(result.firstValue(), valueUsed)
 	}
 
 	if err != nil {
