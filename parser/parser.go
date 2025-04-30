@@ -1936,6 +1936,8 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 		stmt, err = p.evaluatePrint(ctx)
 	case lexer.WRITE:
 		stmt, err = p.evaluateWrite(ctx)
+	case lexer.PANIC:
+		stmt, err = p.evaluatePanic(ctx)
 	default:
 		// Variable initialization also starts with identifier but is a statement (e.g. x := 1234).
 		if p.isShortVarInit() {
@@ -2552,6 +2554,14 @@ func (p *Parser) evaluatePrint(ctx context) (Statement, error) {
 	return p.evaluateBuiltInFunction(lexer.PRINT, "print", 0, -1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
 		return Print{
 			expressions: expressions,
+		}, nil
+	})
+}
+
+func (p *Parser) evaluatePanic(ctx context) (Statement, error) {
+	return p.evaluateBuiltInFunction(lexer.PANIC, "panic", 1, 1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
+		return Panic{
+			expression: expressions[0],
 		}, nil
 	})
 }

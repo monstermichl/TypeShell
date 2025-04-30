@@ -161,6 +161,15 @@ func (t *transpiler) evaluatePrint(print parser.Print) error {
 	return t.converter.Print(values)
 }
 
+func (t *transpiler) evaluatePanic(panic parser.Panic) error {
+	result, err := t.evaluateExpression(panic.Expression(), true)
+
+	if err != nil {
+		return err
+	}
+	return t.converter.Panic(result.firstValue())
+}
+
 func (t *transpiler) evaluateWrite(write parser.Write) error {
 	path := write.Path()
 	valueType := path.ValueType()
@@ -715,6 +724,8 @@ func (t *transpiler) evaluate(statement parser.Statement) error {
 		return t.evaluateContinue(statement.(parser.Continue))
 	case parser.STATEMENT_TYPE_PRINT:
 		return t.evaluatePrint(statement.(parser.Print))
+	case parser.STATEMENT_TYPE_PANIC:
+		return t.evaluatePanic(statement.(parser.Panic))
 	case parser.STATEMENT_TYPE_WRITE:
 		return t.evaluateWrite(statement.(parser.Write))
 	default:

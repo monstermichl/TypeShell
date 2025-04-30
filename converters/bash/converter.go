@@ -207,6 +207,12 @@ func (c *converter) Print(values []string) error {
 	return nil
 }
 
+func (c *converter) Panic(value string) error {
+	c.addLine(fmt.Sprintf("echo \"%s\"", value))
+	c.addLine("return -1")
+	return nil
+}
+
 func (c *converter) WriteFile(path string, content string, append string) error {
 	// TODO: Consider append.
 	c.addLine(fmt.Sprintf("echo \"%s\" %s %s", content, ">", path))
@@ -386,7 +392,7 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (
 func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	c.sliceLenHelperRequired = true
-	
+
 	c.VarAssignment(helper, c.sliceLenString(name), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
@@ -509,13 +515,13 @@ func (c *converter) varEvaluationString(name string, global bool) string {
 }
 
 func (c *converter) sliceAssignmentString(name string, index string, value string, global bool) string {
-	
+
 	return fmt.Sprintf("eval %s_%s=\"%s\"", name, index, value)
 }
 
 func (c *converter) sliceEvaluationString(name string, index string) string {
 	return fmt.Sprintf("$(eval \"echo \\${%s_%s}\")",
-		name, 
+		name,
 		index,
 	)
 }

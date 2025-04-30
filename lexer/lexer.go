@@ -71,6 +71,7 @@ const (
 	COPY
 	READ
 	WRITE
+	PANIC
 
 	// App operators.
 	AT
@@ -183,6 +184,7 @@ var keywords = map[string]TokenType{
 	"copy":  COPY,
 	"read":  READ,
 	"write": WRITE,
+	"panic": PANIC,
 
 	// Types.
 	DATA_TYPE_BOOLEAN: DATA_TYPE,

@@ -201,7 +201,7 @@ func (c *converter) ProgramEnd() error {
 			":_stlhle",
 		)
 	}
-
+	c.addEndLine(":end")
 	c.addEndLine("endlocal")
 	return nil
 }
@@ -340,6 +340,13 @@ func (c *converter) Continue() error {
 
 func (c *converter) Print(values []string) error {
 	c.addLine(fmt.Sprintf("echo %s", escapeString(strings.Join(values, " "))))
+	return nil
+}
+
+func (c *converter) Panic(value string) error {
+	c.addLine(fmt.Sprintf("echo %s", value))
+	// TODO: Add error value.
+	c.addLine("goto :end")
 	return nil
 }
 
