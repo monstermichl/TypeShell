@@ -1,8 +1,9 @@
 package parser
 
 type StringSubscript struct {
-	value Expression
-	index Expression
+	value      Expression
+	startIndex Expression
+	endIndex   Expression
 }
 
 func (s StringSubscript) StatementType() StatementType {
@@ -17,6 +18,10 @@ func (s StringSubscript) Value() Expression {
 	return s.value
 }
 
-func (s StringSubscript) Index() Expression {
-	return s.index
+func (s StringSubscript) StartIndex() Expression {
+	return s.startIndex
+}
+
+func (s StringSubscript) EndIndex() Expression {
+	return s.endIndex
 }

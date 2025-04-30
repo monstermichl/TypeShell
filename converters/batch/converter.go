@@ -186,7 +186,8 @@ func (c *converter) ProgramEnd() error {
 
 	if c.stringSubscriptHelperRequired {
 		c.addHelper("string subscript", stringSubscriptHelper,
-			fmt.Sprintf("set \"_sub=!%s:~%%1%%,1!\"", funcArgVar(0)), // https://stackoverflow.com/a/636391
+			"set /A \"_sh=(%2-%1)+1\"",
+			fmt.Sprintf("set \"_sub=!%s:~%%1,%%_sh%%!\"", funcArgVar(0)), // https://stackoverflow.com/a/636391
 		)
 	}
 
@@ -555,11 +556,11 @@ func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
-func (c *converter) StringSubscript(value string, index string, valueUsed bool) (string, error) {
+func (c *converter) StringSubscript(value string, startIndex string, endIndex string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	c.stringSubscriptHelperRequired = true
 
-	c.callFunc(stringSubscriptHelper, []string{value}, index)
+	c.callFunc(stringSubscriptHelper, []string{value}, startIndex, endIndex)
 	c.VarAssignment(helper, c.varEvaluationString("_sub", true), false) // TODO: Is global flag even required here? Because value is already passed to function.
 
 	return c.varEvaluationString(helper, false), nil

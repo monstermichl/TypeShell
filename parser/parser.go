@@ -308,9 +308,8 @@ func incrementDecrementStatement(variable Variable, increment bool) Statement {
 				left: VariableEvaluation{
 					Variable: variable,
 				},
-				operator:  operation,
-				right:     IntegerLiteral{value: 1},
-				valueType: NewValueType(DATA_TYPE_INTEGER, false),
+				operator: operation,
+				right:    IntegerLiteral{value: 1},
 			},
 		},
 	}
@@ -2004,10 +2003,9 @@ func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperators []BinaryO
 			return nil, p.expectedError(fmt.Sprintf("valid %s operator but got \"%s\"", leftType.ToString(), operator), operatorToken)
 		}
 		return BinaryOperation{
-			left:      leftExpression,
-			operator:  operator,
-			right:     rightExpression,
-			valueType: leftExpression.ValueType(),
+			left:     leftExpression,
+			operator: operator,
+			right:    rightExpression,
 		}, nil
 	}
 	return leftExpression, nil
@@ -2308,15 +2306,15 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 	var value Expression
 	var err error
 
-	nextToken := p.peek()
+	valueToken := p.peek()
 
-	switch nextToken.Type() {
+	switch valueToken.Type() {
 	case lexer.IDENTIFIER:
 		value, err = p.evaluateVarEvaluation(ctx)
 	case lexer.STRING_LITERAL:
 		value, err = p.evaluateExpression(ctx)
 	default:
-		return nil, p.expectedError("string or variable", nextToken)
+		return nil, p.expectedError("string or variable", valueToken)
 	}
 
 	if err != nil {
@@ -2326,39 +2324,96 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 	isSlice := valueType.IsSlice()
 
 	if !isSlice && valueType.DataType() != DATA_TYPE_STRING {
-		return nil, p.expectedError("slice or string", nextToken)
+		return nil, p.expectedError("slice or string", valueToken)
 	}
-	nextToken = p.eat()
+	nextToken := p.eat()
 
 	if nextToken.Type() != lexer.OPENING_SQUARE_BRACKET {
 		return nil, p.expectedError("\"[\"", nextToken)
 	}
 	nextToken = p.peek()
-	index, err := p.evaluateExpression(ctx)
+	startToken := nextToken
+	gotRange := nextToken.Type() == lexer.COLON
+	var startIndex Expression
+
+	if gotRange {
+		p.eat()
+		startIndex = IntegerLiteral{0}
+		startToken = p.peek()
+	} else {
+		startIndex, err = p.evaluateExpression(ctx)
+	}
 
 	if err != nil {
 		return nil, err
 	}
-	indexValueType := index.ValueType()
+	startIndexValueType := startIndex.ValueType()
 
-	if !indexValueType.IsInt() {
-		return nil, p.expectedError(fmt.Sprintf("%s as index but got %s", DATA_TYPE_INTEGER, indexValueType.ToString()), nextToken)
+	if !startIndexValueType.IsInt() {
+		return nil, p.expectedError(fmt.Sprintf("%s as start-index but got %s", DATA_TYPE_INTEGER, startIndexValueType.ToString()), startToken)
 	}
-	nextToken = p.eat()
+	nextToken = p.peek()
 
-	if nextToken.Type() != lexer.CLOSING_SQUARE_BRACKET {
-		return nil, p.expectedError("\"]\"", nextToken)
+	if nextToken.Type() == lexer.COLON {
+		if gotRange {
+			return nil, p.expectedError("only one colon", nextToken)
+		}
+		p.eat()
+		gotRange = true
+	}
+
+	if gotRange && isSlice {
+		return nil, p.atError("subscript range is not supported for slices", valueToken)
+	}
+	nextToken = p.peek()
+	endToken := nextToken
+	endIndex := startIndex
+
+	if nextToken.Type() == lexer.CLOSING_SQUARE_BRACKET {
+		// If range but no end-index is provided, create one by using Len-expression.
+		if gotRange {
+			endIndex = BinaryOperation{
+				left:     Len{value},
+				operator: BINARY_OPERATOR_SUBTRACTION,
+				right:    IntegerLiteral{1},
+			}
+		}
+		p.eat() // Eat square bracket.
+	} else {
+		endIndex, err = p.evaluateExpression(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+		nextToken = p.eat()
+
+		if nextToken.Type() != lexer.CLOSING_SQUARE_BRACKET {
+			return nil, p.expectedError("\"]\"", nextToken)
+		}
+
+		// End-index is not included.
+		endIndex = BinaryOperation{
+			left:     endIndex,
+			operator: BINARY_OPERATOR_SUBTRACTION,
+			right:    IntegerLiteral{1},
+		}
+	}
+	endIndexValueType := endIndex.ValueType()
+
+	if !endIndexValueType.IsInt() {
+		return nil, p.expectedError(fmt.Sprintf("%s as stop-index but got %s", DATA_TYPE_INTEGER, endIndexValueType.ToString()), endToken)
 	}
 
 	if !isSlice {
 		return StringSubscript{
-			value: value,
-			index: index,
+			value:      value,
+			startIndex: startIndex,
+			endIndex:   endIndex,
 		}, nil
 	}
 	return SliceEvaluation{
 		value:    value,
-		index:    index,
+		index:    startIndex,
 		dataType: valueType.DataType(),
 	}, nil
 }

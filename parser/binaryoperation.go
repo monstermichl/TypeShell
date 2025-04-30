@@ -4,7 +4,6 @@ type BinaryOperation struct {
 	left      Expression
 	operator  BinaryOperator
 	right     Expression
-	valueType ValueType
 }
 
 func (b BinaryOperation) StatementType() StatementType {
@@ -12,7 +11,7 @@ func (b BinaryOperation) StatementType() StatementType {
 }
 
 func (b BinaryOperation) ValueType() ValueType {
-	return b.valueType
+	return b.left.ValueType()
 }
 
 func (b BinaryOperation) Left() Expression {

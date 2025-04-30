@@ -444,7 +444,12 @@ func (t *transpiler) evaluateSliceEvaluation(evaluation parser.SliceEvaluation, 
 }
 
 func (t *transpiler) evaluateStringSubscript(subscript parser.StringSubscript, valueUsed bool) (expressionResult, error) {
-	indexResult, err := t.evaluateIndex(subscript.Index(), true)
+	startIndexResult, err := t.evaluateIndex(subscript.StartIndex(), true)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	endIndexResult, err := t.evaluateIndex(subscript.EndIndex(), true)
 
 	if err != nil {
 		return expressionResult{}, err
@@ -455,7 +460,7 @@ func (t *transpiler) evaluateStringSubscript(subscript parser.StringSubscript, v
 	if err != nil {
 		return expressionResult{}, err
 	}
-	s, err := t.converter.StringSubscript(str.firstValue(), indexResult.firstValue(), valueUsed)
+	s, err := t.converter.StringSubscript(str.firstValue(), startIndexResult.firstValue(), endIndexResult.firstValue(), valueUsed)
 
 	if err != nil {
 		return expressionResult{}, err
