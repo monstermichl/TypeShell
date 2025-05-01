@@ -209,7 +209,7 @@ func (c *converter) Print(values []string) error {
 
 func (c *converter) Panic(value string) error {
 	c.addLine(fmt.Sprintf("echo \"%s\"", value))
-	c.addLine("return -1")
+	c.addLine("exit 1")
 	return nil
 }
 

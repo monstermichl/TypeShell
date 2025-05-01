@@ -202,7 +202,7 @@ func (c *converter) ProgramEnd() error {
 		)
 	}
 	c.addEndLine(":end")
-	c.addEndLine("endlocal")
+	c.addEndLine("endlocal & exit /B %_e%")
 	return nil
 }
 
@@ -345,7 +345,7 @@ func (c *converter) Print(values []string) error {
 
 func (c *converter) Panic(value string) error {
 	c.addLine(fmt.Sprintf("echo %s", value))
-	// TODO: Add error value.
+	c.addLine("set \"_e=1\"")
 	c.addLine("goto :end")
 	return nil
 }
