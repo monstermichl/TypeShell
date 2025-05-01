@@ -167,7 +167,7 @@ func (t *transpiler) evaluatePanic(panic parser.Panic) error {
 	if err != nil {
 		return err
 	}
-	return t.converter.Panic(result.firstValue())
+	return t.converter.Panic(fmt.Sprintf("panic: %s", result.firstValue()))
 }
 
 func (t *transpiler) evaluateWrite(write parser.Write) error {
