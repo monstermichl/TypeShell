@@ -487,12 +487,13 @@ func (c *converter) LogicalOperation(left string, operator parser.LogicalOperato
 
 	switch operator {
 	case parser.LOGICAL_OPERATOR_AND:
-		line = fmt.Sprintf("if \"%s\" equ \"%s\" if \"%s\" equ \"%s\" (%s) else %s",
+		line = fmt.Sprintf("if \"%s\" equ \"%s\" (if \"%s\" equ \"%s\" (%s) else %s) else %s",
 			left,
 			trueString,
 			right,
 			trueString,
 			trueAssignment,
+			falseAssignment,
 			falseAssignment,
 		)
 	case parser.LOGICAL_OPERATOR_OR:
