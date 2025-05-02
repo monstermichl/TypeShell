@@ -1891,23 +1891,11 @@ func (p *Parser) evaluateUnaryOperation(ctx context) (Expression, error) {
 }
 
 func (p *Parser) evaluateMultiplication(ctx context) (Expression, error) {
-	return p.evaluateBinaryOperation(ctx, BINARY_OPERATOR_MULTIPLICATION, p.evaluateUnaryOperation)
-}
-
-func (p *Parser) evaluateDivision(ctx context) (Expression, error) {
-	return p.evaluateBinaryOperation(ctx, BINARY_OPERATOR_DIVISION, p.evaluateMultiplication)
-}
-
-func (p *Parser) evaluateMModulo(ctx context) (Expression, error) {
-	return p.evaluateBinaryOperation(ctx, BINARY_OPERATOR_MODULO, p.evaluateDivision)
+	return p.evaluateBinaryOperation(ctx, []BinaryOperator{BINARY_OPERATOR_MULTIPLICATION, BINARY_OPERATOR_DIVISION, BINARY_OPERATOR_MODULO}, p.evaluateUnaryOperation)
 }
 
 func (p *Parser) evaluateAddition(ctx context) (Expression, error) {
-	return p.evaluateBinaryOperation(ctx, BINARY_OPERATOR_ADDITION, p.evaluateMModulo)
-}
-
-func (p *Parser) evaluateSubtraction(ctx context) (Expression, error) {
-	return p.evaluateBinaryOperation(ctx, BINARY_OPERATOR_SUBTRACTION, p.evaluateAddition)
+	return p.evaluateBinaryOperation(ctx, []BinaryOperator{BINARY_OPERATOR_ADDITION, BINARY_OPERATOR_SUBTRACTION}, p.evaluateMultiplication)
 }
 
 func (p *Parser) evaluateLogicalAnd(ctx context) (Expression, error) {
@@ -1983,7 +1971,7 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 
 // -----------------------------------------------------------------------------------------------
 
-func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperator BinaryOperator, higherPrioOperation func(ctx context) (Expression, error)) (Expression, error) {
+func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperators []BinaryOperator, higherPrioOperation func(ctx context) (Expression, error)) (Expression, error) {
 	if higherPrioOperation == nil {
 		return nil, errors.New("missing higher precedence callout")
 	}
@@ -1998,9 +1986,9 @@ func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperator BinaryOper
 	operatorToken := p.peek()
 	operator := operatorToken.Value()
 
-	if operatorToken.Type() == lexer.BINARY_OPERATOR && allowedOperator == operator {
+	if operatorToken.Type() == lexer.BINARY_OPERATOR && slices.Contains(allowedOperators, operator) {
 		p.eat() // Eat operator token.
-		rightExpression, err := p.evaluateBinaryOperation(ctx, allowedOperator, higherPrioOperation)
+		rightExpression, err := p.evaluateBinaryOperation(ctx, allowedOperators, higherPrioOperation)
 
 		if err != nil {
 			return nil, err
@@ -2011,7 +1999,7 @@ func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperator BinaryOper
 		if !leftType.Equals(rightType) {
 			return nil, p.expectedError(fmt.Sprintf("same binary operation types but got %s and %s", leftType.ToString(), rightType.ToString()), operatorToken)
 		}
-		allowedOperators := allowedBinaryOperators(leftType)
+		allowedOperators = allowedBinaryOperators(leftType)
 
 		if !slices.Contains(allowedOperators, operator) {
 			return nil, p.expectedError(fmt.Sprintf("valid %s operator but got \"%s\"", leftType.ToString(), operator), operatorToken)
@@ -2029,7 +2017,7 @@ func (p *Parser) evaluateComparison(ctx context) (Expression, error) {
 	// Call evaluateAddition first as it has higher precedence and higher precedence means it must
 	// be processed further down the chain. Learnt a lot about priority handling from this video
 	// https://www.youtube.com/watch?v=aAvL2BTHf60.
-	leftExpression, err := p.evaluateSubtraction(ctx)
+	leftExpression, err := p.evaluateAddition(ctx)
 
 	if err != nil {
 		return nil, err
