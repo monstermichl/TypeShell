@@ -1154,6 +1154,79 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 	return variable, nil
 }
 
+func (p *Parser) evaluateCompoundAssignment(ctx context) (Statement, error) {
+	nameTokens, err := p.evaluateVarNames()
+
+	if err != nil {
+		return nil, err
+	}
+	nameToken := nameTokens[0]
+	namesLen := len(nameTokens)
+
+	if namesLen > 1 {
+		return nil, p.expectedError("a single variable on the left side", nameToken)
+	}
+	assignToken := p.eat()
+
+	// Check assign token.
+	if assignToken.Type() != lexer.COMPOUND_ASSIGN_OPERATOR {
+		return nil, p.expectedError(`"+=", "-=", "*=", "/=" or "%="`, assignToken)
+	}
+	valuesToken := p.peek()
+	evaluatedVals, err := p.evaluateValues(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	isMultiReturnFuncCall, call := evaluatedVals.isMultiReturnFuncCall()
+	values := evaluatedVals.values
+	valuesTypes := []ValueType{}
+
+	// If it's a multi return function call evaluate how many values are returned by the function.
+	if isMultiReturnFuncCall {
+		valuesTypes = call.ReturnTypes()
+	} else {
+		for _, value := range values {
+			valuesTypes = append(valuesTypes, value.ValueType())
+		}
+	}
+	valuesTypesLen := len(valuesTypes)
+
+	if valuesTypesLen > 1 {
+		return nil, p.expectedError("a single value on the right side", valuesToken)
+	}
+	name := nameToken.Value()
+
+	// Make sure variable has been defined.
+	definedVariable, exists := ctx.findVariable(name, p.prefix, ctx.global())
+
+	if !exists {
+		return nil, p.atError(fmt.Sprintf("variable %s has not been defined", name), nameToken)
+	}
+	valueType := valuesTypes[0]
+	expectedValueType := definedVariable.ValueType()
+
+	if valueType != expectedValueType {
+		return nil, p.expectedError(fmt.Sprintf("%s but got %s", expectedValueType.ToString(), valueType.ToString()), valuesToken)
+	}
+	assignOperator := assignToken.Value()
+	binaryOperator := string(assignOperator[0])
+
+	if !slices.Contains([]BinaryOperator{BINARY_OPERATOR_ADDITION, BINARY_OPERATOR_SUBTRACTION, BINARY_OPERATOR_MULTIPLICATION, BINARY_OPERATOR_DIVISION, BINARY_OPERATOR_MODULO}, binaryOperator) {
+		return nil, p.expectedError(fmt.Sprintf(`valid compound assignment operator but got "%s"`, assignOperator), assignToken)
+	}
+	return VariableAssignment{
+		variables: []Variable{definedVariable},
+		values: []Expression{
+			BinaryOperation{
+				left:     VariableEvaluation{definedVariable},
+				operator: binaryOperator,
+				right:    values[0],
+			},
+		},
+	}, nil
+}
+
 func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
 	nameTokens, err := p.evaluateVarNames()
 
@@ -1948,6 +2021,8 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 				switch p.peekAt(1).Type() {
 				case lexer.INCREMENT_OPERATOR, lexer.DECREMENT_OPERATOR:
 					stmt, err = p.evaluateIncrementDecrement(ctx)
+				case lexer.COMPOUND_ASSIGN_OPERATOR:
+					stmt, err = p.evaluateCompoundAssignment(ctx)
 				case lexer.ASSIGN_OPERATOR, lexer.COMMA:
 					stmt, err = p.evaluateVarAssignment(ctx)
 				default:
@@ -2067,7 +2142,7 @@ func (p *Parser) evaluateLogicalOperation(ctx context, operator LogicalOperator,
 		if operatorToken.Type() != lexer.LOGICAL_OPERATOR || operatorToken.Value() != operator {
 			break
 		}
-		
+
 		if !leftExpression.ValueType().IsBool() {
 			return nil, p.expectedError("boolean value", conditionToken)
 		}

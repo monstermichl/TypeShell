@@ -112,3 +112,63 @@ func testComplexCalculationSuccess(t *testing.T, transpilerFunc transpilerFunc) 
 		require.Equal(t, strconv.Itoa((145+37*2)-18+64/4*3-(250%23+11)+7*(81-9)/6+999), output)
 	})
 }
+
+func testCompoundAssignmentAdditionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		var a = 2
+		a += 2
+
+		print(a)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "4", output)
+	})
+}
+
+func testCompoundAssignmentSubtractionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		var a = 2
+		a -= 2
+
+		print(a)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "0", output)
+	})
+}
+
+func testCompoundAssignmentMultiplicationSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		var a = 2
+		a *= 2
+
+		print(a)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "4", output)
+	})
+}
+
+func testCompoundAssignmentDivisionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		var a = 4
+		a /= 2
+
+		print(a)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "2", output)
+	})
+}
+
+func testCompoundAssignmentModuloSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		var a = 4
+		a %= 2
+
+		print(a)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "0", output)
+	})
+}

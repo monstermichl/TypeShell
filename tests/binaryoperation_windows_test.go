@@ -35,3 +35,23 @@ func TestMoreComplexCalculationWithBracketsSuccess(t *testing.T) {
 func TestComplexCalculationSuccess(t *testing.T) {
 	testComplexCalculationSuccess(t, transpileBatch)
 }
+
+func TestCompoundAssignmentAdditionSuccess(t *testing.T) {
+	testCompoundAssignmentAdditionSuccess(t, transpileBatch)
+}
+
+func TestCompoundAssignmentSubtractionSuccess(t *testing.T) {
+	testCompoundAssignmentSubtractionSuccess(t, transpileBatch)
+}
+
+func TestCompoundAssignmentMultiplicationSuccess(t *testing.T) {
+	testCompoundAssignmentMultiplicationSuccess(t, transpileBatch)
+}
+
+func TestCompoundAssignmentDivisionSuccess(t *testing.T) {
+	testCompoundAssignmentDivisionSuccess(t, transpileBatch)
+}
+
+func TestCompoundAssignmentModuloSuccess(t *testing.T) {
+	testCompoundAssignmentModuloSuccess(t, transpileBatch)
+}
