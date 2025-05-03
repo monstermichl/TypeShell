@@ -20,7 +20,7 @@ func TestDirCallSuccess(t *testing.T) {
 	})
 }
 
-func TestLsCallPipeToGrepCallSuccess(t *testing.T) {
+func TestDirCallPipeToFindstrCallSuccess(t *testing.T) {
 	transpileBatchFunc(t, func(dir string) string {
 		return `
 			` + fmt.Sprintf(`var a = @dir("/B", "%s") | @findstr(".tsh")`, dir) + `
