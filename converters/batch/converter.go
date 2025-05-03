@@ -632,7 +632,7 @@ func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) (string,
 		c.appCallHelperRequired = true
 
 		c.addLf()
-		c.callFunc(appCallHelper, []string{strings.Join(callStrings, " ^| ")})
+		c.callFunc(appCallHelper, []string{strings.Join(callStrings, " | ")})
 		c.VarAssignment(helper, c.varEvaluationString("_h", true), false)
 
 		return c.VarEvaluation(helper, valueUsed, false)
