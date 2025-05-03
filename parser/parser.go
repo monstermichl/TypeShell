@@ -2060,15 +2060,20 @@ func (p *Parser) evaluateLogicalOperation(ctx context, operator LogicalOperator,
 	if err != nil {
 		return nil, err
 	}
-	operatorToken := p.peek()
 
-	if operatorToken.Type() == lexer.LOGICAL_OPERATOR && operatorToken.Value() == operator {
+	for {
+		operatorToken := p.peek()
+
+		if operatorToken.Type() != lexer.LOGICAL_OPERATOR || operatorToken.Value() != operator {
+			break
+		}
+		
 		if !leftExpression.ValueType().IsBool() {
 			return nil, p.expectedError("boolean value", conditionToken)
 		}
 		p.eat() // Eat operator token.
 		operatorValue := operatorToken.Value()
-		rightExpression, errTemp := p.evaluateLogicalOperation(ctx, operator, higherPrioOperation)
+		rightExpression, errTemp := higherPrioOperation(ctx)
 
 		if errTemp != nil {
 			return nil, errTemp
