@@ -122,6 +122,8 @@ func (c *converter) ProgramStart() error {
 	c.addLine("@echo off")
 	c.addLine("setlocal EnableDelayedExpansion")
 	c.addLine("setlocal")
+	c.addLine("set \"_e=0\"")
+
 	return nil
 }
 
