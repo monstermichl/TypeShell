@@ -1983,12 +1983,17 @@ func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperators []BinaryO
 	if err != nil {
 		return nil, err
 	}
-	operatorToken := p.peek()
-	operator := operatorToken.Value()
 
-	if operatorToken.Type() == lexer.BINARY_OPERATOR && slices.Contains(allowedOperators, operator) {
+	// To implement associativity, use for-loop and keep appending same prio-expressions.
+	for {
+		operatorToken := p.peek()
+		operator := operatorToken.Value()
+
+		if operatorToken.Type() != lexer.BINARY_OPERATOR || !slices.Contains(allowedOperators, operator) {
+			break
+		}
 		p.eat() // Eat operator token.
-		rightExpression, err := p.evaluateBinaryOperation(ctx, allowedOperators, higherPrioOperation)
+		rightExpression, err := higherPrioOperation(ctx)
 
 		if err != nil {
 			return nil, err
@@ -1999,16 +2004,16 @@ func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperators []BinaryO
 		if !leftType.Equals(rightType) {
 			return nil, p.expectedError(fmt.Sprintf("same binary operation types but got %s and %s", leftType.ToString(), rightType.ToString()), operatorToken)
 		}
-		allowedOperators = allowedBinaryOperators(leftType)
+		allowedTypeOperators := allowedBinaryOperators(leftType)
 
-		if !slices.Contains(allowedOperators, operator) {
+		if !slices.Contains(allowedTypeOperators, operator) {
 			return nil, p.expectedError(fmt.Sprintf("valid %s operator but got \"%s\"", leftType.ToString(), operator), operatorToken)
 		}
-		return BinaryOperation{
+		leftExpression = BinaryOperation{
 			left:     leftExpression,
 			operator: operator,
 			right:    rightExpression,
-		}, nil
+		}
 	}
 	return leftExpression, nil
 }
