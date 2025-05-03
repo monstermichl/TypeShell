@@ -1,0 +1,34 @@
+package tests
+
+import (
+	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestDirCallSuccess(t *testing.T) {
+	transpileBatchFunc(t, func(dir string) string {
+		return `
+			` + fmt.Sprintf(`var a = @dir("/B", "%s")`, dir) + `
+
+			print(a)
+		`
+	}, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "test.bat\ntest.tsh", output)
+	})
+}
+
+func TestLsCallPipeToGrepCallSuccess(t *testing.T) {
+	transpileBatchFunc(t, func(dir string) string {
+		return `
+			` + fmt.Sprintf(`var a = @dir("/B", "%s") | @findstr(".tsh")`, dir) + `
+
+			print(a)
+		`
+	}, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "test.tsh", output)
+	})
+}

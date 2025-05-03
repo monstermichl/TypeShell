@@ -15,10 +15,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type sourceCallout func(dir string) string
 type compareCallout func(output string, err error)
 type transpilerFunc func(t *testing.T, source string, compare compareCallout)
 
-func transpile(t *testing.T, source string, targetFileName string, converter transpiler.Converter, compare compareCallout) {
+func transpileFunc(t *testing.T, source sourceCallout, targetFileName string, converter transpiler.Converter, compare compareCallout) {
 	trans := transpiler.New()
 	dir, err := os.MkdirTemp("", "typeshell_tests")
 
@@ -26,7 +27,7 @@ func transpile(t *testing.T, source string, targetFileName string, converter tra
 	defer os.RemoveAll(dir)
 
 	file := filepath.Join(dir, "test.tsh")
-	err = os.WriteFile(file, []byte(source), 0x777)
+	err = os.WriteFile(file, []byte(source(dir)), 0x777)
 
 	require.Nil(t, err)
 	code, err := trans.Transpile(file, converter)
@@ -48,12 +49,26 @@ func transpile(t *testing.T, source string, targetFileName string, converter tra
 	compare(outputString, err)
 }
 
+func transpile(t *testing.T, source string, targetFileName string, converter transpiler.Converter, compare compareCallout) {
+	transpileFunc(t, func(_ string) string {
+		return source
+	}, targetFileName, converter, compare)
+}
+
 func transpileBash(t *testing.T, source string, compare compareCallout) {
 	transpile(t, source, "test.sh", bash.New(), compare)
 }
 
+func transpileBashFunc(t *testing.T, source sourceCallout, compare compareCallout) {
+	transpileFunc(t, source, "test.sh", bash.New(), compare)
+}
+
 func transpileBatch(t *testing.T, source string, compare compareCallout) {
 	transpile(t, source, "test.bat", batch.New(), compare)
+}
+
+func transpileBatchFunc(t *testing.T, source sourceCallout, compare compareCallout) {
+	transpileFunc(t, source, "test.bat", batch.New(), compare)
 }
 
 func shortenError(err error) error {
