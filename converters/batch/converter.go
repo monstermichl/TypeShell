@@ -613,7 +613,11 @@ func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) (string,
 		argsCopy := call.Args()
 
 		for j, arg := range argsCopy {
-			argsCopy[j] = fmt.Sprintf("\"%s\"", arg)
+			// If argument is a variable or contains whitespaces, quote it.
+			if strings.HasPrefix(arg, "%") || len(strings.Split(arg, " ")) > 1 {
+				arg = fmt.Sprintf("\"%s\"", arg)
+			}
+			argsCopy[j] = arg
 		}
 		space := ""
 
