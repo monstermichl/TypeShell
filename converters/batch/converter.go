@@ -654,6 +654,17 @@ func (c *converter) Copy(destination string, source string, valueUsed bool, glob
 	return c.varEvaluationString("_l", true), nil
 }
 
+func (c *converter) Exists(path string, valueUsed bool) (string, error) {
+	helper := c.nextHelperVar()
+
+	c.addLine(fmt.Sprintf(`if exist "%s" (%s) else %s`,
+		path,
+		c.varAssignmentString(helper, c.BoolToString(true), false),
+		c.varAssignmentString(helper, c.BoolToString(false), false),
+	))
+	return c.VarEvaluation(helper, valueUsed, false)
+}
+
 func (c *converter) ReadFile(path string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	c.readHelperRequired = true

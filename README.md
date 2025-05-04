@@ -169,10 +169,17 @@ copy(dstSlice, srcSlice)
 ```golang
 // Reads file content.
 read(path)
+```
 
+```golang
 // Writes file content.
 write(path, contentString)
 write(path, contentString, appendBool)
+```
+
+```golang
+// Checks if a path exists.
+exists(path)
 ```
 
 ```golang

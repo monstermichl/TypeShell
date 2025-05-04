@@ -1918,6 +1918,10 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 	case lexer.COPY:
 		expr, err = p.evaluateCopy(ctx)
 
+	// Handle copy.
+	case lexer.EXISTS:
+		expr, err = p.evaluateExists(ctx)
+
 	// Handle len.
 	case lexer.LEN:
 		expr, err = p.evaluateLen(ctx)
@@ -2710,6 +2714,24 @@ func (p *Parser) evaluateCopy(ctx context) (Expression, error) {
 		return nil, err
 	}
 	return expr.(Copy), nil
+}
+
+func (p *Parser) evaluateExists(ctx context) (Expression, error) {
+	expr, err := p.evaluateBuiltInFunction(lexer.EXISTS, "exists", 1, 1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
+		path := expressions[0]
+
+		if !path.ValueType().IsString() {
+			return nil, p.expectedError("path string", keywordToken)
+		}
+		return Exists{
+			path: path,
+		}, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return expr.(Exists), nil
 }
 
 func (p *Parser) evaluateRead(ctx context) (Expression, error) {

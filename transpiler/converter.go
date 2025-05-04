@@ -94,5 +94,6 @@ type Converter interface {
 	AppCall(calls []AppCall, valueUsed bool) (string, error)
 	Input(prompt string, valueUsed bool) (string, error)
 	Copy(destination string, source string, valueUsed bool, global bool) (string, error)
+	Exists(path string, valueUsed bool) (string, error)
 	ReadFile(path string, valueUsed bool) (string, error)
 }

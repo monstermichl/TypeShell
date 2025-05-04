@@ -71,6 +71,7 @@ const (
 	PRINT
 	INPUT
 	COPY
+	EXISTS
 	READ
 	WRITE
 	PANIC
@@ -185,14 +186,15 @@ var keywords = map[string]TokenType{
 	"nil":      NIL_LITERAL,
 
 	// Builtin functions.
-	"len":   LEN,
-	"print": PRINT,
-	"echo":  PRINT,
-	"input": INPUT,
-	"copy":  COPY,
-	"read":  READ,
-	"write": WRITE,
-	"panic": PANIC,
+	"len":    LEN,
+	"print":  PRINT,
+	"echo":   PRINT,
+	"input":  INPUT,
+	"copy":   COPY,
+	"exists": EXISTS,
+	"read":   READ,
+	"write":  WRITE,
+	"panic":  PANIC,
 
 	// Types.
 	DATA_TYPE_BOOLEAN: DATA_TYPE,

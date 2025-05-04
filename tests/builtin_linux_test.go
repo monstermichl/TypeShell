@@ -1,7 +1,10 @@
 package tests
 
 import (
+	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestLenSliceSuccess(t *testing.T) {
@@ -14,6 +17,15 @@ func TestLenStringSuccess(t *testing.T) {
 
 func TestCopySuccess(t *testing.T) {
 	testCopySuccess(t, transpileBash)
+}
+
+func TestExistsSuccess(t *testing.T) {
+	transpileBashFunc(t, func(dir string) string {
+		return fmt.Sprintf(`print(exists("%s"))`, dir)
+	}, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "1", output)
+	})
 }
 
 func TestReadSuccess(t *testing.T) {
@@ -38,6 +50,20 @@ func TestLenStringInFunctionSuccess(t *testing.T) {
 
 func TestCopyInFunctionSuccess(t *testing.T) {
 	testCopyInFunctionSuccess(t, transpileBash)
+}
+
+func TestExistsInFunctionSuccess(t *testing.T) {
+	transpileBashFunc(t, func(dir string) string {
+		return `
+			func test() {
+			` + fmt.Sprintf(`print(exists("%s"))`, dir) + `
+			}
+			test()
+		`
+	}, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "1", output)
+	})
 }
 
 func TestReadInFunctionSuccess(t *testing.T) {
