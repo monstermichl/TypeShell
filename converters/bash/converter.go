@@ -401,7 +401,7 @@ func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 func (c *converter) StringSubscript(value string, startIndex string, endIndex string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
-	c.VarAssignment(helper, fmt.Sprintf("$(_ssh %s %s %s)", value, startIndex, endIndex), false) // https://www.baeldung.com/linux/bash-substring#1-using-thecut-command
+	c.VarAssignment(helper, fmt.Sprintf("$(_ssh \"%s\" %s %s)", value, startIndex, endIndex), false) // https://www.baeldung.com/linux/bash-substring#1-using-thecut-command
 	c.stringSubscriptHelperRequired = true
 
 	return c.varEvaluationString(helper, false), nil
