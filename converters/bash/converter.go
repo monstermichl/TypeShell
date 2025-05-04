@@ -558,7 +558,7 @@ func (c *converter) addLine(line string) {
 }
 
 func (c *converter) nextHelperVar() string {
-	helperVar := fmt.Sprintf("h%d", c.varCounter)
+	helperVar := fmt.Sprintf("_h%d", c.varCounter)
 	c.varCounter++
 
 	return helperVar
