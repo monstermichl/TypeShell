@@ -166,7 +166,7 @@ func (c *converter) ProgramEnd() error {
 			"call :_sllh %2", // Call slice length helper.
 			":_schl",
 			"if !_i! lss !_l! (",
-			"for /f \"delims=\" %%i in (\"%2[!_i!]\") do set \"_v=!%%i!\"",
+			"for /f \"delims=\" %%i in (\"%2_!_i!\") do set \"_v=!%%i!\"",
 			c.sliceAssignmentString("!%1!", "!_i!", "!_v!", false),
 			"set /A \"_i=!_i!+1\"",
 			"goto :_schl",
@@ -179,7 +179,7 @@ func (c *converter) ProgramEnd() error {
 		c.addHelper("slice length", sliceLengthHelper,
 			"set _l=0",
 			":_sllhl",
-			"if not defined %1[%_l%] goto :_sllhle",
+			"if not defined %1_%_l% goto :_sllhle",
 			"set /A \"_l=%_l%+1\"",
 			"goto :_sllhl",
 			":_sllhle",
@@ -534,20 +534,20 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (
 	helper := c.nextHelperVar()
 
 	// A for-loop is required because the evaluation wouldn't work with the following code as expected.
-	// It always put out "_h0[0]" instead of "4".
+	// It always put out "_h0_0" instead of "4".
 	//
 	// set a1=_h0
-	// set _h0[0]=4
-	// set x=!a1![0]
+	// set _h0_0=4
+	// set x=!a1!_0
 	// echo !x!
 	//
 	// ChatGpt (yes, I'm a bit ashamed about it but I used it) told me the following:
-	// In your Batch script, the issue arises because set x=!a1![0] does not expand !a1! before
-	// accessing [0]. Instead, it treats !a1![0] as a literal string, so x is assigned the value
-	// _h0[0], not 4. Batch scripts do not support indirect variable expansion in a straightforward
+	// In your Batch script, the issue arises because set x=!a1!_0 does not expand !a1! before
+	// accessing [0]. Instead, it treats !a1!_0 as a literal string, so x is assigned the value
+	// _h0_0, not 4. Batch scripts do not support indirect variable expansion in a straightforward
 	// way. However, you can work around this by using for /f to evaluate the variable dynamically
 	c.addLine(
-		fmt.Sprintf("for /f \"delims=\" %%%%i in (\"%s[%s]\") do set \"%s=!%%%%i!\"",
+		fmt.Sprintf("for /f \"delims=\" %%%%i in (\"%s_%s\") do set \"%s=!%%%%i!\"",
 			name, // TODO: Is global flag even required here? Because value is already passed to function.
 			index,
 			c.varName(helper, false),
@@ -781,7 +781,7 @@ func (c *converter) nextHelperVar() string {
 
 func (c *converter) sliceAssignmentString(name string, index string, value string, global bool) string {
 	// TODO: Is global flag even required here? Because value is already passed to function.
-	return fmt.Sprintf("set \"%s[%s]=%s\"", name, index, value)
+	return fmt.Sprintf("set \"%s_%s=%s\"", name, index, value)
 }
 
 func (c *converter) addLf() {
