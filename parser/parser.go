@@ -647,8 +647,17 @@ func (p *Parser) evaluateProgram() (Program, error) {
 }
 
 func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
-	nextToken := p.peek()
+	var nextToken lexer.Token
 	statementsTemp := []Statement{}
+
+	// Skip empty characters.
+	for {
+		nextToken = p.peek()
+		if !slices.Contains([]lexer.TokenType{lexer.NEWLINE}, nextToken.Type()) {
+			break
+		}
+		p.eat()
+	}
 
 	if nextToken.Type() == lexer.IMPORT {
 		p.eat()
