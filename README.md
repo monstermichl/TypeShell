@@ -3,7 +3,7 @@ TypeShell is a Go-like programming language that transpiles down to Batch or Bas
 
 ## Basics
 ### Variables
-Supported variable types are *bool*, *int* and *string*.
+Supported variable types are *bool*, *int*, *string* and *error*.
 
 ```golang
 // Variable definition with default value.
@@ -27,8 +27,12 @@ a, b := divisionWithRemainder(5, 2)
 ### Control flow
 ```golang
 // If-statement.
-if a == 5 {
+if a < 5 {
     // Do something.
+} else if > 5 {
+    // Do something.
+} else {
+    // Do something else.
 }
 ```
 
@@ -43,6 +47,11 @@ for a == 5 {
 }
 
 for i := 0; i < 5; i++ {
+    // Do something.
+}
+
+// For-range-loop (supported for slices and strings).
+for i, v := range s {
     // Do something.
 }
 ```
@@ -97,33 +106,6 @@ for i := 0; i < len(s); i++ {
 }
 ```
 
-### Operators
-```golang
-// Arithmetical operators.
-2 + 5
-2 - 5
-2 * 5
-2 / 5
-2 % 5
-```
-
-```golang
-// Compare operators.
-2 == 5
-2 != 5
-2 > 5
-2 >= 5
-2 < 5
-2 <= 5
-```
-
-```golang
-// Logical operators.
-!true
-true && true
-true || true
-```
-
 ### Programs
 ```golang
 // Programs are called by stating the program name preceded by an @.
@@ -140,26 +122,62 @@ true || true
 x := @ls("-a") | @sort()
 ```
 
+### Imports
+TypeShell does not support import of packages like Go does, but it supports single file imports. If an imported script is not a [standard "library" script](https://github.com/monstermichl/TypeShell/tree/main/std), an alias needs to be defined.
+
+```golang
+// Relative file import.
+import (
+    hp "helper.tsh"
+)
+
+hp.HelperFunc()
+```
+
+```golang
+// Standard "library" import.
+import (
+    "strings"
+)
+
+print(strings.Contains("Hello World", "World")) // Prints 1.
+```
+
 ### Builtin
 ```golang
-// Returns the length of a slice.
+// Returns the length of a slice or a string.
 len(slice)
+len(str)
 ```
 
 ```golang
 // Prints the passed arguments to stdout.
-print()
+print(arg0, arg1, ...)
 ```
 
 ```golang
 // Asks for user input.
 input()
-input("name: ")
+input(promptString)
 ```
 
 ```golang
 // Copies values from srcSlice to dstSlice. Returns the copied length.
 copy(dstSlice, srcSlice)
+```
+
+```golang
+// Reads file content.
+read(path)
+
+// Writes file content.
+write(path, contentString)
+write(path, contentString, appendBool)
+```
+
+```golang
+// Kills the program with an error.
+panic(err)
 ```
 
 ## Caveats
@@ -196,3 +214,22 @@ if err != nil {
 ### Functions
 - Functions must be defined before being used.
 - Recursions are not supported yet.
+
+### Slices
+If a slice index does not exist on assignment, it is created.
+```golang
+s := []string{}
+
+s[0] = "Hello World" // This is perfectly fine.
+```
+
+A slice's length is determined by its consecutive values.
+```golang
+s := []string{}
+
+s[0] = "Hello"
+s[1] = "World"
+s[3] = "Out of reach"
+
+print(len(s)) // Prints 2.
+```
