@@ -1212,8 +1212,8 @@ func (p *Parser) evaluateCompoundAssignment(ctx context) (Statement, error) {
 	assignOperator := assignToken.Value()
 	binaryOperator := string(assignOperator[0])
 
-	if !slices.Contains([]BinaryOperator{BINARY_OPERATOR_ADDITION, BINARY_OPERATOR_SUBTRACTION, BINARY_OPERATOR_MULTIPLICATION, BINARY_OPERATOR_DIVISION, BINARY_OPERATOR_MODULO}, binaryOperator) {
-		return nil, p.expectedError(fmt.Sprintf(`valid compound assignment operator but got "%s"`, assignOperator), assignToken)
+	if !slices.Contains(allowedBinaryOperators(valueType), binaryOperator) {
+		return nil, p.expectedError(fmt.Sprintf("valid %s compound assign operator but got \"%s\"", valueType.ToString(), assignOperator), assignToken)
 	}
 	return VariableAssignment{
 		variables: []Variable{definedVariable},
