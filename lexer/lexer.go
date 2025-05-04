@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -245,9 +246,13 @@ func Tokenize(source string) ([]Token, error) {
 				appended := false
 
 				if match := regexp.MustCompile(`^\\.`).FindString(source[i:]); match != "" {
-					// Skip escaped character.
-					str += match
+					// Convert escaped character to be a control character (https://pkg.go.dev/strconv#Unquote).
+					parsed, err := strconv.Unquote(fmt.Sprintf(`"%s"`, match))
 
+					if err != nil {
+						return nil, fmt.Errorf(`invalid escape sequence "%s"`, match)
+					}
+					str += parsed
 					i += len(match)
 					appended = true
 				} else if c0 == "\"" {

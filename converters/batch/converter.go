@@ -100,7 +100,7 @@ func (c *converter) StringToString(value string) string {
 	c.addLf()
 
 	// Replace "\n" with Batch newline value.
-	return strings.ReplaceAll(value, "\\n", "!LF!")
+	return strings.ReplaceAll(value, "\n", "!LF!")
 }
 
 func (c *converter) Dump() (string, error) {
