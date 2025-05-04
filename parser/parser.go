@@ -292,7 +292,7 @@ func defaultVarValue(valueType ValueType) (Expression, error) {
 	} else {
 		return SliceInstantiation{dataType: dataType}, nil
 	}
-	return nil, fmt.Errorf("no default value found for type %s", valueType.ToString())
+	return nil, fmt.Errorf("no default value found for type %s", valueType.String())
 }
 
 func incrementDecrementStatement(variable Variable, increment bool) Statement {
@@ -1067,7 +1067,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 
 		// If the variable already exists, make sure it has the same type as the specified type.
 		if exists && specifiedType.DataType() != DATA_TYPE_UNKNOWN && !specifiedType.Equals(variableValueType) {
-			return nil, p.atError(fmt.Sprintf("variable \"%s\" already exists but has type %s", name, variableValueType.ToString()), nextToken)
+			return nil, p.atError(fmt.Sprintf("variable \"%s\" already exists but has type %s", name, variableValueType.String()), nextToken)
 		}
 		storedName := name
 
@@ -1109,7 +1109,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 		if specifiedType.DataType() != DATA_TYPE_UNKNOWN {
 			for _, valueType := range valuesTypes {
 				if !valueType.Equals(specifiedType) {
-					return nil, p.expectedError(fmt.Sprintf("%s but got %s", specifiedType.ToString(), valueType.ToString()), nextToken)
+					return nil, p.expectedError(fmt.Sprintf("%s but got %s", specifiedType.String(), valueType.String()), nextToken)
 				}
 			}
 		}
@@ -1122,7 +1122,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 			if variableValueType.DataType() == DATA_TYPE_UNKNOWN {
 				variables[i].valueType = valueValueType // Use index here to make sure the original variable is modified, not the copy.
 			} else if !variableValueType.Equals(valueValueType) {
-				return nil, p.expectedError(fmt.Sprintf("%s but got %s for variable %s", variableValueType.ToString(), valueValueType.ToString(), variable.Name()), nextToken)
+				return nil, p.expectedError(fmt.Sprintf("%s but got %s for variable %s", variableValueType.String(), valueValueType.String(), variable.Name()), nextToken)
 			}
 		}
 
@@ -1207,13 +1207,13 @@ func (p *Parser) evaluateCompoundAssignment(ctx context) (Statement, error) {
 	expectedValueType := definedVariable.ValueType()
 
 	if valueType != expectedValueType {
-		return nil, p.expectedError(fmt.Sprintf("%s but got %s", expectedValueType.ToString(), valueType.ToString()), valuesToken)
+		return nil, p.expectedError(fmt.Sprintf("%s but got %s", expectedValueType.String(), valueType.String()), valuesToken)
 	}
 	assignOperator := assignToken.Value()
 	binaryOperator := string(assignOperator[0])
 
 	if !slices.Contains(allowedBinaryOperators(valueType), binaryOperator) {
-		return nil, p.expectedError(fmt.Sprintf("valid %s compound assign operator but got \"%s\"", valueType.ToString(), assignOperator), assignToken)
+		return nil, p.expectedError(fmt.Sprintf("valid %s compound assign operator but got \"%s\"", valueType.String(), assignOperator), assignToken)
 	}
 	return VariableAssignment{
 		variables: []Variable{definedVariable},
@@ -1278,7 +1278,7 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
 		expectedValueType := definedVariable.ValueType()
 
 		if valueType != expectedValueType {
-			return nil, p.expectedError(fmt.Sprintf("%s but got %s", expectedValueType.ToString(), valueType.ToString()), valuesToken)
+			return nil, p.expectedError(fmt.Sprintf("%s but got %s", expectedValueType.String(), valueType.String()), valuesToken)
 		}
 		variables = append(variables, NewVariable(name, valueType, ctx.global(), isPublic(name)))
 	}
@@ -1455,7 +1455,7 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 						returnValueType := returnValue.ValueType()
 
 						if !returnValueType.Equals(returnType) {
-							errTemp = fmt.Errorf("function \"%s\" returns %s but expects %s", name, returnValueType.ToString(), returnType.ToString())
+							errTemp = fmt.Errorf("function \"%s\" returns %s but expects %s", name, returnValueType.String(), returnType.String())
 							break
 						}
 					}
@@ -2093,12 +2093,12 @@ func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperators []BinaryO
 		rightType := rightExpression.ValueType()
 
 		if !leftType.Equals(rightType) {
-			return nil, p.expectedError(fmt.Sprintf("same binary operation types but got %s and %s", leftType.ToString(), rightType.ToString()), operatorToken)
+			return nil, p.expectedError(fmt.Sprintf("same binary operation types but got %s and %s", leftType.String(), rightType.String()), operatorToken)
 		}
 		allowedTypeOperators := allowedBinaryOperators(leftType)
 
 		if !slices.Contains(allowedTypeOperators, operator) {
-			return nil, p.expectedError(fmt.Sprintf("valid %s operator but got \"%s\"", leftType.ToString(), operator), operatorToken)
+			return nil, p.expectedError(fmt.Sprintf("valid %s operator but got \"%s\"", leftType.String(), operator), operatorToken)
 		}
 		leftExpression = BinaryOperation{
 			left:     leftExpression,
@@ -2132,12 +2132,12 @@ func (p *Parser) evaluateComparison(ctx context) (Expression, error) {
 		rightType := rightExpression.ValueType()
 
 		if !leftType.Equals(rightType) {
-			return nil, p.expectedError(fmt.Sprintf("same comparison types but got %s and %s", leftType.DataType(), rightType.ToString()), operatorToken)
+			return nil, p.expectedError(fmt.Sprintf("same comparison types but got %s and %s", leftType.DataType(), rightType.String()), operatorToken)
 		}
 		allowedOperators := allowedCompareOperators(leftType)
 
 		if !slices.Contains(allowedOperators, operator) {
-			return nil, p.expectedError(fmt.Sprintf("valid %s operator but got \"%s\"", leftType.ToString(), operator), operatorToken)
+			return nil, p.expectedError(fmt.Sprintf("valid %s operator but got \"%s\"", leftType.String(), operator), operatorToken)
 		}
 		return NewComparison(leftExpression, operator, rightExpression), nil
 	}
@@ -2223,7 +2223,7 @@ func (p *Parser) evaluateArguments(typeName string, name string, params []Variab
 			lastArgType := expr.ValueType()
 
 			if !lastParamType.Equals(lastArgType) {
-				return nil, p.expectedError(fmt.Sprintf("parameter %s (%s) but got %s", lastParamType.ToString(), param.Name(), lastArgType.ToString()), argToken)
+				return nil, p.expectedError(fmt.Sprintf("parameter %s (%s) but got %s", lastParamType.String(), param.Name(), lastArgType.String()), argToken)
 			}
 		}
 		nextToken = p.peek()
@@ -2355,7 +2355,7 @@ func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
 		return nil, err
 	}
 	if !sliceValueType.IsSlice() {
-		return nil, p.expectedError(fmt.Sprintf("slice type but got %s", sliceValueType.ToString()), nextToken)
+		return nil, p.expectedError(fmt.Sprintf("slice type but got %s", sliceValueType.String()), nextToken)
 	}
 	nextToken = p.eat()
 
@@ -2379,7 +2379,7 @@ func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
 			sliceElementValueType.isSlice = false
 
 			if !valueDataType.Equals(sliceElementValueType) {
-				return nil, p.atError(fmt.Sprintf("%s cannot not be added to %s", valueDataType.ToString(), sliceElementValueType.ToString()), valueToken)
+				return nil, p.atError(fmt.Sprintf("%s cannot not be added to %s", valueDataType.String(), sliceElementValueType.String()), valueToken)
 			}
 			values = append(values, expr)
 			nextToken = p.peek()
@@ -2453,7 +2453,7 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 	startIndexValueType := startIndex.ValueType()
 
 	if !startIndexValueType.IsInt() {
-		return nil, p.expectedError(fmt.Sprintf("%s as start-index but got %s", DATA_TYPE_INTEGER, startIndexValueType.ToString()), startToken)
+		return nil, p.expectedError(fmt.Sprintf("%s as start-index but got %s", DATA_TYPE_INTEGER, startIndexValueType.String()), startToken)
 	}
 	nextToken = p.peek()
 
@@ -2504,7 +2504,7 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 	endIndexValueType := endIndex.ValueType()
 
 	if !endIndexValueType.IsInt() {
-		return nil, p.expectedError(fmt.Sprintf("%s as stop-index but got %s", DATA_TYPE_INTEGER, endIndexValueType.ToString()), endToken)
+		return nil, p.expectedError(fmt.Sprintf("%s as stop-index but got %s", DATA_TYPE_INTEGER, endIndexValueType.String()), endToken)
 	}
 
 	if !isSlice {
@@ -2536,7 +2536,7 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 	variableValueType := variable.ValueType()
 
 	if !variableValueType.IsSlice() {
-		return nil, p.expectedError(fmt.Sprintf("slice but variable is of type %s", variableValueType.ToString()), nameToken)
+		return nil, p.expectedError(fmt.Sprintf("slice but variable is of type %s", variableValueType.String()), nameToken)
 	}
 	nextToken := p.eat()
 
@@ -2552,7 +2552,7 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 	indexValueType := index.ValueType()
 
 	if !indexValueType.IsInt() {
-		return nil, p.expectedError(fmt.Sprintf("%s as index but got %s", DATA_TYPE_INTEGER, indexValueType.ToString()), nextToken)
+		return nil, p.expectedError(fmt.Sprintf("%s as index but got %s", DATA_TYPE_INTEGER, indexValueType.String()), nextToken)
 	}
 	nextToken = p.eat()
 
@@ -2598,7 +2598,7 @@ func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
 	valueType := definedVariable.ValueType()
 
 	if !valueType.IsInt() {
-		return nil, p.expectedError(fmt.Sprintf("%s but got %s", NewValueType(DATA_TYPE_INTEGER, false).ToString(), valueType.ToString()), identifierToken)
+		return nil, p.expectedError(fmt.Sprintf("%s but got %s", NewValueType(DATA_TYPE_INTEGER, false).String(), valueType.String()), identifierToken)
 	}
 	operationToken := p.eat()
 	increment := true
@@ -2686,7 +2686,7 @@ func (p *Parser) evaluateCopy(ctx context) (Expression, error) {
 		} else if !srcType.IsSlice() {
 			return nil, p.expectedError("slice as second argument", keywordToken)
 		} else if !dstType.Equals(srcType) {
-			return nil, p.atError(fmt.Sprintf("got %s as destination but %s as source", dstType.ToString(), srcType.ToString()), keywordToken)
+			return nil, p.atError(fmt.Sprintf("got %s as destination but %s as source", dstType.String(), srcType.String()), keywordToken)
 		}
 		dstSlice := dst.(VariableEvaluation)
 

@@ -175,7 +175,7 @@ func (t *transpiler) evaluateWrite(write parser.Write) error {
 	valueType := path.ValueType()
 
 	if !valueType.IsString() {
-		return fmt.Errorf("expected string but got %s as read path", valueType.ToString())
+		return fmt.Errorf("expected string but got %s as read path", valueType.String())
 	}
 	result, err := t.evaluateExpression(path, true)
 
@@ -187,7 +187,7 @@ func (t *transpiler) evaluateWrite(write parser.Write) error {
 	valueType = data.ValueType()
 
 	if !valueType.IsString() {
-		return fmt.Errorf("expected string but got %s as data", valueType.ToString())
+		return fmt.Errorf("expected string but got %s as data", valueType.String())
 	}
 	result, err = t.evaluateExpression(data, true)
 
@@ -203,7 +203,7 @@ func (t *transpiler) evaluateWrite(write parser.Write) error {
 		valueType = append.ValueType()
 
 		if !valueType.IsBool() {
-			return fmt.Errorf("expected bool but got %s as append flag", valueType.ToString())
+			return fmt.Errorf("expected bool but got %s as append flag", valueType.String())
 		}
 		result, err = t.evaluateExpression(append, true)
 
@@ -679,7 +679,7 @@ func (t *transpiler) evaluateRead(read parser.Read, valueUsed bool) (expressionR
 	valueType := path.ValueType()
 
 	if !valueType.IsString() {
-		return expressionResult{}, fmt.Errorf("expected string but got %s as read path", valueType.ToString())
+		return expressionResult{}, fmt.Errorf("expected string but got %s as read path", valueType.String())
 	}
 	result, err := t.evaluateExpression(path, true)
 

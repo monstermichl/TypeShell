@@ -247,7 +247,7 @@ func (c *converter) UnaryOperation(expr string, operator parser.UnaryOperator, v
 func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	notAllowedError := func() (string, error) {
-		return "", fmt.Errorf("binary operation %s is not allowed on type %s", operator, valueType.ToString())
+		return "", fmt.Errorf("binary operation %s is not allowed on type %s", operator, valueType.String())
 	}
 
 	if valueType.IsSlice() {
@@ -318,7 +318,7 @@ func (c *converter) Comparison(left string, operator parser.CompareOperator, rig
 	}
 
 	if len(operatorString) == 0 {
-		return "", fmt.Errorf("comparison %s is not allowed on type %s", operator, valueType.ToString())
+		return "", fmt.Errorf("comparison %s is not allowed on type %s", operator, valueType.String())
 	}
 	helper := c.nextHelperVar()
 

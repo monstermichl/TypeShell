@@ -29,7 +29,7 @@ func (vt ValueType) IsSlice() bool {
 	return vt.isSlice
 }
 
-func (vt ValueType) ToString() string {
+func (vt ValueType) String() string {
 	s := string(vt.dataType)
 
 	if vt.isSlice {
