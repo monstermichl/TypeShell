@@ -214,8 +214,10 @@ func (c *converter) Panic(value string) error {
 }
 
 func (c *converter) WriteFile(path string, content string, append string) error {
-	// TODO: Consider append.
-	c.addLine(fmt.Sprintf("echo \"%s\" %s %s", content, ">", path))
+	helper := c.nextHelperVar()
+
+	c.VarAssignment(helper, fmt.Sprintf(`$(if [ "%s" -eq "%s" ]; then echo ">>"; else echo ">"; fi)`, append, c.BoolToString(true)), false)
+	c.addLine(fmt.Sprintf(`eval "echo \"%s\" %s %s"`, content, c.varEvaluationString(helper, false), path))
 	return nil
 }
 

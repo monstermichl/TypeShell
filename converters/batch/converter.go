@@ -130,12 +130,11 @@ func (c *converter) ProgramStart() error {
 func (c *converter) ProgramEnd() error {
 	if c.fileWriteHelperRequired {
 		c.addHelper("file write", fileWriteHelper,
-			"set _a=",
+			`set "_a=>"`,
+			fmt.Sprintf(`if "%%2" equ "%s" set "_a=>>"`, c.BoolToString(true)),
 			fmt.Sprintf("for /f \"delims=\" %%%%i in (\"!%s!\") do (", funcArgVar(0)),
-			"if defined _a (echo %%i >> %~1) else (",
-			"echo %%i > %~1",
-			"set _a=1",
-			")",
+			"echo %%i%_a% %~1",
+			`set "_a=>>"`,
 			")",
 		)
 	}
@@ -354,10 +353,10 @@ func (c *converter) Panic(value string) error {
 
 func (c *converter) WriteFile(path string, content string, append string) error {
 	c.fileWriteHelperRequired = true
-	// TODO: Consider append.
+
 	// Use global variable to pass content to write file helper because Batch doesn't
 	// support newline passing because it splits arguments at newlines.
-	c.callFunc(fileWriteHelper, []string{content}, path)
+	c.callFunc(fileWriteHelper, []string{content}, path, append)
 
 	return nil
 }

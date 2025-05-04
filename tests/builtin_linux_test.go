@@ -36,6 +36,10 @@ func TestWriteSuccess(t *testing.T) {
 	testWriteSuccess(t, transpileBash)
 }
 
+func TestWriteAppendSuccess(t *testing.T) {
+	testWriteAppendSuccess(t, transpileBash)
+}
+
 func TestPanicSuccess(t *testing.T) {
 	testPanicSuccess(t, transpileBash)
 }

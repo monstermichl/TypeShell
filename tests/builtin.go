@@ -76,6 +76,22 @@ func testWriteSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	})
 }
 
+func testWriteAppendSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	file := "read-test.txt"
+	content := "Hello Moon"
+	defer os.Remove(file)
+
+	transpilerFunc(t, `
+		`+fmt.Sprintf(`write("%s", "%s")`, file, content)+`
+		`+fmt.Sprintf(`write("%s", "%s", true)`, file, content)+`
+		`+fmt.Sprintf(`a := read("%s")`, file)+`
+		print(a)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, fmt.Sprintf("%s\n%s", content, content), output)
+	})
+}
+
 func testPanicSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		var a = 1
