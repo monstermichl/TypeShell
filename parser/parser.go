@@ -1652,46 +1652,62 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		if nextToken.Type() != lexer.RANGE {
 			return nil, p.expectedError("range-keyword", nextToken)
 		}
-
-		// To make transpilation easier, only allow a variable-identifier here instead of an expression.
-		// This is necessary to have an identifier for the slice for converting the for-range-loop into
-		// a for-loop.
-		// sliceIdentifierToken := p.eat()
-		// err = p.checkNewVariableNameToken(sliceIdentifierToken, ctx)
 		nextToken := p.peek()
-		sliceExpression, err := p.evaluateExpression(ctx)
+		iterableExpression, err := p.evaluateExpression(ctx)
 
 		if err != nil {
 			return nil, err
 		}
-		// sliceName := sliceIdentifierToken.Value()
-		// sliceVariable := ctx.variables[sliceName]
-
-		if !sliceExpression.ValueType().isSlice {
-			return nil, p.expectedError("slice", nextToken)
-		}
-		sliceValueType := sliceExpression.ValueType()
+		iterableValueType := iterableExpression.ValueType()
 		indexVar := NewVariable(indexVarName, NewValueType(DATA_TYPE_INTEGER, false), false, false)
-		valueVar := NewVariable(valueVarName, sliceValueType, false, false)
+		var iterableEvaluation Expression
+
+		if iterableValueType.IsSlice() {
+			iterableEvaluation = SliceEvaluation{
+				value:    iterableExpression,
+				index:    VariableEvaluation{indexVar},
+				dataType: iterableValueType.DataType(),
+			}
+		} else if iterableValueType.IsString() {
+			iterableEvaluation = StringSubscript{
+				value:      iterableExpression,
+				startIndex: VariableEvaluation{indexVar},
+			}
+		} else {
+			return nil, p.expectedError("slice or string", nextToken)
+		}
+		valueVar := NewVariable(valueVarName, iterableValueType, false, false)
 
 		// Add block variables.
-		ctx.variables[indexVarName] = indexVar // TODO: Use context functions.
-		ctx.variables[valueVarName] = valueVar
+		ctx.addVariables(p.prefix, false, indexVar, valueVar)
 
+		init := VariableAssignment{
+			variables: []Variable{indexVar},
+			values:    []Expression{IntegerLiteral{0}},
+		}
+		condition := Comparison{
+			left:     VariableEvaluation{indexVar},
+			operator: COMPARE_OPERATOR_LESS,
+			right:    Len{iterableExpression},
+		}
+		increment := incrementDecrementStatement(indexVar, true)
+		forRangeStatements := []Statement{
+			VariableAssignment{
+				variables: []Variable{valueVar},
+				values:    []Expression{iterableEvaluation},
+			},
+		}
 		statements, err := p.evaluateBlock(nil, ctx, SCOPE_FOR)
-
-		// Remove block variables.
-		delete(ctx.variables, indexVarName)
-		delete(ctx.variables, valueVarName)
 
 		if err != nil {
 			return nil, err
 		}
-		stmt = ForRange{
-			indexVar: indexVar,
-			valueVar: valueVar,
-			slice:    sliceExpression,
-			body:     statements,
+
+		stmt = For{
+			init:      init,
+			condition: condition,
+			increment: increment,
+			body:      append(forRangeStatements, statements...),
 		}
 	} else {
 		var init Statement

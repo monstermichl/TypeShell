@@ -118,26 +118,58 @@ func testForWithSeparateCountingVariableAndSepareteConditionAndSeparateIncrement
 
 func testForWithNoConditionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
-		func test() {
-			i := 0
+		i := 0
 
-			for {
-				if i >= 2 {
-					break
-				}
-				print("ok")
-				i++
+		for {
+			if i >= 2 {
+				break
 			}
+			print("ok")
+			i++
 		}
-		test()
 	`, func(output string, err error) {
 		require.Nil(t, err)
 		require.Equal(t, "ok\nok", output)
 	})
 }
 
+func testForRangeSliceSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		s := []string{"2", "1", "0"}
 
+		for i, v := range s {
+			print(i, v)
+		}
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "0 2\n1 1\n2 0", output)
+	})
+}
 
+func testForRangeStringSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		s := "test"
+
+		for i, v := range s {
+			print(i, v)
+		}
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "0 t\n1 e\n2 s\n3 t", output)
+	})
+}
+
+func testForRangeNonIterableFail(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		s := 2
+
+		for i, v := range s {
+			print(i, v)
+		}
+	`, func(output string, err error) {
+		require.EqualError(t, shortenError(err), "expected slice or string")
+	})
+}
 
 func testForComparisonInFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
@@ -290,5 +322,37 @@ func testForWithNoConditionInFunctionSuccess(t *testing.T, transpilerFunc transp
 	`, func(output string, err error) {
 		require.Nil(t, err)
 		require.Equal(t, "ok\nok", output)
+	})
+}
+
+func testForRangeSliceInFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		func test() {
+			s := []string{"2", "1", "0"}
+
+			for i, v := range s {
+				print(i, v)
+			}
+		}
+		test()
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "0 2\n1 1\n2 0", output)
+	})
+}
+
+func testForRangeStringInFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		func test() {
+			s := "test"
+
+			for i, v := range s {
+				print(i, v)
+			}
+		}
+		test()
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "0 t\n1 e\n2 s\n3 t", output)
 	})
 }

@@ -23,5 +23,11 @@ func (s StringSubscript) StartIndex() Expression {
 }
 
 func (s StringSubscript) EndIndex() Expression {
-	return s.endIndex
+	endIndex := s.endIndex
+
+	// Automatically define end-index.
+	if endIndex == nil {
+		endIndex = s.startIndex
+	}
+	return endIndex
 }

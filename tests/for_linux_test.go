@@ -40,6 +40,18 @@ func TestForWithNoConditionSuccess(t *testing.T) {
 	testForWithNoConditionSuccess(t, transpileBash)
 }
 
+func TestForRangeSliceSuccess(t *testing.T) {
+	testForRangeSliceSuccess(t, transpileBash)
+}
+
+func TestForRangeStringSuccess(t *testing.T) {
+	testForRangeStringSuccess(t, transpileBash)
+}
+
+func TestForRangeNonIterableFail(t *testing.T) {
+	testForRangeNonIterableFail(t, transpileBash)
+}
+
 func TestForComparisonInFunctionSuccess(t *testing.T) {
 	testForComparisonInFunctionSuccess(t, transpileBash)
 }
@@ -74,4 +86,12 @@ func TestForWithSeparateCountingVariableAndSepareteConditionAndSeparateIncrement
 
 func TestForWithNoConditionInFunctionSuccess(t *testing.T) {
 	testForWithNoConditionInFunctionSuccess(t, transpileBash)
+}
+
+func TestForRangeSliceInFunctionSuccess(t *testing.T) {
+	testForRangeSliceInFunctionSuccess(t, transpileBash)
+}
+
+func TestForRangeStringInFunctionSuccess(t *testing.T) {
+	testForRangeStringInFunctionSuccess(t, transpileBash)
 }
