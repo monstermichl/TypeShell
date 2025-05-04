@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -10,7 +11,7 @@ import (
 func TestDirCallSuccess(t *testing.T) {
 	transpileBatchFunc(t, func(dir string) string {
 		return `
-			` + fmt.Sprintf(`var a = @dir("/B", "%s")`, dir) + `
+			` + fmt.Sprintf(`var a = @dir("/B", "%s")`, strings.ReplaceAll(dir, `\`, `\\`)) + `
 
 			print(a)
 		`
@@ -23,7 +24,7 @@ func TestDirCallSuccess(t *testing.T) {
 func TestDirCallPipeToFindstrCallSuccess(t *testing.T) {
 	transpileBatchFunc(t, func(dir string) string {
 		return `
-			` + fmt.Sprintf(`var a = @dir("/B", "%s") | @findstr(".tsh")`, dir) + `
+			` + fmt.Sprintf(`var a = @dir("/B", "%s") | @findstr(".tsh")`, strings.ReplaceAll(dir, `\`, `\\`)) + `
 
 			print(a)
 		`
