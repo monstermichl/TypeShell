@@ -65,9 +65,11 @@ const (
 	ELSE
 	FOR
 	RANGE
-	LEN
 	BREAK
 	CONTINUE
+
+	// Builtin functions.
+	LEN
 	PRINT
 	INPUT
 	COPY
