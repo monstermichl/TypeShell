@@ -183,6 +183,11 @@ exists(path)
 ```
 
 ```golang
+// Converts an integer to a string.
+itoa(str)
+```
+
+```golang
 // Kills the program with an error.
 panic(err)
 ```
