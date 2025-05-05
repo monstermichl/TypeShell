@@ -19,6 +19,7 @@ type converter struct {
 	startCode                     []string
 	code                          []string
 	varCounter                    int
+	forCounter                    int
 	funcs                         []funcInfo
 	funcCounter                   int
 	sliceLenHelperRequired        bool
@@ -182,6 +183,17 @@ func (c *converter) ForStart() error {
 	return nil
 }
 
+func (c *converter) ForIncrementStart() error {
+	c.addLine(fmt.Sprintf(`if [ ! -z ${%s+x} ]; then`, c.mustCurrentForVar())) // https://stackoverflow.com/a/13864829
+	return nil
+}
+
+func (c *converter) ForIncrementEnd() error {
+	c.addLine("fi")
+	c.addLine(fmt.Sprintf(`%s=1`, c.mustCurrentForVar()))
+	return nil
+}
+
 func (c *converter) ForCondition(condition string) error {
 	c.addLine(fmt.Sprintf("if [ %s -ne %s ]; then break; fi", condition, c.BoolToString(true)))
 	return nil
@@ -189,6 +201,8 @@ func (c *converter) ForCondition(condition string) error {
 
 func (c *converter) ForEnd() error {
 	c.addLine("done")
+	c.forCounter++
+
 	return nil
 }
 
@@ -517,6 +531,10 @@ func (c *converter) ReadFile(path string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	c.VarAssignment(helper, fmt.Sprintf("$(cat \"%s\")", path), false)
 	return c.VarEvaluation(helper, valueUsed, false)
+}
+
+func (c *converter) mustCurrentForVar() string {
+	return fmt.Sprintf("_fv%d", c.forCounter)
 }
 
 func (c *converter) varName(name string, global bool) string {

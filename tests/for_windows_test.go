@@ -40,6 +40,10 @@ func TestForWithNoConditionSuccess(t *testing.T) {
 	testForWithNoConditionSuccess(t, transpileBatch)
 }
 
+func TestForContinueSuccess(t *testing.T) {
+	testForContinueSuccess(t, transpileBatch)
+}
+
 func TestForRangeSliceSuccess(t *testing.T) {
 	testForRangeSliceSuccess(t, transpileBatch)
 }

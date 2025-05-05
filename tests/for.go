@@ -133,6 +133,20 @@ func testForWithNoConditionSuccess(t *testing.T, transpilerFunc transpilerFunc) 
 	})
 }
 
+func testForContinueSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		for i := 1; i <= 4; i++ {
+			if i % 2 != 0 {
+				continue
+			}
+			print(i)
+		}
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "2\n4", output)
+	})
+}
+
 func testForRangeSliceSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		s := []string{"2", "1", "0"}

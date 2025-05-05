@@ -1,7 +1,6 @@
 package batch
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -42,7 +41,7 @@ type converter struct {
 	endCode                       []string
 	varCounter                    int
 	ifCounter                     int
-	whileCounter                  int
+	forCounter                    int
 	endLabels                     []string
 	funcs                         []funcInfo
 	funcCounter                   int
@@ -68,6 +67,10 @@ func returnValVar(subscript int) string {
 
 func funcArgVar(subscript int) string {
 	return fmt.Sprintf("_fa%d", subscript)
+}
+
+func forLabel(count int) string {
+	return fmt.Sprintf(":_f%d", count)
 }
 
 func escapeString(s string) string {
@@ -301,12 +304,23 @@ func (c *converter) ElseEnd() error {
 }
 
 func (c *converter) ForStart() error {
-	label := c.nextWhileLabel()
+	label := c.nextForLabel()
 	c.nextEndLabel()
 	c.fors = append(c.fors, forInfo{
 		label: label,
 	})
 	c.addLine(label)
+	return nil
+}
+
+func (c *converter) ForIncrementStart() error {
+	c.addLine(fmt.Sprintf(`if defined %s (`, c.mustCurrentForVar()))
+	return nil
+}
+
+func (c *converter) ForIncrementEnd() error {
+	c.addLine(")")
+	c.addLine(fmt.Sprintf(`set "%s=1"`, c.mustCurrentForVar()))
 	return nil
 }
 
@@ -336,7 +350,8 @@ func (c *converter) Break() error {
 }
 
 func (c *converter) Continue() error {
-	return errors.New("continue has not been implemented yet")
+	c.addLine(fmt.Sprintf("goto %s", c.mustCurrentForLabel()))
+	return nil
 }
 
 func (c *converter) Print(values []string) error {
@@ -723,9 +738,17 @@ func (c *converter) addEndLine(line string) {
 	c.endCode = append(c.endCode, line)
 }
 
-func (c *converter) nextWhileLabel() string {
-	label := fmt.Sprintf(":_w%d", c.whileCounter)
-	c.whileCounter++
+func (c *converter) mustCurrentForLabel() string {
+	return forLabel(c.forCounter - 1)
+}
+
+func (c *converter) mustCurrentForVar() string {
+	return fmt.Sprintf("_fv%d", c.forCounter-1)
+}
+
+func (c *converter) nextForLabel() string {
+	label := forLabel(c.forCounter)
+	c.forCounter++
 
 	return label
 }

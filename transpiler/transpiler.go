@@ -139,11 +139,11 @@ func (t *transpiler) evaluateLogicalOperation(operation parser.LogicalOperation,
 	return t.evaluateOperation(operation, t.converter.LogicalOperation, valueUsed)
 }
 
-func (t *transpiler) evaluateBreak(print parser.Break) error {
+func (t *transpiler) evaluateBreak() error {
 	return t.converter.Break()
 }
 
-func (t *transpiler) evaluateContinue(print parser.Continue) error {
+func (t *transpiler) evaluateContinue() error {
 	return t.converter.Continue()
 }
 
@@ -299,6 +299,25 @@ func (t *transpiler) evaluateFor(forStatement parser.For) error {
 	if err != nil {
 		return err
 	}
+	increment := forStatement.Increment()
+
+	if increment != nil {
+		err = conv.ForIncrementStart()
+
+		if err != nil {
+			return err
+		}
+		err = t.evaluate(increment)
+
+		if err != nil {
+			return err
+		}
+		err = conv.ForIncrementEnd()
+
+		if err != nil {
+			return err
+		}
+	}
 	result, err := t.evaluateExpression(forStatement.Condition(), true)
 
 	if err != nil {
@@ -313,15 +332,6 @@ func (t *transpiler) evaluateFor(forStatement parser.For) error {
 
 	if err != nil {
 		return err
-	}
-	increment := forStatement.Increment()
-
-	if increment != nil {
-		err = t.evaluate(increment)
-
-		if err != nil {
-			return err
-		}
 	}
 	return conv.ForEnd()
 }
@@ -746,9 +756,9 @@ func (t *transpiler) evaluate(statement parser.Statement) error {
 	case parser.STATEMENT_TYPE_FOR:
 		return t.evaluateFor(statement.(parser.For))
 	case parser.STATEMENT_TYPE_BREAK:
-		return t.evaluateBreak(statement.(parser.Break))
+		return t.evaluateBreak()
 	case parser.STATEMENT_TYPE_CONTINUE:
-		return t.evaluateContinue(statement.(parser.Continue))
+		return t.evaluateContinue()
 	case parser.STATEMENT_TYPE_PRINT:
 		return t.evaluatePrint(statement.(parser.Print))
 	case parser.STATEMENT_TYPE_PANIC:

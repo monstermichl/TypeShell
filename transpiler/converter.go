@@ -69,6 +69,8 @@ type Converter interface {
 	ElseStart() error
 	ElseEnd() error
 	ForStart() error
+	ForIncrementStart() error
+	ForIncrementEnd() error
 	ForCondition(condition string) error
 	ForEnd() error
 	Break() error
