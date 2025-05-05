@@ -718,6 +718,11 @@ func (c *converter) ifStart(condition string, startAddition string) error {
 }
 
 func (c *converter) addLine(line string) {
+	// Make sure code within if-, for- and function-blocks gets indented to avoid label issues... (https://github.com/monstermichl/TypeShell/issues/25).
+	if len(c.ifs) > 0 || len(c.fors) > 0 || len(c.funcs) > 0 {
+		line = fmt.Sprintf(" %s", line)
+	}
+
 	if c.inFunction() {
 		currFunc := c.mustCurrentFuncInfo()
 		currFuncName := currFunc.name
