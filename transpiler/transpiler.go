@@ -652,6 +652,17 @@ func (t *transpiler) evaluateCopy(copy parser.Copy, valueUsed bool) (expressionR
 	}, nil
 }
 
+func (t *transpiler) evaluateItoa(itoa parser.Itoa, valueUsed bool) (expressionResult, error) {
+	result, err := t.evaluateExpression(itoa.Value(), true)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	return expressionResult{
+		values: []string{result.firstValue()},
+	}, nil
+}
+
 func (t *transpiler) evaluateExists(exists parser.Exists, valueUsed bool) (expressionResult, error) {
 	expr, err := t.evaluateExpression(exists.Path(), true)
 
@@ -793,6 +804,8 @@ func (t *transpiler) evaluateExpression(expression parser.Expression, valueUsed 
 		return t.evaluateCopy(expression.(parser.Copy), valueUsed)
 	case parser.STATEMENT_TYPE_EXISTS:
 		return t.evaluateExists(expression.(parser.Exists), valueUsed)
+	case parser.STATEMENT_TYPE_ITOA:
+		return t.evaluateItoa(expression.(parser.Itoa), valueUsed)
 	case parser.STATEMENT_TYPE_LEN:
 		return t.evaluateLen(expression.(parser.Len), valueUsed)
 	case parser.STATEMENT_TYPE_READ:

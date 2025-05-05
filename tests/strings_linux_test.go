@@ -31,3 +31,7 @@ func TestStringRangeSubscriptSuccess(t *testing.T) {
 func TestStringRangeNoIndicesSubscriptSuccess(t *testing.T) {
 	testStringRangeNoIndicesSubscriptSuccess(t, transpileBash)
 }
+
+func TestItoaSuccess(t *testing.T) {
+	testItoaSuccess(t, transpileBash)
+}

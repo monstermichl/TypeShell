@@ -84,3 +84,12 @@ func testStringRangeNoIndicesSubscriptSuccess(t *testing.T, transpilerFunc trans
 		require.Equal(t, "test"[:], output)
 	})
 }
+
+func testItoaSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		print("Hello World " + itoa(24))
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "Hello World 24", output)
+	})
+}

@@ -1918,7 +1918,11 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 	case lexer.COPY:
 		expr, err = p.evaluateCopy(ctx)
 
-	// Handle copy.
+	// Handle itoa.
+	case lexer.ITOA:
+		expr, err = p.evaluateItoa(ctx)
+
+	// Handle exists.
 	case lexer.EXISTS:
 		expr, err = p.evaluateExists(ctx)
 
@@ -2714,6 +2718,24 @@ func (p *Parser) evaluateCopy(ctx context) (Expression, error) {
 		return nil, err
 	}
 	return expr.(Copy), nil
+}
+
+func (p *Parser) evaluateItoa(ctx context) (Expression, error) {
+	expr, err := p.evaluateBuiltInFunction(lexer.ITOA, "itoa", 1, 1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
+		value := expressions[0]
+
+		if !value.ValueType().IsInt() {
+			return nil, p.expectedError("integer", keywordToken)
+		}
+		return Itoa{
+			value: value,
+		}, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return expr.(Itoa), nil
 }
 
 func (p *Parser) evaluateExists(ctx context) (Expression, error) {

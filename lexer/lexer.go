@@ -71,6 +71,7 @@ const (
 	PRINT
 	INPUT
 	COPY
+	ITOA
 	EXISTS
 	READ
 	WRITE
@@ -191,6 +192,7 @@ var keywords = map[string]TokenType{
 	"echo":   PRINT,
 	"input":  INPUT,
 	"copy":   COPY,
+	"itoa":   ITOA,
 	"exists": EXISTS,
 	"read":   READ,
 	"write":  WRITE,

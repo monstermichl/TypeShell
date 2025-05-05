@@ -86,6 +86,7 @@ const (
 	STATEMENT_TYPE_CONTINUE                       StatementType = "continue"
 	STATEMENT_TYPE_INSTANTIATION                  StatementType = "instantiation"
 	STATEMENT_TYPE_PRINT                          StatementType = "print"
+	STATEMENT_TYPE_ITOA                           StatementType = "itoa"
 	STATEMENT_TYPE_EXISTS                         StatementType = "exists"
 	STATEMENT_TYPE_PANIC                          StatementType = "panic"
 	STATEMENT_TYPE_LEN                            StatementType = "len"
