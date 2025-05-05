@@ -41,7 +41,7 @@ func TestForWithNoConditionSuccess(t *testing.T) {
 }
 
 func TestForContinueSuccess(t *testing.T) {
-	testForContinueSuccess(t, transpileBatch)
+	testForContinueSuccess(t, transpileBash)
 }
 
 func TestForRangeSliceSuccess(t *testing.T) {
