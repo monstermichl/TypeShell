@@ -156,7 +156,7 @@ func (t *transpiler) evaluatePrint(print parser.Print) error {
 		if err != nil {
 			return err
 		}
-		values = append(values, result.firstValue())
+		values = append(values, result.values...)
 	}
 	return t.converter.Print(values)
 }
