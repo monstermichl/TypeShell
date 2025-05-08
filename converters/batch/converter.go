@@ -242,7 +242,7 @@ func (c *converter) FuncEnd() error {
 	name := c.mustCurrentFuncInfo().name
 
 	c.addLine(fmt.Sprintf(":_ret_%s", name))
-	c.addLine("exit /B 0")
+	c.addLine("exit /B")
 	c.addLine(fmt.Sprintf(":_eo_%s", name))
 	c.addLine(fmt.Sprintf(":: %s function end", name))
 
@@ -787,7 +787,7 @@ func (c *converter) addHelper(helperType string, label string, code ...string) {
 		c.addEndLine(line)
 	}
 	c.addEndLine(endLabel)
-	c.addEndLine("exit /B 0")
+	c.addEndLine("exit /B")
 	c.addEndLine(fmt.Sprintf(":: global %s helper end", helperType))
 }
 
