@@ -786,8 +786,8 @@ func (c *converter) addHelper(helperType string, label string, code ...string) {
 	for _, line := range code {
 		c.addEndLine(line)
 	}
-	c.addEndLine(endLabel)
 	c.addEndLine("exit /B")
+	c.addEndLine(endLabel)
 	c.addEndLine(fmt.Sprintf(":: global %s helper end", helperType))
 }
 
