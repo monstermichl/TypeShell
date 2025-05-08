@@ -21,6 +21,7 @@ const (
 	stringSubscriptHelper helperName = "_stsh" // String subscript
 	stringLengthHelper    helperName = "_stlh" // String length
 	stringEscapeHelper    helperName = "_seh"  // String escape
+	echoHelper            helperName = "_ech"  // Echo
 )
 
 type funcInfo struct {
@@ -57,6 +58,7 @@ type converter struct {
 	stringSubscriptHelperRequired bool
 	stringLenHelperRequired       bool
 	fileWriteHelperRequired       bool
+	echoHelperRequired            bool
 }
 
 func New() *converter {
@@ -191,6 +193,13 @@ func (c *converter) ProgramEnd() error {
 			"set /A \"_l=%_l%+1\"",
 			"goto :_stlhl",
 			":_stlhle",
+		)
+	}
+
+	if c.echoHelperRequired {
+		c.addHelper("echo", echoHelper,
+			fmt.Sprintf(`set "_ehv=%s"`, c.varEvaluationString(funcArgVar(0), true)),
+			"echo !_ehv!",
 		)
 	}
 	c.addEndLine(":end")
@@ -343,18 +352,12 @@ func (c *converter) Continue() error {
 }
 
 func (c *converter) Print(values []string) error {
-	helper := c.nextHelperVar()
-
-	c.VarAssignment(helper, strings.Join(values, " "), false)
-	c.addLine(fmt.Sprintf(`echo %s`, c.varEvaluationString(helper, false)))
+	c.callEchoFunc(values...)
 	return nil
 }
 
 func (c *converter) Panic(value string) error {
-	helper := c.nextHelperVar()
-
-	c.VarAssignment(helper, value, false)
-	c.addLine(fmt.Sprintf("echo %s", c.varEvaluationString(helper, false)))
+	c.callEchoFunc(value)
 	c.addLine(`set "_e=1"`)
 	c.addLine("goto :end")
 	return nil
@@ -693,6 +696,11 @@ func (c *converter) callFuncString(name string, globalArgs []string, args ...str
 
 func (c *converter) callFunc(name string, globalArgs []string, args ...string) {
 	c.addLine(c.callFuncString(name, globalArgs, args...))
+}
+
+func (c *converter) callEchoFunc(values ...string) {
+	c.echoHelperRequired = true
+	c.addLine(c.callFuncString(echoHelper, []string{strings.Join(values, " ")}))
 }
 
 func (c *converter) varName(name string, global bool) string {
