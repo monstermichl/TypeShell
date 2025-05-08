@@ -23,12 +23,6 @@ const (
 	stringEscapeHelper    helperName = "_seh"  // String escape
 )
 
-type returnVarName = string
-
-const (
-	stringEscapeReturnVar returnVarName = "_ser"
-)
-
 type funcInfo struct {
 	name string
 }
@@ -42,6 +36,7 @@ type ifInfo struct {
 }
 
 type converter struct {
+	startCode                     []string
 	globalCode                    []string
 	previousFunctionName          string
 	functionsCode                 [][]string
@@ -62,7 +57,6 @@ type converter struct {
 	stringSubscriptHelperRequired bool
 	stringLenHelperRequired       bool
 	fileWriteHelperRequired       bool
-	stringEscapeHelperRequired    bool
 }
 
 func New() *converter {
@@ -108,6 +102,7 @@ func (c *converter) Dump() (string, error) {
 		functionsCode = append(functionsCode, c.functionsCode[i]...)
 	}
 	return strings.Join([]string{
+		strings.Join(c.startCode, "\n"),
 		strings.Join(c.globalCode, "\n"),
 		strings.Join(functionsCode, "\n"),
 		strings.Join(c.endCode, "\n"),
@@ -115,10 +110,10 @@ func (c *converter) Dump() (string, error) {
 }
 
 func (c *converter) ProgramStart() error {
-	c.addLine("@echo off")
-	c.addLine("setlocal EnableDelayedExpansion")
-	c.addLine("setlocal")
-	c.addLine("set \"_e=0\"")
+	c.addStartLine("@echo off")
+	c.addStartLine("setlocal EnableDelayedExpansion")
+	c.addStartLine("setlocal")
+	c.addStartLine(`set "_e=0"`)
 
 	return nil
 }
@@ -129,8 +124,7 @@ func (c *converter) ProgramEnd() error {
 			`set "_a=>"`,
 			fmt.Sprintf(`if "%%2" equ "%s" set "_a=>>"`, c.BoolToString(true)),
 			fmt.Sprintf("for /f \"delims=\" %%%%i in (\"!%s!\") do (", funcArgVar(0)),
-			c.stringEscapeCallString("!i!"),
-			fmt.Sprintf("echo %s%%_a%% %%~1", c.varEvaluationString(stringEscapeReturnVar, true)),
+			"echo %%i%_a% %~1",
 			`set "_a=>>"`,
 			")",
 		)
@@ -197,20 +191,6 @@ func (c *converter) ProgramEnd() error {
 			"set /A \"_l=%_l%+1\"",
 			"goto :_stlhl",
 			":_stlhle",
-		)
-	}
-
-	if c.stringEscapeHelperRequired {
-		c.addHelper("string escape", stringEscapeHelper,
-			fmt.Sprintf(`set "%s=%%%s%%`, stringEscapeReturnVar, funcArgVar(0)),
-			`set "_cs=%% ^ & < > | ' , ; = ( )"`,
-			`for %%c in (!_cs!) do (`,
-	
-			// Here a the special character should be replaced by a caret followed by the special char.
-			// However, for some reason it also works now without... I'm not even sure if this function
-			// is necessary but in case it is required in the future I'll leave it here.
-			fmt.Sprintf(`set "%s=!%s:%%%%c=%%%%c!`, stringEscapeReturnVar, stringEscapeReturnVar),
-			")",
 		)
 	}
 	c.addEndLine(":end")
@@ -363,14 +343,18 @@ func (c *converter) Continue() error {
 }
 
 func (c *converter) Print(values []string) error {
-	c.addLine(c.stringEscapeCallString(strings.Join(values, " ")))
-	c.addLine(fmt.Sprintf(`echo %s`, c.varEvaluationString(stringEscapeReturnVar, true)))
+	helper := c.nextHelperVar()
+
+	c.VarAssignment(helper, strings.Join(values, " "), false)
+	c.addLine(fmt.Sprintf(`echo %s`, c.varEvaluationString(helper, false)))
 	return nil
 }
 
 func (c *converter) Panic(value string) error {
-	c.addLine(c.stringEscapeCallString(value))
-	c.addLine(fmt.Sprintf("echo %s", c.varEvaluationString(stringEscapeReturnVar, true)))
+	helper := c.nextHelperVar()
+
+	c.VarAssignment(helper, value, false)
+	c.addLine(fmt.Sprintf("echo %s", c.varEvaluationString(helper, false)))
 	c.addLine(`set "_e=1"`)
 	c.addLine("goto :end")
 	return nil
@@ -711,11 +695,6 @@ func (c *converter) callFunc(name string, globalArgs []string, args ...string) {
 	c.addLine(c.callFuncString(name, globalArgs, args...))
 }
 
-func (c *converter) stringEscapeCallString(values ...string) string {
-	c.stringEscapeHelperRequired = true
-	return c.callFuncString(stringEscapeHelper, []string{strings.Join(values, " ")})
-}
-
 func (c *converter) varName(name string, global bool) string {
 	if c.inFunction() && !global {
 		name = fmt.Sprintf("f%d_%s", c.funcCounter, name)
@@ -734,6 +713,10 @@ func (c *converter) varEvaluationString(name string, global bool) string {
 func (c *converter) ifStart(condition string, startAddition string) error {
 	c.addLine(fmt.Sprintf("%sif \"%s\" equ \"%s\" (", startAddition, condition, c.BoolToString(true)))
 	return nil
+}
+
+func (c *converter) addStartLine(line string) {
+	c.startCode = append(c.startCode, line)
 }
 
 func (c *converter) addLine(line string) {
@@ -843,9 +826,9 @@ func (c *converter) sliceAssignmentString(name string, index string, value strin
 
 func (c *converter) addLf() {
 	if !c.lfSet {
-		c.addLine("(set LF=^") // https://stackoverflow.com/a/60389149
-		c.addLine("")
-		c.addLine(")")
+		c.addStartLine("(set LF=^") // https://stackoverflow.com/a/60389149
+		c.addStartLine("")
+		c.addStartLine(")")
 
 		c.lfSet = true
 	}
