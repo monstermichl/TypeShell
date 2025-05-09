@@ -199,7 +199,7 @@ func (c *converter) ProgramEnd() error {
 	if c.echoHelperRequired {
 		c.addHelper("echo", echoHelper,
 			fmt.Sprintf(`set "_ehv=%s"`, c.varEvaluationString(funcArgVar(0), true)),
-			`if "!_ehv!" neq "" echo !_ehv!`,
+			`if "!_ehv!" neq "" (echo !_ehv!) else echo.`, // echo. could be problematic (see discussion: https://stackoverflow.com/a/20691061).
 		)
 	}
 	c.addEndLine(":end")
