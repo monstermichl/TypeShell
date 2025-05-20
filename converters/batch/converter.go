@@ -16,8 +16,9 @@ const (
 	appCallHelper         helperName = "_ach"  // App call
 	fileReadHelper        helperName = "_frh"  // File write
 	fileWriteHelper       helperName = "_fwh"  // File read
+	sliceLenSetHelper     helperName = "_sls"  // Slice length set
+	sliceLenGetHelper     helperName = "_slg"  // Slice length get
 	sliceCopyHelper       helperName = "_sch"  // Slice copy
-	sliceLengthHelper     helperName = "_sllh" // Slice length
 	stringSubscriptHelper helperName = "_stsh" // String subscript
 	stringLengthHelper    helperName = "_stlh" // String length
 	stringEscapeHelper    helperName = "_seh"  // String escape
@@ -53,8 +54,9 @@ type converter struct {
 	lfSet                         bool
 	appCallHelperRequired         bool
 	readHelperRequired            bool
-	sliceLenHelperRequired        bool
 	sliceCopyHelperRequired       bool
+	sliceLenSetHelperRequired     bool
+	sliceLenGetHelperRequired     bool
 	stringSubscriptHelperRequired bool
 	stringLenHelperRequired       bool
 	fileWriteHelperRequired       bool
@@ -153,28 +155,31 @@ func (c *converter) ProgramEnd() error {
 	}
 
 	if c.sliceCopyHelperRequired {
+		c.sliceLenGetHelperRequired = true
+
 		c.addHelper("slice copy", sliceCopyHelper,
 			"set _i=0",
-			"call :_sllh %2", // Call slice length helper.
+			c.callFuncString(sliceLenGetHelper, []string{}, "%2"),
 			":_schl",
-			"if !_i! lss !_l! (",
+			`if "!_i!" lss "!_len!" (`,
 			"for /f \"delims=\" %%i in (\"%2_!_i!\") do set \"_v=!%%i!\"",
 			c.sliceAssignmentString("!%1!", "!_i!", "!_v!", false),
 			"set /A \"_i=!_i!+1\"",
 			"goto :_schl",
 			")",
+			c.callFuncString(sliceLenSetHelper, []string{}, "!%1!", "!_i!"),
 		)
-		c.sliceLenHelperRequired = true
 	}
 
-	if c.sliceLenHelperRequired {
-		c.addHelper("slice length", sliceLengthHelper,
-			"set _l=0",
-			":_sllhl",
-			"if not defined %1_%_l% goto :_sllhle",
-			"set /A \"_l=%_l%+1\"",
-			"goto :_sllhl",
-			":_sllhle",
+	if c.sliceLenSetHelperRequired {
+		c.addHelper("slice length set", sliceLenSetHelper,
+			`set "%1_len=%2"`,
+		)
+	}
+
+	if c.sliceLenGetHelperRequired {
+		c.addHelper("slice length get", sliceLenGetHelper,
+			`set "_len=!%1_len!"`,
 		)
 	}
 
@@ -532,7 +537,10 @@ func (c *converter) VarEvaluation(name string, valueUsed bool, global bool) (str
 }
 
 func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
-	helper := c.nextHelperVar()
+	helper := c.varName(c.nextHelperVar(), false)
+
+	c.sliceLenSetHelperRequired = true
+	c.callFunc(sliceLenSetHelper, []string{}, helper, strconv.Itoa(len(values)))
 
 	// Init slice values.
 	for i, value := range values {
@@ -569,10 +577,10 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (
 
 func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
-	c.sliceLenHelperRequired = true
 
-	c.callFunc(sliceLengthHelper, []string{}, name)
-	c.VarAssignment(helper, c.varEvaluationString("_l", true), false)
+	c.sliceLenGetHelperRequired = true
+	c.callFunc(sliceLenGetHelper, []string{}, name)
+	c.VarAssignment(helper, c.varEvaluationString("_len", true), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
 }
@@ -662,7 +670,8 @@ func (c *converter) Copy(destination string, source string, valueUsed bool, glob
 	c.sliceCopyHelperRequired = true
 	c.callFunc(sliceCopyHelper, []string{}, c.varName(destination, global), source)
 
-	return c.varEvaluationString("_l", true), nil
+	c.callFunc(sliceLenGetHelper, []string{}, c.varEvaluationString(destination, global))
+	return c.varEvaluationString("_len", true), nil
 }
 
 func (c *converter) Exists(path string, valueUsed bool) (string, error) {
