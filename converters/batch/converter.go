@@ -222,7 +222,7 @@ func (c *converter) VarAssignment(name string, value string, global bool) error 
 	return nil
 }
 
-func (c *converter) SliceAssignment(name string, index string, value string, global bool) error {
+func (c *converter) SliceAssignment(name string, index string, value string, defaultValue string, global bool) error {
 	// TODO: Find out if global is used correctly here.
 	c.addLine(c.sliceAssignmentString(c.varEvaluationString(name, global), index, value, global)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
 	return nil

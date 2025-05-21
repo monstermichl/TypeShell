@@ -58,7 +58,7 @@ type Converter interface {
 	ProgramEnd() error
 	VarDefinition(name string, value string, global bool) error
 	VarAssignment(name string, value string, global bool) error
-	SliceAssignment(name string, index string, value string, global bool) error
+	SliceAssignment(name string, index string, value string, defaultValue string, global bool) error
 	FuncStart(name string, params []string, returnTypes []parser.ValueType) error
 	FuncEnd() error
 	Return(values []ReturnValue) error
