@@ -21,6 +21,7 @@ type converter struct {
 	forCounter                    int
 	funcs                         []funcInfo
 	funcCounter                   int
+	sliceAssignmentHelperRequired bool
 	sliceCopyHelperRequired       bool
 	stringSubscriptHelperRequired bool
 }
@@ -61,6 +62,21 @@ func (c *converter) ProgramStart() error {
 }
 
 func (c *converter) ProgramEnd() error {
+	if c.sliceAssignmentHelperRequired {
+		// $1: Slice name
+		// $2: Assignment index
+		// $3: Assignment value
+		// $4: Default value
+		c.addHelper("slice assignment", "_sah",
+			"local _i=${2}",
+			fmt.Sprintf(`local _l=%s`, c.sliceLenString("${1}")),
+			`for ((_c=${_l};_c<${_i};_c++)); do`,
+			c.sliceAssignmentString("${1}", "${_c}", "${4}", false),
+			`done`,
+			c.sliceAssignmentString("${1}", "${_i}", "${3}", false),
+		)
+	}
+
 	if c.sliceCopyHelperRequired {
 		c.addHelper("slice copy", "_sch",
 			"local _i=0",
@@ -102,8 +118,8 @@ func (c *converter) VarAssignment(name string, value string, global bool) error 
 }
 
 func (c *converter) SliceAssignment(name string, index string, value string, defaultValue string, global bool) error {
-	// TODO: Find out if global is correctly used here.
-	c.addLine(c.sliceAssignmentString(c.varEvaluationString(name, global), index, value, global)) // TODO: Find out if using varEvaluationString here is a good idea because name might not be a variable.
+	c.sliceAssignmentHelperRequired = true
+	c.addLine(fmt.Sprintf(`_sah %s %s "%s" "%s"`, c.varEvaluationString(name, global), index, value, defaultValue))
 	return nil
 }
 
@@ -492,6 +508,7 @@ func (c *converter) Copy(destination string, source string, valueUsed bool, glob
 	destination = c.varName(destination, global)
 
 	c.addLine(fmt.Sprintf("_sch %s %s", destination, source))
+	c.sliceAssignmentHelperRequired = true
 	c.sliceCopyHelperRequired = true
 
 	helper := c.nextHelperVar()
@@ -536,6 +553,7 @@ func (c *converter) varEvaluationString(name string, global bool) string {
 }
 
 func (c *converter) sliceAssignmentString(name string, index string, value string, global bool) string {
+	c.sliceAssignmentHelperRequired = true
 	return fmt.Sprintf(`eval "%s[%s]=\"%s\""`, name, index, value)
 }
 
