@@ -32,6 +32,19 @@ func testSliceAssignValuesSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	})
 }
 
+func testSliceAssignUndefinedSubscriptSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		var a = []int{1, 2}
+
+		a[3] = 4
+
+		print(a[0], a[1], a[2], a[3])
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "1 2 0 4", output)
+	})
+}
+
 func testSliceLengthSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		var a = []int{1, 2}
@@ -102,6 +115,22 @@ func testSliceAssignValuesInFunctionSuccess(t *testing.T, transpilerFunc transpi
 	`, func(output string, err error) {
 		require.Nil(t, err)
 		require.Equal(t, "3 4 5", output)
+	})
+}
+
+func testSliceAssignUndefinedSubscriptInFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		func test() {
+			var a = []int{1, 2}
+
+			a[3] = 4
+
+			print(a[0], a[1], a[2], a[3])
+		}
+		test()
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "1 2 0 4", output)
 	})
 }
 

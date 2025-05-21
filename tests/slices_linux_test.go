@@ -12,6 +12,10 @@ func TestSliceAssignValuesSuccess(t *testing.T) {
 	testSliceAssignValuesSuccess(t, transpileBash)
 }
 
+func TestSliceAssignUndefinedSubscriptSuccess(t *testing.T) {
+	testSliceAssignUndefinedSubscriptSuccess(t, transpileBash)
+}
+
 func TestSliceLengthSuccess(t *testing.T) {
 	testSliceLengthSuccess(t, transpileBash)
 }
@@ -30,6 +34,10 @@ func TestDefineSliceInFunctionSuccess(t *testing.T) {
 
 func TestSliceAssignValuesInFunctionSuccess(t *testing.T) {
 	testSliceAssignValuesInFunctionSuccess(t, transpileBash)
+}
+
+func TestSliceAssignUndefinedSubscriptInFunctionSuccess(t *testing.T) {
+	testSliceAssignUndefinedSubscriptInFunctionSuccess(t, transpileBash)
 }
 
 func TestSliceLengthInFunctionSuccess(t *testing.T) {
