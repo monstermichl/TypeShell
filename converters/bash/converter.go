@@ -3,7 +3,6 @@ package bash
 import (
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/monstermichl/typeshell/parser"
@@ -22,7 +21,6 @@ type converter struct {
 	forCounter                    int
 	funcs                         []funcInfo
 	funcCounter                   int
-	sliceLenHelperRequired        bool
 	sliceCopyHelperRequired       bool
 	stringSubscriptHelperRequired bool
 }
@@ -64,29 +62,15 @@ func (c *converter) ProgramStart() error {
 
 func (c *converter) ProgramEnd() error {
 	if c.sliceCopyHelperRequired {
-		c.sliceLenHelperRequired = true
-
 		c.addHelper("slice copy", "_sch",
 			"local _i=0",
-			"local _l=$(_slh ${2})",
+			fmt.Sprintf(`local _l=%s`, c.sliceLenString("${2}")),
 			"local _n=$(eval \"echo \\${${1}}\")",
 			"while [ ${_i} -lt ${_l} ]; do",
 			fmt.Sprintf("local _v=%s", c.sliceEvaluationString("${2}", "${_i}")),
 			c.sliceAssignmentString("${_n}", "${_i}", "${_v}", false),
 			"_i=$(expr ${_i} + 1)",
 			"done",
-		)
-	}
-
-	if c.sliceLenHelperRequired {
-		c.addHelper("slice length", "_slh",
-			"local _l=0",
-			"while true; do",
-			"eval \"local _t=\\${$1_${_l}}\"",
-			"if [ -z \"${_t}\" ]; then break; fi", // https://stackoverflow.com/a/13864829 (didn't work with +x (probably due to the underscore of the variable)).
-			"_l=$(expr ${_l} + 1)",
-			"done",
-			"echo ${_l}",
 		)
 	}
 
@@ -389,8 +373,13 @@ func (c *converter) VarEvaluation(name string, valueUsed bool, global bool) (str
 func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
-	for i, value := range values {
-		c.addLine(c.sliceAssignmentString(helper, strconv.Itoa(i), value, false))
+	if len(values) > 0 {
+		vals := ""
+
+		for _, value := range values {
+			vals = fmt.Sprintf(`%s %s`, vals, value)
+		}
+		c.addLine(fmt.Sprintf("%s=(%s)", helper, strings.TrimSpace(vals)))
 	}
 	return helper, nil
 }
@@ -407,8 +396,6 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (
 
 func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
-	c.sliceLenHelperRequired = true
-
 	c.VarAssignment(helper, c.sliceLenString(name), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
@@ -549,19 +536,15 @@ func (c *converter) varEvaluationString(name string, global bool) string {
 }
 
 func (c *converter) sliceAssignmentString(name string, index string, value string, global bool) string {
-
-	return fmt.Sprintf("eval %s_%s=\"%s\"", name, index, value)
+	return fmt.Sprintf(`eval "%s[%s]=\"%s\""`, name, index, value)
 }
 
 func (c *converter) sliceEvaluationString(name string, index string) string {
-	return fmt.Sprintf("$(eval \"echo \\${%s_%s}\")",
-		name,
-		index,
-	)
+	return fmt.Sprintf(`$(eval "echo \${%s[%s]}")`, name, index)
 }
 
 func (c *converter) sliceLenString(name string) string {
-	return fmt.Sprintf("$(_slh %s)", name)
+	return fmt.Sprintf(`$(eval "echo \${#%s[@]}")`, name)
 }
 
 func (c *converter) ifStart(condition string, startWord string) error {
