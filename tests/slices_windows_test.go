@@ -24,6 +24,10 @@ func TestIterateSliceSuccess(t *testing.T) {
 	testIterateSliceSuccess(t, transpileBatch)
 }
 
+func TestReassignSliceSuccess(t *testing.T) {
+	testReassignSliceSuccess(t, transpileBatch)
+}
+
 func TestCopySliceSuccess(t *testing.T) {
 	testCopySliceSuccess(t, transpileBatch)
 }
@@ -46,6 +50,10 @@ func TestSliceLengthInFunctionSuccess(t *testing.T) {
 
 func TestIterateSliceInFunctionSuccess(t *testing.T) {
 	testIterateSliceInFunctionSuccess(t, transpileBatch)
+}
+
+func TestReassignSliceInFunctionSuccess(t *testing.T) {
+	testReassignSliceInFunctionSuccess(t, transpileBatch)
 }
 
 func TestCopySliceInFunctionSuccess(t *testing.T) {

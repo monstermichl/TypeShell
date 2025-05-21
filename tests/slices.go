@@ -69,6 +69,23 @@ func testIterateSliceSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	})
 }
 
+func testReassignSliceSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		var a = []int{1, 2}
+		a[3] = 4
+
+		print(len(a))
+		print(a[0], a[1], a[2], a[3])
+
+		a = []int{5, 6}
+		print(len(a))
+		print(a[0], a[1])
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "4\n1 2 0 4\n2\n5 6", output)
+	})
+}
+
 func testCopySliceSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		var a = []int{1, 2}
@@ -161,6 +178,26 @@ func testIterateSliceInFunctionSuccess(t *testing.T, transpilerFunc transpilerFu
 	`, func(output string, err error) {
 		require.Nil(t, err)
 		require.Equal(t, "1\n2", output)
+	})
+}
+
+func testReassignSliceInFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		func test() {
+			var a = []int{1, 2}
+			a[3] = 4
+
+			print(len(a))
+			print(a[0], a[1], a[2], a[3])
+
+			a = []int{5, 6}
+			print(len(a))
+			print(a[0], a[1])
+		}
+		test()
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "4\n1 2 0 4\n2\n5 6", output)
 	})
 }
 
