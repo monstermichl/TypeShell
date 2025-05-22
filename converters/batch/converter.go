@@ -134,7 +134,7 @@ func (c *converter) ProgramEnd() error {
 		c.addHelper("file write", fileWriteHelper,
 			`set "_a=>"`,
 			fmt.Sprintf(`if "%%2" equ "%s" set "_a=>>"`, c.BoolToString(true)),
-			fmt.Sprintf("for /f \"delims=\" %%%%i in (\"!%s!\") do (", funcArgVar(0)),
+			fmt.Sprintf(`for /f "delims=" %%%%i in ("!%s!") do (`, funcArgVar(0)),
 			"echo %%i%_a% %~1",
 			`set "_a=>>"`,
 			")",
@@ -143,20 +143,20 @@ func (c *converter) ProgramEnd() error {
 
 	if c.appCallHelperRequired {
 		c.addHelper("app call", appCallHelper,
-			"set _h=",
-			fmt.Sprintf("for /f \"delims=\" %%%%i in ('call !%s!') do (", funcArgVar(0)),
-			"if defined _h set \"_h=!_h!!LF!\"",
-			"set \"_h=!_h!%%i\"",
+			`set "_h="`,
+			fmt.Sprintf(`for /f "delims=" %%%%i in ('call !%s!') do (`, funcArgVar(0)),
+			`if defined _h set "_h=!_h!!LF!"`,
+			`set "_h=!_h!%%i"`,
 			")",
 		)
 	}
 
 	if c.readHelperRequired {
 		c.addHelper("read", fileReadHelper,
-			"set _h=",
-			"for /f \"delims=\" %%i in (%~1) do (",
-			"if defined _h set \"_h=!_h!!LF!\"",
-			"set \"_h=!_h!%%i\"",
+			`set "_h="`,
+			`for /f "delims=" %%i in (%~1) do (`,
+			`if defined _h set "_h=!_h!!LF!"`,
+			`set "_h=!_h!%%i"`,
 			")",
 		)
 	}
@@ -169,13 +169,13 @@ func (c *converter) ProgramEnd() error {
 		// %1: Destination slice
 		// %2: Source slice
 		c.addHelper("slice copy", sliceCopyHelper,
-			"set _i=0",
+			`set "_i=0"`,
 			c.callFuncString(sliceLenGetHelper, []string{}, "%2"),
 			":_sch_loop",
 			`if "!_i!" lss "!_len!" (`,
-			"for /f \"delims=\" %%i in (\"%2_!_i!\") do set \"_v=!%%i!\"",
+			`for /f "delims=" %%i in ("%2_!_i!") do set "_v=!%%i!"`,
 			c.sliceAssignmentString("!%1!", "!_i!", "!_v!", false),
-			"set /A \"_i=!_i!+1\"",
+			`set /A "_i=!_i!+1"`,
 			"goto :_sch_loop",
 			")",
 			c.callFuncString(sliceLenSetHelper, []string{}, "!%1!", "!_i!"),
@@ -197,10 +197,10 @@ func (c *converter) ProgramEnd() error {
 			":_sah_loop",
 			`if "!_i!" lss "%2" (`,
 			c.sliceAssignmentString("!%1!", "!_i!", "%3", false),
-			"set /A \"_i=!_i!+1\"",
+			`set /A "_i=!_i!+1"`,
 			"goto :_sah_loop",
 			") else (",
-			"set /A \"_len=%2+1\"",
+			`set /A "_len=%2+1"`,
 			c.callFuncString(sliceLenSetHelper, []string{}, "!%1!", "!_len!"),
 			")",
 			c.sliceAssignmentString("!%1!", "%2", fmt.Sprintf("!%s!", funcArgVar(0)), false),
@@ -221,8 +221,8 @@ func (c *converter) ProgramEnd() error {
 
 	if c.stringSubscriptHelperRequired {
 		c.addHelper("string subscript", stringSubscriptHelper,
-			"set /A \"_sh=(%2-%1)+1\"",
-			fmt.Sprintf("set \"_sub=!%s:~%%1,%%_sh%%!\"", funcArgVar(0)), // https://stackoverflow.com/a/636391
+			`set /A "_sh=(%2-%1)+1"`,
+			fmt.Sprintf(`set "_sub=!%s:~%%1,%%_sh%%!"`, funcArgVar(0)), // https://stackoverflow.com/a/636391
 		)
 	}
 
@@ -230,8 +230,8 @@ func (c *converter) ProgramEnd() error {
 		c.addHelper("string length", stringLengthHelper,
 			"set _l=0",
 			":_stlhl",
-			fmt.Sprintf("if \"!%s:~%%_l%%!\" equ \"\" goto :_stlhle", funcArgVar(0)), // https://www.geeksforgeeks.org/batch-script-string-length/
-			"set /A \"_l=%_l%+1\"",
+			fmt.Sprintf(`if "!%s:~%%_l%%!" equ "" goto :_stlhle`, funcArgVar(0)), // https://www.geeksforgeeks.org/batch-script-string-length/
+			`set /A "_l=%_l%+1"`,
 			"goto :_stlhl",
 			":_stlhle",
 		)
@@ -363,7 +363,7 @@ func (c *converter) ForIncrementEnd() error {
 }
 
 func (c *converter) ForCondition(condition string) error {
-	c.addLine(fmt.Sprintf("if \"%s\" equ \"%s\" (", condition, c.BoolToString(true)))
+	c.addLine(fmt.Sprintf(`if "%s" equ "%s" (`, condition, c.BoolToString(true)))
 	return nil
 }
 
@@ -425,7 +425,7 @@ func (c *converter) UnaryOperation(expr string, operator parser.UnaryOperator, v
 	switch operator {
 	case parser.UNARY_OPERATOR_NEGATE:
 		c.addLine(
-			fmt.Sprintf("if \"%s\" equ \"%s\" (%s) else %s",
+			fmt.Sprintf("if %s equ %s (%s) else %s",
 				expr,
 				c.BoolToString(true),
 				c.varAssignmentString(helper, c.BoolToString(false), false),
@@ -433,7 +433,7 @@ func (c *converter) UnaryOperation(expr string, operator parser.UnaryOperator, v
 			),
 		)
 	default:
-		return "", fmt.Errorf("unknown unary operator \"%s\"", operator)
+		return "", fmt.Errorf(`unknown unary operator "%s"`, operator)
 	}
 	return c.VarEvaluation(helper, valueUsed, false)
 }
@@ -461,7 +461,7 @@ func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator,
 		default:
 			return notAllowedError()
 		}
-		c.addLine(fmt.Sprintf("set /A \"%s=%s%s%s\"", c.varName(helper, false), left, operator, right))
+		c.addLine(fmt.Sprintf(`set /A "%s=%s%s%s"`, c.varName(helper, false), left, operator, right))
 	case parser.DATA_TYPE_STRING:
 		switch operator {
 		case parser.BINARY_OPERATOR_ADDITION:
@@ -547,7 +547,7 @@ func (c *converter) LogicalOperation(left string, operator parser.LogicalOperato
 
 	switch operator {
 	case parser.LOGICAL_OPERATOR_AND:
-		line = fmt.Sprintf("if \"%s\" equ \"%s\" (if \"%s\" equ \"%s\" (%s) else %s) else %s",
+		line = fmt.Sprintf(`if %s equ %s (if %s equ %s (%s) else %s) else %s`,
 			left,
 			trueString,
 			right,
@@ -557,7 +557,7 @@ func (c *converter) LogicalOperation(left string, operator parser.LogicalOperato
 			falseAssignment,
 		)
 	case parser.LOGICAL_OPERATOR_OR:
-		line = fmt.Sprintf("if \"%s\" equ \"%s\" (%s) else if \"%s\" equ \"%s\" (%s) else %s",
+		line = fmt.Sprintf(`if %s equ %s (%s) else if %s equ %s (%s) else %s`,
 			left,
 			trueString,
 			trueAssignment,
@@ -567,7 +567,7 @@ func (c *converter) LogicalOperation(left string, operator parser.LogicalOperato
 			falseAssignment,
 		)
 	default:
-		return "", fmt.Errorf("unknown logical operator \"%s\"", operator)
+		return "", fmt.Errorf(`unknown logical operator "%s"`, operator)
 	}
 
 	c.addLine(line)
@@ -610,7 +610,7 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (
 	// _h0_0, not 4. Batch scripts do not support indirect variable expansion in a straightforward
 	// way. However, you can work around this by using for /f to evaluate the variable dynamically
 	c.addLine(
-		fmt.Sprintf("for /f \"delims=\" %%%%i in (\"%s_%s\") do set \"%s=!%%%%i!\"",
+		fmt.Sprintf(`for /f "delims=" %%%%i in ("%s_%s") do set "%s=!%%%%i!"`,
 			name, // TODO: Is global flag even required here? Because value is already passed to function.
 			index,
 			c.varName(helper, false),
@@ -678,7 +678,7 @@ func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) (string,
 		for j, arg := range argsCopy {
 			// If argument is a variable or contains whitespaces, quote it.
 			if strings.HasPrefix(arg, "%") || len(strings.Split(arg, " ")) > 1 {
-				arg = fmt.Sprintf("\"%s\"", arg)
+				arg = fmt.Sprintf(`"%s"`, arg)
 			}
 			argsCopy[j] = arg
 		}
@@ -706,7 +706,7 @@ func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) (string,
 
 func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
-	c.addLine(fmt.Sprintf("set /p \"%s=%s\"", helper, prompt))
+	c.addLine(fmt.Sprintf(`set /p "%s=%s"`, helper, prompt))
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
@@ -764,7 +764,7 @@ func (c *converter) varName(name string, global bool) string {
 }
 
 func (c *converter) varAssignmentString(name string, value string, global bool) string {
-	return fmt.Sprintf("set \"%s=%s\"", c.varName(name, global), value)
+	return fmt.Sprintf(`set "%s=%s"`, c.varName(name, global), value)
 }
 
 func (c *converter) varEvaluationString(name string, global bool) string {
@@ -772,7 +772,7 @@ func (c *converter) varEvaluationString(name string, global bool) string {
 }
 
 func (c *converter) ifStart(condition string, startAddition string) error {
-	c.addLine(fmt.Sprintf("%sif \"%s\" equ \"%s\" (", startAddition, condition, c.BoolToString(true)))
+	c.addLine(fmt.Sprintf(`%sif "%s" equ "%s" (`, startAddition, condition, c.BoolToString(true)))
 	return nil
 }
 
@@ -877,7 +877,7 @@ func (c *converter) nextHelperVar() string {
 
 func (c *converter) sliceAssignmentString(name string, index string, value string, global bool) string {
 	// TODO: Is global flag even required here? Because value is already passed to function.
-	return fmt.Sprintf("set \"%s_%s=%s\"", name, index, value)
+	return fmt.Sprintf(`set "%s_%s=%s"`, name, index, value)
 }
 
 func (c *converter) addLf() {
