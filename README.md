@@ -228,20 +228,13 @@ if err != nil {
 - Recursions are not supported yet.
 
 ### Slices
-If a slice index does not exist on assignment, it is created.
+If a slice index does not exist on assignment, it and its intermediate indices are created.
 ```golang
-s := []string{}
+s := []string{"Hello"}
 
-s[0] = "Hello World" // This is perfectly fine.
-```
+s[2] = "World"
 
-A slice's length is determined by its consecutive values.
-```golang
-s := []string{}
-
-s[0] = "Hello"
-s[1] = "World"
-s[3] = "Out of reach"
-
-print(len(s)) // Prints 2.
+print(s[0]) // Prints "Hello".
+print(s[1]) // Prints "".
+print(s[2]) // Prints "World".
 ```
