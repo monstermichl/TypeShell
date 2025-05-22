@@ -237,3 +237,40 @@ func testSliceReturnedFromFunctionSuccess(t *testing.T, transpilerFunc transpile
 		require.Equal(t, "test0\ntest1", output)
 	})
 }
+
+func testComplexSliceOperationsSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		func test1() string {
+			return "hello world"
+		}
+
+		func test2() string {
+			return "hello mars"
+		}
+
+		func test3() []string {
+			return []string{test1(), test2()}
+		}
+
+		func test4(nextString string) ([]string, int) {
+			s := test3()
+			s[3] = nextString
+
+			return s, len(s)
+		}
+		slice1, amount := test4("hello mum")
+		print("amount 1: " + itoa(amount))
+
+		var slice2 []string
+		amount = copy(slice2, slice1)
+		print("amount 2: " + itoa(amount))
+
+		for i, v := range slice2 {
+			print(v)
+		}
+		print(slice1[0])
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "amount 1: 4\namount 2: 4\nhello world\nhello mars\n\nhello mum\nhello world", output)
+	})
+}
