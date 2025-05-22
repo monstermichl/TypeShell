@@ -15,9 +15,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type sourceCallout func(dir string) string
+type sourceCallout func(dir string) (string, error)
 type compareCallout func(output string, err error)
 type transpilerFunc func(t *testing.T, source string, compare compareCallout)
+type transpilerCalloutFunc func(t *testing.T, callout sourceCallout, compare compareCallout)
 
 func transpileFunc(t *testing.T, source sourceCallout, targetFileName string, converter transpiler.Converter, compare compareCallout) {
 	trans := transpiler.New()
@@ -27,31 +28,36 @@ func transpileFunc(t *testing.T, source sourceCallout, targetFileName string, co
 	defer os.RemoveAll(dir)
 
 	file := filepath.Join(dir, "test.tsh")
-	err = os.WriteFile(file, []byte(source(dir)), 0x777)
+	outputString := ""
+	src, err := source(dir)
 
-	require.Nil(t, err)
-	code, err := trans.Transpile(file, converter)
-	output := []byte{}
-
-	// If transpilation was successful, run the code.
 	if err == nil {
-		targetFile := filepath.Join(dir, targetFileName)
-		err = os.WriteFile(targetFile, []byte(code), 0x777)
+		var code string
+		err = os.WriteFile(file, []byte(src), 0x777)
 
 		require.Nil(t, err)
-		cmd := exec.Command(targetFile)
-		output, err = cmd.Output()
-	}
-	outputString := string(output)
-	outputString = strings.ReplaceAll(outputString, "\r\n", "\n")
-	outputString = strings.TrimSpace(outputString)
+		code, err = trans.Transpile(file, converter)
+		output := []byte{}
 
+		// If transpilation was successful, run the code.
+		if err == nil {
+			targetFile := filepath.Join(dir, targetFileName)
+			err = os.WriteFile(targetFile, []byte(code), 0x777)
+
+			require.Nil(t, err)
+			cmd := exec.Command(targetFile)
+			output, err = cmd.Output()
+		}
+		outputString = string(output)
+		outputString = strings.ReplaceAll(outputString, "\r\n", "\n")
+		outputString = strings.TrimSpace(outputString)
+	}
 	compare(outputString, err)
 }
 
 func transpile(t *testing.T, source string, targetFileName string, converter transpiler.Converter, compare compareCallout) {
-	transpileFunc(t, func(_ string) string {
-		return source
+	transpileFunc(t, func(_ string) (string, error) {
+		return source, nil
 	}, targetFileName, converter, compare)
 }
 

@@ -20,8 +20,8 @@ func TestCopySuccess(t *testing.T) {
 }
 
 func TestExistsSuccess(t *testing.T) {
-	transpileBashFunc(t, func(dir string) string {
-		return fmt.Sprintf(`print(exists("%s"))`, dir)
+	transpileBashFunc(t, func(dir string) (string, error) {
+		return fmt.Sprintf(`print(exists("%s"))`, dir), nil
 	}, func(output string, err error) {
 		require.Nil(t, err)
 		require.Equal(t, "1", output)
@@ -57,13 +57,13 @@ func TestCopyInFunctionSuccess(t *testing.T) {
 }
 
 func TestExistsInFunctionSuccess(t *testing.T) {
-	transpileBashFunc(t, func(dir string) string {
+	transpileBashFunc(t, func(dir string) (string, error) {
 		return `
 			func test() {
 			` + fmt.Sprintf(`print(exists("%s"))`, dir) + `
 			}
 			test()
-		`
+		`, nil
 	}, func(output string, err error) {
 		require.Nil(t, err)
 		require.Equal(t, "1", output)

@@ -9,12 +9,12 @@ import (
 )
 
 func TestDirCallSuccess(t *testing.T) {
-	transpileBatchFunc(t, func(dir string) string {
+	transpileBatchFunc(t, func(dir string) (string, error) {
 		return `
 			` + fmt.Sprintf(`var a = @dir("/B", "%s")`, strings.ReplaceAll(dir, `\`, `\\`)) + `
 
 			print(a)
-		`
+		`, nil
 	}, func(output string, err error) {
 		require.Nil(t, err)
 		require.Equal(t, "test.bat\ntest.tsh", output)
@@ -22,12 +22,12 @@ func TestDirCallSuccess(t *testing.T) {
 }
 
 func TestDirCallPipeToFindstrCallSuccess(t *testing.T) {
-	transpileBatchFunc(t, func(dir string) string {
+	transpileBatchFunc(t, func(dir string) (string, error) {
 		return `
 			` + fmt.Sprintf(`var a = @dir("/B", "%s") | @findstr(".tsh")`, strings.ReplaceAll(dir, `\`, `\\`)) + `
 
 			print(a)
-		`
+		`, nil
 	}, func(output string, err error) {
 		require.Nil(t, err)
 		require.Equal(t, "test.tsh", output)

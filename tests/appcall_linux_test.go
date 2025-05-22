@@ -8,12 +8,12 @@ import (
 )
 
 func TestLsCallSuccess(t *testing.T) {
-	transpileBashFunc(t, func(dir string) string {
+	transpileBashFunc(t, func(dir string) (string, error) {
 		return `
 			` + fmt.Sprintf(`var a = @ls("%s")`, dir) + `
 
 			print(a)
-		`
+		`, nil
 	}, func(output string, err error) {
 		require.Nil(t, err)
 		require.Equal(t, "test.sh\ntest.tsh", output)
@@ -21,12 +21,12 @@ func TestLsCallSuccess(t *testing.T) {
 }
 
 func TestLsCallPipeToGrepCallSuccess(t *testing.T) {
-	transpileBashFunc(t, func(dir string) string {
+	transpileBashFunc(t, func(dir string) (string, error) {
 		return `
 			` + fmt.Sprintf(`var a = @ls("%s") | @grep(".tsh")`, dir) + `
 
 			print(a)
-		`
+		`, nil
 	}, func(output string, err error) {
 		require.Nil(t, err)
 		require.Equal(t, "test.tsh", output)
