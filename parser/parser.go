@@ -156,15 +156,15 @@ type evaluatedValues struct {
 	values []Expression
 }
 
-func (ev evaluatedValues) isMultiReturnFuncCall() (bool, FunctionCall) {
-	var call FunctionCall
+func (ev evaluatedValues) isMultiReturnCall() (bool, Call) {
+	var call Call
 	values := ev.values
 	multi := false
 
-	if len(values) == 1 && values[0].StatementType() == STATEMENT_TYPE_FUNCTION_CALL {
-		callTemp := values[0].(FunctionCall)
+	if len(values) == 1 {
+		callTemp, ok := values[0].(Call)
 
-		if len(callTemp.ReturnTypes()) > 1 {
+		if ok && len(callTemp.ReturnTypes()) > 1 {
 			multi = true
 			call = callTemp
 		}
@@ -1096,7 +1096,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 		}
 		values = evaluatedVals.values
 		valuesTypes := []ValueType{}
-		isMultiReturnFuncCall, call := evaluatedVals.isMultiReturnFuncCall()
+		isMultiReturnFuncCall, call := evaluatedVals.isMultiReturnCall()
 
 		// If multi-return function, get function return types, else get value types.
 		if isMultiReturnFuncCall {
@@ -1187,7 +1187,7 @@ func (p *Parser) evaluateCompoundAssignment(ctx context) (Statement, error) {
 	if err != nil {
 		return nil, err
 	}
-	isMultiReturnFuncCall, call := evaluatedVals.isMultiReturnFuncCall()
+	isMultiReturnFuncCall, call := evaluatedVals.isMultiReturnCall()
 	values := evaluatedVals.values
 	valuesTypes := []ValueType{}
 
@@ -1254,7 +1254,7 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
 	if err != nil {
 		return nil, err
 	}
-	isMultiReturnFuncCall, call := evaluatedVals.isMultiReturnFuncCall()
+	isMultiReturnFuncCall, call := evaluatedVals.isMultiReturnCall()
 	valuesTypes := []ValueType{}
 
 	// If it's a multi return function call evaluate how many values are returned by the function.

@@ -462,7 +462,7 @@ func (c *converter) FuncCall(name string, args []string, returnTypes []parser.Va
 	return returnValues, nil
 }
 
-func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) (string, error) {
+func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) ([]string, error) {
 	callsCopy := calls
 	callStrings := []string{}
 
@@ -490,10 +490,15 @@ func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) (string,
 		helper := c.nextHelperVar()
 
 		c.VarDefinition(helper, callString, false)
-		return c.VarEvaluation(helper, valueUsed, false)
+		eval, err := c.VarEvaluation(helper, valueUsed, false)
+
+		if err != nil {
+			return nil, err
+		}
+		return []string{eval, "$?"}, nil
 	}
 	c.addLine(callString)
-	return "", nil
+	return []string{}, nil
 }
 
 func (c *converter) Input(prompt string, valueUsed bool) (string, error) {

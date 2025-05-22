@@ -10,25 +10,25 @@ import (
 func TestLsCallSuccess(t *testing.T) {
 	transpileBashFunc(t, func(dir string) (string, error) {
 		return `
-			` + fmt.Sprintf(`var a = @ls("%s")`, dir) + `
+			` + fmt.Sprintf(`var a, code = @ls("%s")`, dir) + `
 
-			print(a)
+			print(a, code)
 		`, nil
 	}, func(output string, err error) {
 		require.Nil(t, err)
-		require.Equal(t, "test.sh\ntest.tsh", output)
+		require.Equal(t, "test.sh\ntest.tsh 0", output)
 	})
 }
 
 func TestLsCallPipeToGrepCallSuccess(t *testing.T) {
 	transpileBashFunc(t, func(dir string) (string, error) {
 		return `
-			` + fmt.Sprintf(`var a = @ls("%s") | @grep(".tsh")`, dir) + `
+			` + fmt.Sprintf(`var a, code = @ls("%s") | @grep(".tsh")`, dir) + `
 
-			print(a)
+			print(a, code)
 		`, nil
 	}, func(output string, err error) {
 		require.Nil(t, err)
-		require.Equal(t, "test.tsh", output)
+		require.Equal(t, "test.tsh 0", output)
 	})
 }

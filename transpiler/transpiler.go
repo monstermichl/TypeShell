@@ -613,12 +613,12 @@ func (t *transpiler) evaluateAppCall(call parser.AppCall, valueUsed bool) (expre
 		})
 		nextCall = nextCall.Next()
 	}
-	s, err := t.converter.AppCall(convertedCalls, valueUsed)
+	values, err := t.converter.AppCall(convertedCalls, valueUsed)
 
 	if err != nil {
 		return expressionResult{}, err
 	}
-	return newExpressionResult(s), nil
+	return newExpressionResult(values...), nil
 }
 
 func (t *transpiler) evaluateSliceInstantiation(instantiation parser.SliceInstantiation, valueUsed bool) (expressionResult, error) {

@@ -11,7 +11,7 @@ func (a AppCall) StatementType() StatementType {
 }
 
 func (a AppCall) ValueType() ValueType {
-	return ValueType{dataType: DATA_TYPE_STRING}
+	return NewValueType(DATA_TYPE_MULTIPLE, false)
 }
 
 func (a AppCall) Name() string {
@@ -24,4 +24,11 @@ func (a AppCall) Args() []Expression {
 
 func (a AppCall) Next() *AppCall {
 	return a.next
+}
+
+func (a AppCall) ReturnTypes() []ValueType {
+	return []ValueType{
+		NewValueType(DATA_TYPE_STRING, false),
+		NewValueType(DATA_TYPE_INTEGER, false),
+	}
 }

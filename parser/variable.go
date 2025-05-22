@@ -51,7 +51,7 @@ func (v VariableDefinition) Values() []Expression {
 
 type VariableDefinitionCallAssignment struct {
 	variables []Variable
-	call      FunctionCall
+	call      Call
 }
 
 func (v VariableDefinitionCallAssignment) StatementType() StatementType {
@@ -62,7 +62,7 @@ func (v VariableDefinitionCallAssignment) Variables() []Variable {
 	return v.variables
 }
 
-func (v VariableDefinitionCallAssignment) Call() FunctionCall {
+func (v VariableDefinitionCallAssignment) Call() Call {
 	return v.call
 }
 
@@ -85,7 +85,7 @@ func (v VariableAssignment) Values() []Expression {
 
 type VariableAssignmentCallAssignment struct {
 	variables []Variable
-	call      FunctionCall
+	call      Call
 }
 
 func (v VariableAssignmentCallAssignment) StatementType() StatementType {
@@ -96,7 +96,7 @@ func (v VariableAssignmentCallAssignment) Variables() []Variable {
 	return v.variables
 }
 
-func (v VariableAssignmentCallAssignment) Call() FunctionCall {
+func (v VariableAssignmentCallAssignment) Call() Call {
 	return v.call
 }
 
