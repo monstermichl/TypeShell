@@ -480,6 +480,7 @@ func (c *converter) Comparison(left string, operator parser.CompareOperator, rig
 	NOT_EQUAL_OPERATOR := "neq"
 
 	var operatorString string
+	quote := ""
 
 	if !valueType.IsSlice() {
 		switch valueType.DataType() {
@@ -512,6 +513,7 @@ func (c *converter) Comparison(left string, operator parser.CompareOperator, rig
 			case parser.COMPARE_OPERATOR_NOT_EQUAL:
 				operatorString = NOT_EQUAL_OPERATOR
 			}
+			quote = `"` // Strings shall be quoted.
 		}
 	}
 
@@ -520,10 +522,14 @@ func (c *converter) Comparison(left string, operator parser.CompareOperator, rig
 	}
 	helper := c.nextHelperVar()
 	c.addLine(
-		fmt.Sprintf("if \"%s\" %s \"%s\" (%s) else %s",
+		fmt.Sprintf(`if %s%s%s %s %s%s%s (%s) else %s`,
+			quote,
 			left,
+			quote,
 			operatorString,
+			quote,
 			right,
+			quote,
 			c.varAssignmentString(helper, c.BoolToString(true), false),
 			c.varAssignmentString(helper, c.BoolToString(false), false),
 		),
