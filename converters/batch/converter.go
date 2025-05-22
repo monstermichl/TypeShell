@@ -109,9 +109,18 @@ func (c *converter) Dump() (string, error) {
 	}
 	globalCode := append([]string{}, c.globalCode...)
 	globalCode = append(globalCode, functionsCode...)
+	indent := 0
 
+	// Only indent content within brackets.
 	for i, line := range globalCode {
-		globalCode[i] = fmt.Sprintf(" %s", line) // Indent all global code.
+		if strings.HasPrefix(line, ")") {
+			indent--
+		}
+		globalCode[i] = fmt.Sprintf("%s%s", strings.Repeat(" ", indent), line) // Indent all global code.
+
+		if strings.HasSuffix(line, "(") {
+			indent++
+		}
 	}
 	return strings.Join([]string{
 		strings.Join(c.startCode, "\n"),
