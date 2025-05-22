@@ -191,7 +191,6 @@ var keywords = map[string]TokenType{
 	// Builtin functions.
 	"len":    LEN,
 	"print":  PRINT,
-	"echo":   PRINT,
 	"input":  INPUT,
 	"copy":   COPY,
 	"itoa":   ITOA,
