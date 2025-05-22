@@ -700,19 +700,21 @@ func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) ([]strin
 	}
 
 	if valueUsed {
-		helper := c.nextHelperVar()
+		helper1 := c.nextHelperVar()
+		helper2 := c.nextHelperVar()
 		c.appCallHelperRequired = true
 
 		c.addLf()
 		c.callFunc(appCallHelper, []string{strings.Join(callStrings, " | ")})
-		c.VarAssignment(helper, c.varEvaluationString("_h", true), false)
+		c.VarAssignment(helper1, c.varEvaluationString("_h", true), false)
 
-		eval, err := c.VarEvaluation(helper, valueUsed, false)
+		eval, err := c.VarEvaluation(helper1, valueUsed, false)
 
 		if err != nil {
 			return nil, err
 		}
-		return []string{eval, "%errorlevel%"}, nil
+		c.VarAssignment(helper2, "%errorlevel%", false)
+		return []string{eval, c.varEvaluationString(helper2, false)}, nil
 	}
 	c.addLine(fmt.Sprintf("call %s", strings.Join(callStrings, " | ")))
 	return []string{}, nil

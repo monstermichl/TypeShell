@@ -487,15 +487,17 @@ func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) ([]strin
 
 	if valueUsed {
 		callString = fmt.Sprintf("$(%s)", callString)
-		helper := c.nextHelperVar()
+		helper1 := c.nextHelperVar()
+		helper2 := c.nextHelperVar()
 
-		c.VarDefinition(helper, callString, false)
-		eval, err := c.VarEvaluation(helper, valueUsed, false)
+		c.VarDefinition(helper1, callString, false)
+		eval, err := c.VarEvaluation(helper1, valueUsed, false)
 
 		if err != nil {
 			return nil, err
 		}
-		return []string{eval, "$?"}, nil
+		c.VarDefinition(helper2, "$?", false)
+		return []string{eval, c.varEvaluationString(helper2, false)}, nil
 	}
 	c.addLine(callString)
 	return []string{}, nil
