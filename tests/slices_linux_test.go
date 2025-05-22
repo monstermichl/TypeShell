@@ -59,3 +59,7 @@ func TestReassignSliceInFunctionSuccess(t *testing.T) {
 func TestCopySliceInFunctionSuccess(t *testing.T) {
 	testCopySliceInFunctionSuccess(t, transpileBash)
 }
+
+func TestSliceReturnedFromFunctionSuccess(t *testing.T) {
+	testSliceReturnedFromFunctionSuccess(t, transpileBash)
+}

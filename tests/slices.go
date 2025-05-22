@@ -220,3 +220,20 @@ func testCopySliceInFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc)
 		require.Equal(t, "2\n1\n2", output)
 	})
 }
+
+func testSliceReturnedFromFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		i := 0
+		func test() []string {
+			return []string{"test" + itoa(i)}
+		}
+		s1 := test()
+		i++
+		s2 := test()
+		print(s1[0])
+		print(s2[0])
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "test0\ntest1", output)
+	})
+}
