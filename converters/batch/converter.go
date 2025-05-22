@@ -568,16 +568,18 @@ func (c *converter) VarEvaluation(name string, valueUsed bool, global bool) (str
 }
 
 func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
-	helper := c.varName(c.nextHelperVar(), false)
+	c.addLine(`set /A "_dvc=!_dvc!+1"`) // Dynamic variable counter.
+	helper := c.nextHelperVar()
+	c.VarAssignment(helper, "_dv!_dvc!", false)
 
 	c.sliceAssignmentHelperRequired = true
-	c.callFunc(sliceLenSetHelper, []string{}, helper, strconv.Itoa(len(values)))
+	c.callFunc(sliceLenSetHelper, []string{}, c.varEvaluationString(helper, false), strconv.Itoa(len(values)))
 
 	// Init slice values.
 	for i, value := range values {
-		c.addLine(c.sliceAssignmentString(helper, strconv.Itoa(i), value, false))
+		c.addLine(c.sliceAssignmentString(c.varEvaluationString(helper, false), strconv.Itoa(i), value, false))
 	}
-	return helper, nil
+	return c.varEvaluationString(helper, false), nil
 }
 
 func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (string, error) {

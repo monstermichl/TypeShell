@@ -387,17 +387,19 @@ func (c *converter) VarEvaluation(name string, valueUsed bool, global bool) (str
 }
 
 func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
+	c.addLine(fmt.Sprintf(`_dvc=$((%s+1))`, c.varEvaluationString("_dvc", true))) // Dynamic variable counter.
 	helper := c.nextHelperVar()
+	c.VarAssignment(helper, fmt.Sprintf(`_dv%s`, c.varEvaluationString("_dvc", true)), false)
 
 	if len(values) > 0 {
 		vals := ""
 
 		for _, value := range values {
-			vals = fmt.Sprintf(`%s %s`, vals, value)
+			vals = fmt.Sprintf(`%s \"%s\"`, vals, value)
 		}
-		c.addLine(fmt.Sprintf("%s=(%s)", helper, strings.TrimSpace(vals)))
+		c.addLine(fmt.Sprintf(`eval "%s=(%s)"`, c.varEvaluationString(helper, false), strings.TrimSpace(vals)))
 	}
-	return helper, nil
+	return c.varEvaluationString(helper, false), nil
 }
 
 func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (string, error) {
