@@ -107,10 +107,15 @@ func (c *converter) Dump() (string, error) {
 	for i := len(c.functionsCode) - 1; i >= 0; i-- {
 		functionsCode = append(functionsCode, c.functionsCode[i]...)
 	}
+	globalCode := append([]string{}, c.globalCode...)
+	globalCode = append(globalCode, functionsCode...)
+
+	for i, line := range globalCode {
+		globalCode[i] = fmt.Sprintf(" %s", line) // Indent all global code.
+	}
 	return strings.Join([]string{
 		strings.Join(c.startCode, "\n"),
-		strings.Join(c.globalCode, "\n"),
-		strings.Join(functionsCode, "\n"),
+		strings.Join(globalCode, "\n"),
 		strings.Join(c.endCode, "\n"),
 	}, "\n"), nil
 }
@@ -770,11 +775,6 @@ func (c *converter) addStartLine(line string) {
 }
 
 func (c *converter) addLine(line string) {
-	// Make sure code within if-, for- and function-blocks gets indented to avoid label issues... (https://github.com/monstermichl/TypeShell/issues/25).
-	if len(c.ifs) > 0 || len(c.fors) > 0 || len(c.funcs) > 0 {
-		line = fmt.Sprintf(" %s", line)
-	}
-
 	if c.inFunction() {
 		currFunc := c.mustCurrentFuncInfo()
 		currFuncName := currFunc.name
