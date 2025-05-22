@@ -233,6 +233,7 @@ func Tokenize(source string) ([]Token, error) {
 	row := startIndex
 	column := startIndex
 
+	source = strings.ReplaceAll(source, "\r\n", "\n") // Replace all \r\n with \n.
 	sourceLength := len(source)
 
 	for i < sourceLength {
