@@ -144,7 +144,9 @@ func (c *converter) ProgramEnd() error {
 			`set "_a=>"`,
 			fmt.Sprintf(`if "%%2" equ "%s" set "_a=>>"`, c.BoolToString(true)),
 			fmt.Sprintf(`for /f "delims=" %%%%i in ("!%s!") do (`, funcArgVar(0)),
-			"echo %%i%_a% %~1",
+			`for /f "delims=" %%j in ('echo %%i!_a! %~1') do (`,
+			"rem", // NOP (https://stackoverflow.com/a/7191952). The for-loop is just required to expand !_a! delayed.
+			`)`,
 			`set "_a=>>"`,
 			")",
 		)
