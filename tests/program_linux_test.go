@@ -4,6 +4,10 @@ import (
 	"testing"
 )
 
-func TestComplexProgramSuccess(t *testing.T) {
-	testComplexProgramSuccess(t, transpileBash)
+func TestComplexProgram1Success(t *testing.T) {
+	testComplexProgram1Success(t, transpileBash)
+}
+
+func TestComplexProgram2Success(t *testing.T) {
+	testComplexProgram2Success(t, transpileBash)
 }
