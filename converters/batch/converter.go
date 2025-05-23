@@ -153,9 +153,11 @@ func (c *converter) ProgramEnd() error {
 	if c.appCallHelperRequired {
 		c.addHelper("app call", appCallHelper,
 			`set "_h="`,
-			fmt.Sprintf(`for /f "delims=" %%%%i in ('call !%s!') do (`, funcArgVar(0)),
+			`set "_te="`, // Temporary error variable.
+			fmt.Sprintf(`for /f "delims=" %%%%i in ('cmd /V:ON /C "!%s! & echo ^!errorlevel^!"') do (`, funcArgVar(0)), // Use the carets in ^!errorlevel^! to make sure errorlevel is expanded within cmd.
 			`if defined _h set "_h=!_h!!LF!"`,
-			`set "_h=!_h!%%i"`,
+			`set "_h=!_h!!_te!"`,
+			`set _te=%%i`,
 			")",
 		)
 	}
@@ -713,7 +715,7 @@ func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) ([]strin
 		if err != nil {
 			return nil, err
 		}
-		c.VarAssignment(helper2, "%errorlevel%", false)
+		c.VarAssignment(helper2, c.varEvaluationString("_te", true), false)
 		return []string{eval, c.varEvaluationString(helper2, false)}, nil
 	}
 	c.addLine(fmt.Sprintf("call %s", strings.Join(callStrings, " | ")))
