@@ -32,3 +32,16 @@ func TestLsCallPipeToGrepCallSuccess(t *testing.T) {
 		require.Equal(t, "test.tsh 0", output)
 	})
 }
+
+func TestLsCallFail(t *testing.T) {
+	transpileBashFunc(t, func(dir string) (string, error) {
+		return `
+			var a, code = @ls("not-present-dir")
+
+			print(code)
+		`, nil
+	}, func(output string, err error) {
+		require.Nil(t, err)
+		require.NotEqual(t, "0", output)
+	})
+}

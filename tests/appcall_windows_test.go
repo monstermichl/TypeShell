@@ -33,3 +33,16 @@ func TestDirCallPipeToFindstrCallSuccess(t *testing.T) {
 		require.Equal(t, "test.tsh 0", output)
 	})
 }
+
+func TestDirCallFail(t *testing.T) {
+	transpileBatchFunc(t, func(dir string) (string, error) {
+		return `
+			var a, code = @dir("/B", "not-present-dir")
+
+			print(code)
+		`, nil
+	}, func(output string, err error) {
+		require.Nil(t, err)
+		require.NotEqual(t, "0", output)
+	})
+}
