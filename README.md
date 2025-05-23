@@ -118,8 +118,8 @@ for i := 0; i < len(s); i++ {
 ```
 
 ```golang
-// To capture the output, just assign the call chain to a variable.
-x := @ls("-a") | @sort()
+// To capture the output, just assign the call chain to variables.
+stdout, stderr, code := @ls("-a") | @sort()
 ```
 
 ### Imports
