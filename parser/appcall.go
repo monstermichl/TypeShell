@@ -28,7 +28,8 @@ func (a AppCall) Next() *AppCall {
 
 func (a AppCall) ReturnTypes() []ValueType {
 	return []ValueType{
-		NewValueType(DATA_TYPE_STRING, false),
-		NewValueType(DATA_TYPE_INTEGER, false),
+		NewValueType(DATA_TYPE_STRING, false),  // stdout
+		NewValueType(DATA_TYPE_STRING, false),  // stderr
+		NewValueType(DATA_TYPE_INTEGER, false), // error code
 	}
 }

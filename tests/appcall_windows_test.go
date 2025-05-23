@@ -11,9 +11,9 @@ import (
 func TestDirCallSuccess(t *testing.T) {
 	transpileBatchFunc(t, func(dir string) (string, error) {
 		return `
-			` + fmt.Sprintf(`var a, code = @dir("/B", "%s")`, strings.ReplaceAll(dir, `\`, `\\`)) + `
+			` + fmt.Sprintf(`var stdout, stderr, code = @dir("/B", "%s")`, strings.ReplaceAll(dir, `\`, `\\`)) + `
 
-			print(a, code)
+			print(stdout, code)
 		`, nil
 	}, func(output string, err error) {
 		require.Nil(t, err)
@@ -24,9 +24,9 @@ func TestDirCallSuccess(t *testing.T) {
 func TestDirCallPipeToFindstrCallSuccess(t *testing.T) {
 	transpileBatchFunc(t, func(dir string) (string, error) {
 		return `
-			` + fmt.Sprintf(`var a, code = @dir("/B", "%s") | @findstr(".tsh")`, strings.ReplaceAll(dir, `\`, `\\`)) + `
+			` + fmt.Sprintf(`var stdout, stderr, code = @dir("/B", "%s") | @findstr(".tsh")`, strings.ReplaceAll(dir, `\`, `\\`)) + `
 
-			print(a, code)
+			print(stdout, code)
 		`, nil
 	}, func(output string, err error) {
 		require.Nil(t, err)
@@ -37,7 +37,7 @@ func TestDirCallPipeToFindstrCallSuccess(t *testing.T) {
 func TestDirCallFail(t *testing.T) {
 	transpileBatchFunc(t, func(dir string) (string, error) {
 		return `
-			var a, code = @dir("/B", "not-present-dir")
+			var stdout, stderr, code = @dir("/B", "not-present-dir")
 
 			print(code)
 		`, nil

@@ -10,9 +10,9 @@ import (
 func TestLsCallSuccess(t *testing.T) {
 	transpileBashFunc(t, func(dir string) (string, error) {
 		return `
-			` + fmt.Sprintf(`var a, code = @ls("%s")`, dir) + `
+			` + fmt.Sprintf(`var stdout, stderr, code = @ls("%s")`, dir) + `
 
-			print(a, code)
+			print(stdout, code)
 		`, nil
 	}, func(output string, err error) {
 		require.Nil(t, err)
@@ -23,9 +23,9 @@ func TestLsCallSuccess(t *testing.T) {
 func TestLsCallPipeToGrepCallSuccess(t *testing.T) {
 	transpileBashFunc(t, func(dir string) (string, error) {
 		return `
-			` + fmt.Sprintf(`var a, code = @ls("%s") | @grep(".tsh")`, dir) + `
+			` + fmt.Sprintf(`var stdout, stderr, code = @ls("%s") | @grep(".tsh")`, dir) + `
 
-			print(a, code)
+			print(stdout, code)
 		`, nil
 	}, func(output string, err error) {
 		require.Nil(t, err)
@@ -36,7 +36,7 @@ func TestLsCallPipeToGrepCallSuccess(t *testing.T) {
 func TestLsCallFail(t *testing.T) {
 	transpileBashFunc(t, func(dir string) (string, error) {
 		return `
-			var a, code = @ls("not-present-dir")
+			var stdout, stderr, code = @ls("not-present-dir")
 
 			print(code)
 		`, nil

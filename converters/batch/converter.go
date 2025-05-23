@@ -678,6 +678,11 @@ func (c *converter) FuncCall(name string, args []string, returnTypes []parser.Va
 			returnValues = append(returnValues, eval)
 		}
 	}
+
+	// Make sure return values contain as many values as expected.
+	for len(returnValues) < len(returnTypes) {
+		returnValues = append(returnValues, "")
+	}
 	return returnValues, nil
 }
 
@@ -718,10 +723,10 @@ func (c *converter) AppCall(calls []transpiler.AppCall, valueUsed bool) ([]strin
 			return nil, err
 		}
 		c.VarAssignment(helper2, c.varEvaluationString("_te", true), false)
-		return []string{eval, c.varEvaluationString(helper2, false)}, nil
+		return []string{eval, "", c.varEvaluationString(helper2, false)}, nil // TODO: Return stderr (https://github.com/monstermichl/TypeShell/issues/28).
 	}
 	c.addLine(fmt.Sprintf("call %s", strings.Join(callStrings, " | ")))
-	return []string{}, nil
+	return []string{"", "", "0"}, nil
 }
 
 func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
