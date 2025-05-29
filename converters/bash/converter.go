@@ -179,12 +179,13 @@ func (c *converter) ElseEnd() error {
 }
 
 func (c *converter) ForStart() error {
+	c.addLine(fmt.Sprintf(`%s=`, c.mustCurrentForVar()))
 	c.addLine("while true; do")
 	return nil
 }
 
 func (c *converter) ForIncrementStart() error {
-	c.addLine(fmt.Sprintf(`if [ ! -z ${%s+x} ]; then`, c.mustCurrentForVar())) // https://stackoverflow.com/a/13864829
+	c.addLine(fmt.Sprintf(`if [ ! -z ${%s} ]; then`, c.mustCurrentForVar())) // https://stackoverflow.com/a/13864829
 	return nil
 }
 

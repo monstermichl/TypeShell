@@ -350,6 +350,7 @@ func (c *converter) ForStart() error {
 	c.fors = append(c.fors, forInfo{
 		label: label,
 	})
+	c.addLine(fmt.Sprintf(`set "%s="`, c.mustCurrentForVar()))
 	c.addLine(label)
 	return nil
 }
