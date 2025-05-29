@@ -40,6 +40,7 @@ type ifInfo struct {
 
 type converter struct {
 	startCode                     []string
+	helperCode                    []string
 	globalCode                    []string
 	previousFunctionName          string
 	functionsCode                 [][]string
@@ -107,7 +108,8 @@ func (c *converter) Dump() (string, error) {
 	for i := len(c.functionsCode) - 1; i >= 0; i-- {
 		functionsCode = append(functionsCode, c.functionsCode[i]...)
 	}
-	globalCode := append([]string{}, c.globalCode...)
+	globalCode := append([]string{}, c.helperCode...)
+	globalCode = append(globalCode, c.globalCode...)
 	globalCode = append(globalCode, functionsCode...)
 	globalCode = append(globalCode, c.endCode...)
 	indent := 0
@@ -807,6 +809,10 @@ func (c *converter) addStartLine(line string) {
 	c.startCode = append(c.startCode, line)
 }
 
+func (c *converter) addHelperLine(line string) {
+	c.helperCode = append(c.helperCode, line)
+}
+
 func (c *converter) addLine(line string) {
 	if c.inFunction() {
 		currFunc := c.mustCurrentFuncInfo()
@@ -854,16 +860,16 @@ func (c *converter) addHelper(helperType string, label string, code ...string) {
 	label = strings.TrimLeft(label, ":")
 	endLabel := fmt.Sprintf(":_eo_%s", label)
 
-	c.addEndLine(fmt.Sprintf(":: global %s helper begin", helperType))
-	c.addEndLine(fmt.Sprintf("goto %s", endLabel))
-	c.addEndLine(fmt.Sprintf(":%s", label))
+	c.addHelperLine(fmt.Sprintf(":: global %s helper begin", helperType))
+	c.addHelperLine(fmt.Sprintf("goto %s", endLabel))
+	c.addHelperLine(fmt.Sprintf(":%s", label))
 
 	for _, line := range code {
-		c.addEndLine(line)
+		c.addHelperLine(line)
 	}
-	c.addEndLine("exit /B")
-	c.addEndLine(endLabel)
-	c.addEndLine(fmt.Sprintf(":: global %s helper end", helperType))
+	c.addHelperLine("exit /B")
+	c.addHelperLine(endLabel)
+	c.addHelperLine(fmt.Sprintf(":: global %s helper end", helperType))
 }
 
 func (c *converter) inFunction() bool {
