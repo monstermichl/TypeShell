@@ -253,9 +253,9 @@ func (c *converter) ProgramEnd() error {
 	}
 
 	if c.echoHelperRequired {
+		v := c.varEvaluationString(funcArgVar(0), true)
 		c.addHelper("echo", echoHelper,
-			fmt.Sprintf(`set "_ehv=%s"`, c.varEvaluationString(funcArgVar(0), true)),
-			`if "!_ehv!" neq "" (echo !_ehv!) else echo.`, // echo. could be problematic (see discussion: https://stackoverflow.com/a/20691061).
+			fmt.Sprintf(`if "%s" neq "" (echo %s) else echo.`, v, v), // echo. could be problematic (see discussion: https://stackoverflow.com/a/20691061).
 		)
 	}
 	c.addEndLine(":end")
