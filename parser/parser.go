@@ -1685,6 +1685,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		} else {
 			return nil, p.expectedError("slice or string", nextToken)
 		}
+		iterableValueType.isSlice = false // Make sure the value var is not a slice.
 		valueVar := NewVariable(valueVarName, iterableValueType, false, false)
 
 		// Add block variables.
