@@ -15,3 +15,7 @@ func TestComplexProgram2Success(t *testing.T) {
 func TestComplexProgram3Success(t *testing.T) {
 	testComplexProgram3Success(t, transpileBatch)
 }
+
+func TestComplexProgram4Success(t *testing.T) {
+	testComplexProgram4Success(t, transpileBatch)
+}

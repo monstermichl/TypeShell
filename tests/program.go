@@ -312,3 +312,73 @@ func testComplexProgram3Success(t *testing.T, transpilerFunc transpilerFunc) {
 		require.Equal(t, "Summary 1: OK: Math = 30 Success: 1\nSummary 2: FAIL: Science = 0 Success: 0\nLabels valid: 1 Message: all labels valid\nLabel 0 = Score_1\nLabel 1 = Score_2\nReportCard 1: OK: English = 15 Error: \nReportCard 2: FAIL: History = 0 Error: some scores were non-positive\nReportCard 3:  Error: inactive user", output)
 	})
 }
+
+func testComplexProgram4Success(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		// Helper: Get element index for 2D logical position (row-major)
+		func idx(row int, col int, cols int) int {
+			return row*cols + col
+		}
+
+		// Step 1: Generate scores as 1D slice representing 2D matrix
+		func generateScores(students int, subjects int) []int {
+			total := students * subjects
+			scores := []int{}
+			for i := 0; i < total; i++ {
+				scores[i] = 0 // fill with zeros initially
+			}
+
+			for r := 0; r < students; r++ {
+				for c := 0; c < subjects; c++ {
+					// Example scoring logic
+					score := (r + 1) * (c + 2)
+					scores[idx(r, c, subjects)] = score
+				}
+			}
+			return scores
+		}
+
+		// Step 2: Label a single student’s scores from 1D slice + indexing
+		func labelStudentScores(scores []int, student int, subjects int) []string {
+			labels := []string{}
+			for i := 0; i < subjects; i++ {
+				labels[len(labels)] = "Student" + itoa(student+1) + "_Sub" + itoa(i+1) + "=" + itoa(scores[idx(student, i, subjects)])
+			}
+			return labels
+		}
+
+		// Step 3: Summarize student's labeled scores
+		func summarizeStudent(labels []string) string {
+			count := 0
+			last := ""
+			for i, l := range labels {
+				count = i + 1
+				last = l
+			}
+			return "Count=" + itoa(count) + ", Last=" + last
+		}
+
+		// Step 4: Evaluate classroom by iterating students
+		func evaluateClassroom(scores []int, students int, subjects int) []string {
+			summaries := []string{}
+			for s := 0; s < students; s++ {
+				labels := labelStudentScores(scores, s, subjects)
+				summary := summarizeStudent(labels)
+				summaries[len(summaries)] = summary
+			}
+			return summaries
+		}
+
+		students := 3
+		subjects := 4
+		scores := generateScores(students, subjects)
+		summaries := evaluateClassroom(scores, students, subjects)
+
+		for i := 0; i < len(summaries); i++ {
+			print("Student", itoa(i+1)+":", summaries[i])
+		}
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "Student 1: Count=4, Last=Student1_Sub4=5\nStudent 2: Count=4, Last=Student2_Sub4=10\nStudent 3: Count=4, Last=Student3_Sub4=15", output)
+	})
+}
