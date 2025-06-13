@@ -54,6 +54,7 @@ func (c *converter) Dump() (string, error) {
 
 	allCode = append(allCode, c.startCode...)
 	allCode = append(allCode, c.code...)
+	allCode = append(allCode, "") // Add a terminating newline.
 
 	return strings.Join(allCode, "\n"), nil
 }
