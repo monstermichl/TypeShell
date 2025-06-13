@@ -108,9 +108,9 @@ func (c *converter) Dump() (string, error) {
 		functionsCode = append(functionsCode, c.functionsCode[i]...)
 	}
 	allCode := append([]string{}, c.startCode...)
-	allCode = append(allCode, c.globalCode...)
-	allCode = append(allCode, functionsCode...)
 	allCode = append(allCode, c.helperCode...)
+	allCode = append(allCode, functionsCode...)
+	allCode = append(allCode, c.globalCode...)
 	allCode = append(allCode, c.endCode...)
 	allCode = append(allCode, "") // Add a terminating newline.
 	indent := 0
