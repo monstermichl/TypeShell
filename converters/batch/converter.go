@@ -103,20 +103,31 @@ func (c *converter) StringToString(value string) string {
 func (c *converter) Dump() (string, error) {
 	functionsCode := []string{}
 
-	// Append function code in the reverse order because Batch only
-	// knows "function"-labels that are further down the code.
+	// Collect function code.
 	for i := len(c.functionsCode) - 1; i >= 0; i-- {
 		functionsCode = append(functionsCode, c.functionsCode[i]...)
 	}
-	globalCode := append([]string{}, c.helperCode...)
-	globalCode = append(globalCode, c.globalCode...)
-	globalCode = append(globalCode, functionsCode...)
-	globalCode = append(globalCode, c.endCode...)
+	allCode := append([]string{}, c.startCode...)
+	allCode = append(allCode, c.globalCode...)
+	allCode = append(allCode, functionsCode...)
+	allCode = append(allCode, c.helperCode...)
+	allCode = append(allCode, c.endCode...)
+	allCode = append(allCode, "") // Add a terminating newline.
+	indent := 0
 
-	return strings.Join([]string{
-		strings.Join(c.startCode, "\r\n"),
-		strings.Join(globalCode, "\r\n"),
-	}, "\r\n"), nil
+	for i, line := range allCode {
+		if strings.HasPrefix(line, ")") {
+			indent--
+		}
+		if strings.HasSuffix(line, "(") {
+			indent++
+		}
+		if indent < 0 {
+			indent = 0
+		}
+		allCode[i] = fmt.Sprintf("%s%s", strings.Repeat(" ", indent), line)
+	}
+	return strings.Join(allCode, "\r\n"), nil
 }
 
 func (c *converter) ProgramStart() error {
