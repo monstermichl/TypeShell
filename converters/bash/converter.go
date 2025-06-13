@@ -48,6 +48,10 @@ func (c *converter) Dump() (string, error) {
 	return strings.Join(allCode, "\n"), nil
 }
 
+func (c *converter) Extension() string {
+	return "sh"
+}
+
 func (c *converter) ProgramStart() error {
 	c.addStartLine(fmt.Sprintf("#!%s", c.interpreter))
 	return nil

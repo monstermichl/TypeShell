@@ -50,6 +50,7 @@ type Converter interface {
 	// Common methods
 	StringToString(value string) string
 	Dump() (string, error)
+	Extension() string
 
 	// Statement methods
 	ProgramStart() error

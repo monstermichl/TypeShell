@@ -119,6 +119,10 @@ func (c *converter) Dump() (string, error) {
 	return strings.Join(allCode, "\r\n"), nil
 }
 
+func (c *converter) Extension() string {
+	return "bat"
+}
+
 func (c *converter) ProgramStart() error {
 	c.addStartLine("@echo off")
 	c.addStartLine("setlocal EnableDelayedExpansion")
