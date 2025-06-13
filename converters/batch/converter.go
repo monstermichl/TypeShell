@@ -82,17 +82,6 @@ func forLabel(count int) string {
 	return fmt.Sprintf(":_f%d", count)
 }
 
-func (c *converter) BoolToString(value bool) string {
-	if value {
-		return "1"
-	}
-	return "0"
-}
-
-func (c *converter) IntToString(value int) string {
-	return fmt.Sprintf("%d", value)
-}
-
 func (c *converter) StringToString(value string) string {
 	c.addLf()
 
@@ -143,7 +132,7 @@ func (c *converter) ProgramEnd() error {
 	if c.fileWriteHelperRequired {
 		c.addHelper("file write", fileWriteHelper,
 			`set "_a=>"`,
-			fmt.Sprintf(`if "%%2" equ "%s" set "_a=>>"`, c.BoolToString(true)),
+			fmt.Sprintf(`if "%%2" equ "%s" set "_a=>>"`, transpiler.BoolToString(true)),
 			fmt.Sprintf(`for /f "delims=" %%%%i in ("!%s!") do (`, funcArgVar(0)),
 			`for /f "delims=" %%j in ('echo %%i!_a! %~1') do (`,
 			"rem", // NOP (https://stackoverflow.com/a/7191952). The for-loop is just required to expand !_a! delayed.
@@ -378,7 +367,7 @@ func (c *converter) ForIncrementEnd() error {
 }
 
 func (c *converter) ForCondition(condition string) error {
-	c.addLine(fmt.Sprintf(`if "%s" equ "%s" (`, condition, c.BoolToString(true)))
+	c.addLine(fmt.Sprintf(`if "%s" equ "%s" (`, condition, transpiler.BoolToString(true)))
 	return nil
 }
 
@@ -442,9 +431,9 @@ func (c *converter) UnaryOperation(expr string, operator parser.UnaryOperator, v
 		c.addLine(
 			fmt.Sprintf("if %s equ %s (%s) else %s",
 				expr,
-				c.BoolToString(true),
-				c.varAssignmentString(helper, c.BoolToString(false), false),
-				c.varAssignmentString(helper, c.BoolToString(true), false),
+				transpiler.BoolToString(true),
+				c.varAssignmentString(helper, transpiler.BoolToString(false), false),
+				c.varAssignmentString(helper, transpiler.BoolToString(true), false),
 			),
 		)
 	default:
@@ -545,8 +534,8 @@ func (c *converter) Comparison(left string, operator parser.CompareOperator, rig
 			quote,
 			right,
 			quote,
-			c.varAssignmentString(helper, c.BoolToString(true), false),
-			c.varAssignmentString(helper, c.BoolToString(false), false),
+			c.varAssignmentString(helper, transpiler.BoolToString(true), false),
+			c.varAssignmentString(helper, transpiler.BoolToString(false), false),
 		),
 	)
 	return c.VarEvaluation(helper, valueUsed, false)
@@ -554,8 +543,8 @@ func (c *converter) Comparison(left string, operator parser.CompareOperator, rig
 
 func (c *converter) LogicalOperation(left string, operator parser.LogicalOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
 	var line string
-	trueString := c.BoolToString(true)
-	falseString := c.BoolToString(false)
+	trueString := transpiler.BoolToString(true)
+	falseString := transpiler.BoolToString(false)
 	helper := c.nextHelperVar()
 	trueAssignment := c.varAssignmentString(helper, trueString, false)
 	falseAssignment := c.varAssignmentString(helper, falseString, false)
@@ -750,8 +739,8 @@ func (c *converter) Exists(path string, valueUsed bool) (string, error) {
 
 	c.addLine(fmt.Sprintf(`if exist "%s" (%s) else %s`,
 		path,
-		c.varAssignmentString(helper, c.BoolToString(true), false),
-		c.varAssignmentString(helper, c.BoolToString(false), false),
+		c.varAssignmentString(helper, transpiler.BoolToString(true), false),
+		c.varAssignmentString(helper, transpiler.BoolToString(false), false),
 	))
 	return c.VarEvaluation(helper, valueUsed, false)
 }
@@ -799,7 +788,7 @@ func (c *converter) varEvaluationString(name string, global bool) string {
 }
 
 func (c *converter) ifStart(condition string, startAddition string) error {
-	c.addLine(fmt.Sprintf(`%sif "%s" equ "%s" (`, startAddition, condition, c.BoolToString(true)))
+	c.addLine(fmt.Sprintf(`%sif "%s" equ "%s" (`, startAddition, condition, transpiler.BoolToString(true)))
 	return nil
 }
 

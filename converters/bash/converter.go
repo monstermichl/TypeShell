@@ -33,17 +33,6 @@ func New() *converter {
 	}
 }
 
-func (c *converter) BoolToString(value bool) string {
-	if value {
-		return "1"
-	}
-	return "0"
-}
-
-func (c *converter) IntToString(value int) string {
-	return fmt.Sprintf("%d", value)
-}
-
 func (c *converter) StringToString(value string) string {
 	// Replace "\\n" with "\n".
 	return strings.ReplaceAll(value, "\\n", "\n")
@@ -199,7 +188,7 @@ func (c *converter) ForIncrementEnd() error {
 }
 
 func (c *converter) ForCondition(condition string) error {
-	c.addLine(fmt.Sprintf("if [ %s -ne %s ]; then break; fi", condition, c.BoolToString(true)))
+	c.addLine(fmt.Sprintf("if [ %s -ne %s ]; then break; fi", condition, transpiler.BoolToString(true)))
 	return nil
 }
 
@@ -234,7 +223,7 @@ func (c *converter) Panic(value string) error {
 func (c *converter) WriteFile(path string, content string, append string) error {
 	helper := c.nextHelperVar()
 
-	c.VarAssignment(helper, fmt.Sprintf(`$(if [ "%s" -eq "%s" ]; then echo ">>"; else echo ">"; fi)`, append, c.BoolToString(true)), false)
+	c.VarAssignment(helper, fmt.Sprintf(`$(if [ "%s" -eq "%s" ]; then echo ">>"; else echo ">"; fi)`, append, transpiler.BoolToString(true)), false)
 	c.addLine(fmt.Sprintf(`eval "echo \"%s\" %s %s"`, content, c.varEvaluationString(helper, false), path))
 	return nil
 }
@@ -252,9 +241,9 @@ func (c *converter) UnaryOperation(expr string, operator parser.UnaryOperator, v
 		c.VarAssignment(helper,
 			fmt.Sprintf("$(if [ \"%s\" -eq \"%s\" ]; then echo %s; else echo %s; fi)",
 				expr,
-				c.BoolToString(true),
-				c.BoolToString(false),
-				c.BoolToString(true),
+				transpiler.BoolToString(true),
+				transpiler.BoolToString(false),
+				transpiler.BoolToString(true),
 			),
 			false,
 		)
@@ -348,8 +337,8 @@ func (c *converter) Comparison(left string, operator parser.CompareOperator, rig
 			left,
 			operatorString,
 			right,
-			c.BoolToString(true),
-			c.BoolToString(false),
+			transpiler.BoolToString(true),
+			transpiler.BoolToString(false),
 		),
 		false,
 	)
@@ -367,7 +356,7 @@ func (c *converter) LogicalOperation(left string, operator parser.LogicalOperato
 	default:
 		return "", fmt.Errorf("unknown logical operator \"%s\"", operator)
 	}
-	trueString := c.BoolToString(true)
+	trueString := transpiler.BoolToString(true)
 	helper := c.nextHelperVar()
 
 	c.VarAssignment(
@@ -379,7 +368,7 @@ func (c *converter) LogicalOperation(left string, operator parser.LogicalOperato
 			right,
 			trueString,
 			trueString,
-			c.BoolToString(false),
+			transpiler.BoolToString(false),
 		),
 		false,
 	)
@@ -541,8 +530,8 @@ func (c *converter) Exists(path string, valueUsed bool) (string, error) {
 	c.VarAssignment(helper,
 		fmt.Sprintf(`$(if [ -e "%s" ]; then echo %s; else echo %s; fi)`,
 			path,
-			c.BoolToString(true),
-			c.BoolToString(false),
+			transpiler.BoolToString(true),
+			transpiler.BoolToString(false),
 		),
 		false,
 	)
@@ -584,7 +573,7 @@ func (c *converter) sliceLenString(name string) string {
 }
 
 func (c *converter) ifStart(condition string, startWord string) error {
-	c.addLine(fmt.Sprintf("%s [ %s -eq %s ]; then", startWord, condition, c.BoolToString(true)))
+	c.addLine(fmt.Sprintf("%s [ %s -eq %s ]; then", startWord, condition, transpiler.BoolToString(true)))
 	return nil
 }
 

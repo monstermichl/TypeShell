@@ -48,8 +48,6 @@ func (rv ReturnValue) ValueType() parser.ValueType {
 
 type Converter interface {
 	// Common methods
-	BoolToString(value bool) string
-	IntToString(value int) string
 	StringToString(value string) string
 	Dump() (string, error)
 

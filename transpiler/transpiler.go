@@ -2,6 +2,7 @@ package transpiler
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/monstermichl/typeshell/parser"
 )
@@ -29,6 +30,17 @@ func (r expressionResult) firstValue() string {
 		return ""
 	}
 	return r.values[0]
+}
+
+func BoolToString(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
+}
+
+func IntToString(i int) string {
+	return strconv.Itoa(i)
 }
 
 type transpiler struct {
@@ -78,11 +90,11 @@ func (t *transpiler) evaluateProgram(program parser.Program) error {
 }
 
 func (t *transpiler) evaluateBooleanLiteral(literal parser.BooleanLiteral, valueUsed bool) (expressionResult, error) {
-	return newExpressionResult(t.converter.BoolToString(literal.Value())), nil
+	return newExpressionResult(BoolToString(literal.Value())), nil
 }
 
 func (t *transpiler) evaluateIntegerLiteral(literal parser.IntegerLiteral, valueUsed bool) (expressionResult, error) {
-	return newExpressionResult(t.converter.IntToString(literal.Value())), nil
+	return newExpressionResult(IntToString(literal.Value())), nil
 }
 
 func (t *transpiler) evaluateStringLiteral(literal parser.StringLiteral, valueUsed bool) (expressionResult, error) {
@@ -196,7 +208,7 @@ func (t *transpiler) evaluateWrite(write parser.Write) error {
 	}
 	dataString := result.firstValue()
 	appendExpr := write.Append()
-	appendString := t.converter.BoolToString(false)
+	appendString := BoolToString(false)
 
 	if appendExpr != nil {
 		append := write.Append()
@@ -436,9 +448,9 @@ func (t *transpiler) evaluateSliceAssignment(assignment parser.SliceAssignment) 
 
 	switch valueType.DataType() {
 	case parser.DATA_TYPE_BOOLEAN:
-		defaultValue = conv.BoolToString(false)
+		defaultValue = BoolToString(false)
 	case parser.DATA_TYPE_INTEGER:
-		defaultValue = conv.IntToString(0)
+		defaultValue = IntToString(0)
 	case parser.DATA_TYPE_STRING:
 		defaultValue = conv.StringToString("")
 	default:
