@@ -50,10 +50,12 @@ func (c *converter) StringToString(value string) string {
 }
 
 func (c *converter) Dump() (string, error) {
-	return strings.Join([]string{
-		strings.Join(c.startCode, "\n"),
-		strings.Join(c.code, "\n"),
-	}, "\n"), nil
+	allCode := []string{}
+
+	allCode = append(allCode, c.startCode...)
+	allCode = append(allCode, c.code...)
+
+	return strings.Join(allCode, "\n"), nil
 }
 
 func (c *converter) ProgramStart() error {
