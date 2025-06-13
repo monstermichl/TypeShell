@@ -114,9 +114,9 @@ func (c *converter) Dump() (string, error) {
 	globalCode = append(globalCode, c.endCode...)
 
 	return strings.Join([]string{
-		strings.Join(c.startCode, "\n"),
-		strings.Join(globalCode, "\n"),
-	}, "\n"), nil
+		strings.Join(c.startCode, "\r\n"),
+		strings.Join(globalCode, "\r\n"),
+	}, "\r\n"), nil
 }
 
 func (c *converter) ProgramStart() error {
