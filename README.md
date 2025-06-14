@@ -37,13 +37,18 @@ if a < 5 {
 ```
 
 ```golang
-a := "b"
-
 // Switch-statement.
 switch a {
-case "a":
+case 5:
     // Do something.
-case "b":
+case 6:
+    // Do something.
+default:
+    // Do something else.
+}
+
+switch true {
+case a == 5:
     // Do something.
 default:
     // Do something else.
