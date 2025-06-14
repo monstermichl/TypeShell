@@ -63,6 +63,9 @@ const (
 	RETURN
 	IF
 	ELSE
+	SWITCH
+	CASE
+	DEFAULT
 	FOR
 	RANGE
 	BREAK
@@ -182,6 +185,9 @@ var keywords = map[string]TokenType{
 	"return":   RETURN,
 	"if":       IF,
 	"else":     ELSE,
+	"switch":   SWITCH,
+	"case":     CASE,
+	"default":  DEFAULT,
 	"for":      FOR,
 	"range":    RANGE,
 	"break":    BREAK,

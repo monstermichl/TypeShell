@@ -634,7 +634,7 @@ func (p *Parser) evaluateProgram() (Program, error) {
 	if err != nil {
 		return Program{}, err
 	}
-	statementsTemp, err := p.evaluateBlockContent(lexer.EOF, nil, ctx, SCOPE_PROGRAM)
+	statementsTemp, err := p.evaluateBlockContent([]lexer.TokenType{lexer.EOF}, nil, ctx, SCOPE_PROGRAM)
 
 	if err != nil {
 		return Program{}, err
@@ -828,7 +828,7 @@ func (p *Parser) evaluateBlockBegin() error {
 	return nil
 }
 
-func (p *Parser) evaluateBlockContent(terminationTokenType lexer.TokenType, callback blockCallback, ctx context, scope scope) ([]Statement, error) {
+func (p *Parser) evaluateBlockContent(terminationTokenTypes []lexer.TokenType, callback blockCallback, ctx context, scope scope) ([]Statement, error) {
 	var err error
 
 	statements := []Statement{}
@@ -853,42 +853,43 @@ func (p *Parser) evaluateBlockContent(terminationTokenType lexer.TokenType, call
 		tokenType := token.Type()
 		var stmt Statement
 
-		switch tokenType {
-		case terminationTokenType:
-			// Just break on termination token.
-			loop = false
-		case lexer.NEWLINE:
-			// Ignore termination tokens as they are handled after the switch.
-		default:
-			stmt, err = p.evaluateStatement(ctx)
-			prefix := p.prefix
-
-			if err != nil {
-				break
-			}
-			global := ctx.global()
-
-			switch stmt.StatementType() {
-			case STATEMENT_TYPE_VAR_DEFINITION:
-				// Store new variable.
-				err = ctx.addVariables(prefix, global, stmt.(VariableDefinition).Variables()...)
+		if slices.Contains(terminationTokenTypes, tokenType) {
+			loop = false // Just break on termination token.
+		} else {
+			switch tokenType {
+			case lexer.NEWLINE:
+				// Ignore termination tokens as they are handled after the switch.
+			default:
+				stmt, err = p.evaluateStatement(ctx)
+				prefix := p.prefix
 
 				if err != nil {
-					return nil, err
+					break
 				}
-			case STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT:
-				// Store new variable.
-				err = ctx.addVariables(prefix, global, stmt.(VariableDefinitionCallAssignment).Variables()...)
+				global := ctx.global()
 
-				if err != nil {
-					return nil, err
-				}
-			case STATEMENT_TYPE_FUNCTION_DEFINITION:
-				// Store new function.
-				err = ctx.addFunctions(prefix, global, stmt.(FunctionDefinition))
+				switch stmt.StatementType() {
+				case STATEMENT_TYPE_VAR_DEFINITION:
+					// Store new variable.
+					err = ctx.addVariables(prefix, global, stmt.(VariableDefinition).Variables()...)
 
-				if err != nil {
-					return nil, err
+					if err != nil {
+						return nil, err
+					}
+				case STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT:
+					// Store new variable.
+					err = ctx.addVariables(prefix, global, stmt.(VariableDefinitionCallAssignment).Variables()...)
+
+					if err != nil {
+						return nil, err
+					}
+				case STATEMENT_TYPE_FUNCTION_DEFINITION:
+					// Store new function.
+					err = ctx.addFunctions(prefix, global, stmt.(FunctionDefinition))
+
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
 		}
@@ -915,7 +916,7 @@ func (p *Parser) evaluateBlockContent(terminationTokenType lexer.TokenType, call
 		// Expect newline or termination token.
 		if terminationToken.Type() == lexer.NEWLINE {
 			p.eat()
-		} else if terminationToken.Type() != terminationTokenType {
+		} else if !slices.Contains(terminationTokenTypes, terminationToken.Type()) {
 			err = p.expectedError("termination token", terminationToken)
 			break
 		}
@@ -938,7 +939,7 @@ func (p *Parser) evaluateBlock(callback blockCallback, ctx context, scope scope)
 	if err != nil {
 		return nil, err
 	}
-	statements, err := p.evaluateBlockContent(lexer.CLOSING_CURLY_BRACKET, callback, ctx, scope)
+	statements, err := p.evaluateBlockContent([]lexer.TokenType{lexer.CLOSING_CURLY_BRACKET}, callback, ctx, scope)
 
 	if err != nil {
 		return nil, err
@@ -1617,6 +1618,119 @@ func (p *Parser) evaluateIf(ctx context) (Statement, error) {
 	return ifStatement, nil
 }
 
+func (p *Parser) evaluateSwitch(ctx context) (Statement, error) {
+	switchToken := p.eat()
+
+	if switchToken.Type() != lexer.SWITCH {
+		return nil, p.expectedError("switch-keyword", switchToken)
+	}
+	var switchExpr Expression
+	var err error
+
+	exprToken := p.peek()
+
+	if exprToken.Type() == lexer.OPENING_CURLY_BRACKET {
+		switchExpr = BooleanLiteral{true}
+	} else {
+		switchExpr, err = p.evaluateExpression(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+	switchExprValueType := switchExpr.ValueType()
+
+	if switchExprValueType.IsSlice() {
+		return nil, p.atError("slices are not allowed in switch statements", exprToken)
+	}
+	beginToken := p.eat()
+
+	if beginToken.Type() != lexer.OPENING_CURLY_BRACKET {
+		return nil, p.expectedError(`{`, beginToken)
+	}
+	nextToken := p.eat()
+
+	if nextToken.Type() != lexer.NEWLINE {
+		return nil, p.expectedError("newline", nextToken)
+	}
+	fakeIf := If{
+		ifBranch: IfBranch{
+			condition: BooleanLiteral{false}, // Use a fake if-branch that isn't entered if only a default branch has been set in switch.
+			body:      []Statement{},
+		},
+	}
+	useMock := true
+	nextToken = p.peek()
+	defaultSet := false
+
+	// While switch has not been terminated, evaluate cases.
+	for nextToken.Type() != lexer.CLOSING_CURLY_BRACKET {
+		var compareExpr Expression
+		var compareExprToken lexer.Token
+
+		switch nextToken.Type() {
+		case lexer.CASE:
+			p.eat() // Eat case-token.
+			compareExprToken = p.peek()
+			exprTemp, err := p.evaluateExpression(ctx)
+
+			if err != nil {
+				return nil, err
+			}
+			compareExpr = exprTemp
+		case lexer.DEFAULT:
+			p.eat() // Eat default-token.
+		default:
+			return nil, p.expectedError(`"case", "default" or "}"`, nextToken)
+		}
+		colonToken := p.eat()
+
+		if colonToken.Type() != lexer.COLON {
+			return nil, p.expectedError(`":"`, colonToken)
+		}
+		statements, err := p.evaluateBlockContent([]lexer.TokenType{lexer.CASE, lexer.DEFAULT, lexer.CLOSING_CURLY_BRACKET}, nil, ctx, SCOPE_SWITCH)
+
+		if err != nil {
+			return nil, err
+		}
+
+		// Check if non-default case.
+		if compareExpr != nil {
+			compareExprValueType := compareExpr.ValueType()
+
+			if !switchExprValueType.Equals(compareExprValueType) {
+				return nil, p.atError(fmt.Sprintf("%s value cannot be compared with switch's %s value", compareExprValueType.String(), switchExprValueType.String()), compareExprToken)
+			}
+			ifBranch := IfBranch{
+				condition: NewComparison(switchExpr, COMPARE_OPERATOR_EQUAL, compareExpr),
+				body:      statements,
+			}
+
+			// If fake-if has not been overwritten, overwrite it now.
+			if useMock {
+				fakeIf.ifBranch = ifBranch
+				useMock = false
+			} else {
+				fakeIf.elifBranches = append(fakeIf.elifBranches, ifBranch)
+			}
+		} else if !defaultSet {
+			fakeIf.elseBranch = Else{
+				body: statements,
+			}
+			defaultSet = true
+		} else {
+			return nil, p.atError("multiple default cases are not allowed", nextToken)
+		}
+		nextToken = p.peek()
+	}
+	p.eat() // Eat "}" token.
+
+	if nextToken.Type() != lexer.CLOSING_CURLY_BRACKET {
+		return nil, p.expectedError(`"}"`, nextToken)
+	}
+	return fakeIf, nil
+}
+
 func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 	forToken := p.eat()
 
@@ -1642,7 +1756,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		nextToken = p.eat()
 
 		if nextToken.Type() != lexer.COMMA {
-			return nil, p.expectedError("\",\"", nextToken)
+			return nil, p.expectedError(`","`, nextToken)
 		}
 		nextToken = p.eat()
 		err = p.checkNewVariableNameToken(nextToken, ctx)
@@ -1654,7 +1768,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		nextToken = p.eat()
 
 		if nextToken.Type() != lexer.SHORT_INIT_OPERATOR {
-			return nil, p.expectedError("\":=\"", nextToken)
+			return nil, p.expectedError(`":="`, nextToken)
 		}
 		nextToken = p.eat()
 
@@ -2033,6 +2147,8 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 		stmt, err = p.evaluateReturn(ctx)
 	case lexer.IF:
 		stmt, err = p.evaluateIf(ctx)
+	case lexer.SWITCH:
+		stmt, err = p.evaluateSwitch(ctx)
 	case lexer.FOR:
 		stmt, err = p.evaluateFor(ctx)
 	case lexer.BREAK:
