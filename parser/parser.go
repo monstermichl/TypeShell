@@ -334,42 +334,6 @@ func buildPrefixedName(prefix string, funcName string) string {
 	return funcName
 }
 
-func usedFunctions(statements []Statement) ([]string, error) {
-	calls := []string{}
-
-	for _, stmt := range statements {
-		if stmt.StatementType() == STATEMENT_TYPE_FUNCTION_CALL {
-			calls = append(calls, stmt.(FunctionCall).Name())
-		} else if block, ok := stmt.(Block); ok {
-			callsTemp, err := usedFunctions(block.Body())
-
-			if err != nil {
-				return nil, err
-			}
-			calls = append(calls, callsTemp...)
-		}
-	}
-	return calls, nil
-}
-
-func deleteFunctions(public bool, statements []Statement) ([]Statement, error) {
-	used, err := usedFunctions(statements) // Firstly, get all used functions.
-
-	if err != nil {
-		return nil, err
-	}
-
-	// Remove all functions that are not being used.
-	return slices.DeleteFunc(statements, func(stmt Statement) bool {
-		switch stmt.StatementType() {
-		case STATEMENT_TYPE_FUNCTION_DEFINITION:
-			function := stmt.(FunctionDefinition)
-			return function.Public() == public && !slices.Contains(used, function.Name())
-		}
-		return false
-	}), nil
-}
-
 func (p *Parser) atError(what string, token lexer.Token) error {
 	return fmt.Errorf("%s at row %d, column %d: %s", what, token.Row(), token.Column(), p.path)
 }
