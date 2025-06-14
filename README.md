@@ -37,6 +37,27 @@ if a < 5 {
 ```
 
 ```golang
+a := "b"
+
+// Switch-statement.
+switch a {
+case "a":
+    // Do something.
+case "b":
+    // Do something.
+default:
+    // Do something else.
+}
+
+switch {
+case false:
+    // Do something.
+default:
+    // Do something else.
+}
+```
+
+```golang
 // For-loop.
 for {
     // Do something.
@@ -194,7 +215,7 @@ panic(err)
 
 ## Caveats
 ### Condition evaluation
-In contrast to many other programming languages, TypeShell evaluates all conditions before the actual statement. This is done to handle the limitations of Batch/Bash.
+In contrast to many other programming languages, TypeShell evaluates all conditions before the actual statement. This is done to handle the limitations of Batch/Bash. HINT: This is also true for switch-evaluations since switchs is internally converted to ifs.
 
 ```golang
 if a == 1 && b == 1 {
