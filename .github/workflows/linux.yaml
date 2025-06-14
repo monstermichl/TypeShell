@@ -27,3 +27,9 @@ jobs:
             go test ./tests -v -cover -coverprofile=coverage.out -coverpkg ./lexer,./parser,./transpiler || exit -1
             go tool cover -html=coverage.out -o coverage.html
             go tool cover -func=coverage.out
+
+        - name: Archive code coverage
+          uses: actions/upload-artifact@v4
+          with:
+            name: coverage.html
+            path: coverage.html
