@@ -102,20 +102,7 @@ func (c *converter) Dump() (string, error) {
 	allCode = append(allCode, c.globalCode...)
 	allCode = append(allCode, c.endCode...)
 	allCode = append(allCode, "") // Add a terminating newline.
-	indent := 0
 
-	for i, line := range allCode {
-		if strings.HasPrefix(line, ")") {
-			indent--
-		}
-		if strings.HasSuffix(line, "(") {
-			indent++
-		}
-		if indent < 0 {
-			indent = 0
-		}
-		allCode[i] = fmt.Sprintf("%s%s", strings.Repeat(" ", indent), line)
-	}
 	return strings.Join(allCode, "\r\n"), nil
 }
 
