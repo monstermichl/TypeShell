@@ -8,6 +8,10 @@ import (
 
 func testComplexProgram1Success(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
+		/*
+			Add some multiline comment
+			to see if it's handled correctly. 
+		*/
 		// Returns int doubled and a fake error if input is negative
 		func doubleIfPositive(n int) (int, error) {
 			if n < 0 {
