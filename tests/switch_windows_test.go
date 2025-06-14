@@ -27,3 +27,27 @@ func TestSwitchOnlyDefaultSuccess(t *testing.T) {
 func TestSwitchStringsSuccess(t *testing.T) {
 	testSwitchStringsSuccess(t, transpileBatch)
 }
+
+func TestSwitchWithBoolInFunctionSuccess(t *testing.T) {
+	testSwitchWithBoolInFunctionSuccess(t, transpileBatch)
+}
+
+func TestSwitchWithBoolDefaultInFunctionSuccess(t *testing.T) {
+	testSwitchWithBoolDefaultInFunctionSuccess(t, transpileBatch)
+}
+
+func TestSwitchWithImplicitBoolInFunctionSuccess(t *testing.T) {
+	testSwitchWithImplicitBoolInFunctionSuccess(t, transpileBatch)
+}
+
+func TestSwitchWithComparisonsInFunctionSuccess(t *testing.T) {
+	testSwitchWithComparisonsInFunctionSuccess(t, transpileBatch)
+}
+
+func TestSwitchOnlyDefaultInFunctionSuccess(t *testing.T) {
+	testSwitchOnlyDefaultInFunctionSuccess(t, transpileBatch)
+}
+
+func TestSwitchStringsInFunctionSuccess(t *testing.T) {
+	testSwitchStringsInFunctionSuccess(t, transpileBatch)
+}
