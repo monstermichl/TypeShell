@@ -24,4 +24,6 @@ jobs:
         - name: Test
           shell: bash
           run: |
-            go test ./tests -v
+            go test ./tests -v -cover -coverprofile=coverage.out -coverpkg ./lexer,./parser,./transpiler || exit -1
+            go tool cover -html=coverage.out -o coverage.html
+            go tool cover -func=coverage.out
