@@ -19,7 +19,7 @@ jobs:
         
         - name: Build
           run: |
-            go build main.go
+            go build tsh.go
         
         - name: Test
           shell: bash
