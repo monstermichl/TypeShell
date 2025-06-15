@@ -44,6 +44,7 @@ jobs:
         run: |
           GOOS=${{ matrix.os }}
           GOARCH=${{ matrix.arch }}
+          ls -la
           go build tsh.go -o tsh
 
       - name: Archive builds
