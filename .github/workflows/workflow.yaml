@@ -17,26 +17,26 @@ jobs:
         run: |
           go get .
         
-      - name: Test
+      - name: Test Bash
         shell: bash
         run: |
           go build tsh.go
           go test ./tests -v -cover -coverprofile=coverage.out -coverpkg ./lexer,./parser,./transpiler || exit -1
-          go tool cover -html=coverage.out -o coverage.html
           go tool cover -func=coverage.out
 
-      - name: Archive code coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage.html
-          path: coverage.html
+      - name: Test Batch
+        shell: cmd
+        run: |
+          go build tsh.go
+          go test ./tests -v -cover -coverprofile=coverage.out -coverpkg ./lexer,./parser,./transpiler || exit -1
+          go tool cover -func=coverage.out
 
   build:
     needs: test
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: ['linux']
+        os: ['linux', 'windows']
         arch: ['386', 'amd64', 'arm64']
     steps:
       - uses: actions/checkout@v4
@@ -46,11 +46,17 @@ jobs:
         run: |
           GOOS=${{ matrix.os }}
           GOARCH=${{ matrix.arch }}
-          ls -la
           go build -o tsh tsh.go
 
+          if [ "${{ matrix.os }}" == "windows" ]; then
+            EXT=.exe
+          else
+            EXT=
+          fi
+
+          echo "${EXT}" >> $GITHUB_ENV
       - name: Archive builds
         uses: actions/upload-artifact@v4
         with:
-          name: tsh_${{ matrix.os }}_${{ matrix.arch }}
+          name: tsh_${{ matrix.os }}_${{ matrix.arch }}${EXT}
           path: tsh
