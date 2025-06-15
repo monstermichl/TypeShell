@@ -32,6 +32,7 @@ jobs:
           path: coverage.html
 
   build:
+    needs: test
     runs-on: ubuntu-latest
     strategy:
       matrix:
