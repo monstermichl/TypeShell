@@ -3,33 +3,50 @@ name: TypeShell Linux
 on: [ push ]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
-        - uses: actions/checkout@v4
-        - name: Setup Go
+      - uses: actions/checkout@v4
+      - name: Setup Go
 
-          uses: actions/setup-go@v5
-          with:
-            go-version: '1.22.x'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
 
-        - name: Install dependencies
-          run: |
-            go get .
+      - name: Install dependencies
+        run: |
+          go get .
         
-        - name: Build
-          run: |
-            go build tsh.go
-        
-        - name: Test
-          shell: bash
-          run: |
-            go test ./tests -v -cover -coverprofile=coverage.out -coverpkg ./lexer,./parser,./transpiler || exit -1
-            go tool cover -html=coverage.out -o coverage.html
-            go tool cover -func=coverage.out
+      - name: Test
+        shell: bash
+        run: |
+          go build tsh.go
+          go test ./tests -v -cover -coverprofile=coverage.out -coverpkg ./lexer,./parser,./transpiler || exit -1
+          go tool cover -html=coverage.out -o coverage.html
+          go tool cover -func=coverage.out
 
-        - name: Archive code coverage
-          uses: actions/upload-artifact@v4
-          with:
-            name: coverage.html
-            path: coverage.html
+      - name: Archive code coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage.html
+          path: coverage.html
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: ['linux']
+        arch: ['386', 'amd64', 'arm64']
+    steps:
+      - name: Build
+        shell: bash
+        run: |
+          GOOS=${matrix.os}
+          GOARCH=${matrix.arch}
+          go build tsh.go -o tsh
+
+      - name: Archive builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsh_${matrix.os}_${matrix.arch}
+          path: tsh
