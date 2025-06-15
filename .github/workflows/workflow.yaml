@@ -63,7 +63,7 @@ jobs:
           GOARCH=${{ matrix.arch }}
 
           if [ "${{ matrix.os }}" == "windows" ]; then
-            EXT=.exe
+            EXT=\.exe
           else
             EXT=
           fi
