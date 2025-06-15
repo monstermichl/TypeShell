@@ -41,12 +41,12 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          GOOS=${matrix.os}
-          GOARCH=${matrix.arch}
+          GOOS=${{ matrix.os }}
+          GOARCH=${{ matrix.arch }}
           go build tsh.go -o tsh
 
       - name: Archive builds
         uses: actions/upload-artifact@v4
         with:
-          name: tsh_${matrix.os}_${matrix.arch}
+          name: tsh_${{ matrix.os }}_${{ matrix.arch }}
           path: tsh
