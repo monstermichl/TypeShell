@@ -47,7 +47,7 @@ jobs:
           GOOS=${{ matrix.os }}
           GOARCH=${{ matrix.arch }}
           ls -la
-          go build tsh.go -o tsh
+          go build -o tsh tsh.go
 
       - name: Archive builds
         uses: actions/upload-artifact@v4
