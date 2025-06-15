@@ -63,12 +63,13 @@ jobs:
           GOARCH=${{ matrix.arch }}
 
           if [ "${{ matrix.os }}" == "windows" ]; then
-            EXT=\.exe
+            EXT=.exe
+            echo "\.exe" >> $GITHUB_ENV
           else
             EXT=
+            echo "${EXT}" >> $GITHUB_ENV
           fi
 
-          echo "${EXT}" >> $GITHUB_ENV
           go build -o tsh${EXT} tsh.go
 
       - name: Archive builds
