@@ -59,9 +59,7 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          GOOS=${{ matrix.os }}
-          GOARCH=${{ matrix.arch }}
-
+        
           if [ "${{ matrix.os }}" == "windows" ]; then
             EXT=".exe"
           else
@@ -73,8 +71,8 @@ jobs:
           echo "${EXECUTABLE}" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
-          go build -o ${EXECUTABLE} tsh.go
-          ls -la
+          echo "Building for ${{ matrix.os }} ${{ matrix.arch }}"
+          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -o ${EXECUTABLE} tsh.go
 
       - name: Archive builds
         uses: actions/upload-artifact@v4
