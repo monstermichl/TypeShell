@@ -75,4 +75,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tsh_${{ matrix.os }}_${{ matrix.arch }}
-          path: tsh${EXT}
+          path: tsh${{ env.EXT }}
