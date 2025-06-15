@@ -3,7 +3,29 @@ name: TypeShell Linux
 on: [ push ]
 
 jobs:
-  test:
+  test-batch:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+
+      - name: Install dependencies
+        run: |
+          go get .
+
+      - name: Test
+        shell: cmd
+        run: |
+          go build tsh.go
+          go test ./tests -v -cover -coverprofile=coverage.out -coverpkg ./lexer,./parser,./transpiler || exit -1
+          go tool cover -func=coverage.out
+
+  test-bash:
+    needs: test-batch
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,15 +46,8 @@ jobs:
           go test ./tests -v -cover -coverprofile=coverage.out -coverpkg ./lexer,./parser,./transpiler || exit -1
           go tool cover -func=coverage.out
 
-      - name: Test Batch
-        shell: cmd
-        run: |
-          go build tsh.go
-          go test ./tests -v -cover -coverprofile=coverage.out -coverpkg ./lexer,./parser,./transpiler || exit -1
-          go tool cover -func=coverage.out
-
   build:
-    needs: test
+    needs: test-bash
     runs-on: ubuntu-latest
     strategy:
       matrix:
