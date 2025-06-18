@@ -242,7 +242,7 @@ panic(err)
 
 ## Caveats
 ### Condition evaluation
-In contrast to many other programming languages, TypeShell evaluates all conditions before the actual statement. This is done to handle the limitations of Batch/Bash. HINT: This is also true for switch-evaluations since switchs is internally converted to ifs.
+In contrast to many other programming languages, TypeShell evaluates all conditions before the actual statement. This is done to handle the limitations of Batch/Bash. HINT: This is also true for switch-evaluations since switchs are internally converted to ifs.
 
 ```golang
 if a == 1 && b == 1 {
@@ -251,6 +251,7 @@ if a == 1 && b == 1 {
 ```
 
 ```golang
+// How it's handled internally.
 h1 := a == 1
 h2 := b == 2
 h3 := a && b
