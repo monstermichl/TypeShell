@@ -1,0 +1,10 @@
+func hello() string {
+	return "hello"
+}
+
+func buildGreeting(p string) string {
+	return hello() + " " + p
+}
+
+greeting := buildGreeting("world")
+print(greeting)
