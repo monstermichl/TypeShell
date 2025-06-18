@@ -19,7 +19,8 @@ func buildGreeting(p string) string {
 }
 
 greeting := buildGreeting("world")
-print(greeting)
+
+print(greeting) // Prints "Hello World" to the console.
 ```
 
 ## Basics
