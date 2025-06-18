@@ -1,6 +1,27 @@
 # TypeShell
 TypeShell is a Go-like programming language that transpiles down to Batch or Bash.
 
+```cmd
+rem Transpile helloworld.tsh to Batch and Bash and write it to the current directory.
+tsh.exe -i helloworld.tsh -t batch -t bash -o .
+```
+
+## Example
+```golang
+// helloworld.tsh
+
+func hello() string {
+	return "hello"
+}
+
+func buildGreeting(p string) string {
+	return hello() + " " + p
+}
+
+greeting := buildGreeting("world")
+print(greeting)
+```
+
 ## Basics
 ### Variables
 Supported variable types are *bool*, *int*, *string* and *error*.
