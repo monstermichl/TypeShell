@@ -2,7 +2,7 @@
 TypeShell is a Go-like programming language that transpiles down to Batch or Bash.
 
 ```cmd
-rem Transpile helloworld.tsh to Batch and Bash and write it to the current directory.
+rem Transpile helloworld.tsh to Batch and Bash and write the scripts to the current directory.
 tsh.exe -i helloworld.tsh -t batch -t bash -o .
 ```
 
