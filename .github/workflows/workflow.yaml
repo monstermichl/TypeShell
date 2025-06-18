@@ -92,3 +92,5 @@ jobs:
         run: |
           echo "Uploading ${{ env.EXECUTABLE }} release file"
           gh release upload ${{ github.event.release.tag_name }} ${{ env.EXECUTABLE }}
+        env:
+            GH_TOKEN: ${{ github.TOKEN }}
