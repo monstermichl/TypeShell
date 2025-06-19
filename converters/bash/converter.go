@@ -99,17 +99,7 @@ func (c *converter) VarDefinition(name string, value string, global bool) error 
 }
 
 func (c *converter) VarAssignment(name string, value string, global bool) error {
-	length := len(value)
-
-	if length > 0 {
-		if string(value[length-1]) != "\"" {
-			value = fmt.Sprintf("%s\"", value)
-		}
-		if string(value[0]) != "\"" {
-			value = fmt.Sprintf("\"%s", value)
-		}
-	}
-	c.addLine(fmt.Sprintf("%s=%s", c.varName(name, global), value))
+	c.addLine(c.varAssignmentString(name, value, global))
 	return nil
 }
 
@@ -127,7 +117,8 @@ func (c *converter) FuncStart(name string, params []string, returnTypes []parser
 	c.addLine(fmt.Sprintf("%s() {", name))
 
 	for i, param := range params {
-		c.VarAssignment(param, fmt.Sprintf("$%d", i+1), false)
+		s := c.varAssignmentString(param, fmt.Sprintf("$%d", i+1), false)
+		c.addLine(fmt.Sprintf("local %s", s))
 	}
 	return nil
 }
@@ -557,6 +548,20 @@ func (c *converter) varName(name string, global bool) string {
 		name = fmt.Sprintf("f%d_%s", c.funcCounter, name)
 	}
 	return name
+}
+
+func (c *converter) varAssignmentString(name string, value string, global bool) string {
+	length := len(value)
+
+	if length > 0 {
+		if string(value[length-1]) != `"` {
+			value = fmt.Sprintf(`%s"`, value)
+		}
+		if string(value[0]) != `"` {
+			value = fmt.Sprintf(`"%s`, value)
+		}
+	}
+	return fmt.Sprintf("%s=%s", c.varName(name, global), value)
 }
 
 func (c *converter) varEvaluationString(name string, global bool) string {
