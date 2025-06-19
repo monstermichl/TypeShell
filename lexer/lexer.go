@@ -248,7 +248,7 @@ func Tokenize(source string) ([]Token, error) {
 		ogRow := row
 		ogColumn := column
 
-		if c0 == "\"" {
+		if c0 == `"` {
 			// Evaluate string.
 			str := ""
 			i++
@@ -267,7 +267,7 @@ func Tokenize(source string) ([]Token, error) {
 					str += parsed
 					i += len(match)
 					appended = true
-				} else if c0 == "\"" {
+				} else if c0 == `"` {
 					// Detected string end.
 					i++
 					token = newToken(str, STRING_LITERAL, ogRow, ogColumn)
@@ -354,7 +354,7 @@ func Tokenize(source string) ([]Token, error) {
 
 		// If still no token has been found, exit with error.
 		if token.tokenType == UNKNOWN {
-			err = fmt.Errorf("unknown token \"%s\" at position %d", c0, i)
+			err = fmt.Errorf(`unknown token "%s" at position %d`, c0, i)
 			break
 		} else if slices.Contains([]TokenType{SPACE, COMMENT}, token.tokenType) {
 			// Ignore spaces and comments for now.
