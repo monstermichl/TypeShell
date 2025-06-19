@@ -2049,9 +2049,12 @@ func (p *Parser) evaluateUnaryOperation(ctx context) (Expression, error) {
 	nextToken := p.peek()
 	negate := false
 
-	if nextToken.Value() == UNARY_OPERATOR_NEGATE {
-		negate = true
-		p.eat()
+	if nextToken.Type() == lexer.UNARY_OPERATOR {
+		// Use nested if for possible future unary operators.
+		if nextToken.Value() == UNARY_OPERATOR_NEGATE {
+			negate = true
+			p.eat()
+		}
 	}
 	valueToken := p.peek()
 	expr, err := p.evaluateSingleExpression(ctx)
