@@ -248,7 +248,7 @@ func Tokenize(source string) ([]Token, error) {
 		ogRow := row
 		ogColumn := column
 
-		if c0 == `"` {
+		if raw := c0 == "`"; raw || c0 == `"` {
 			// Evaluate string.
 			str := ""
 			i++
@@ -257,7 +257,7 @@ func Tokenize(source string) ([]Token, error) {
 				c0 = char(source, i)
 				appended := false
 
-				if match := regexp.MustCompile(`^\\.`).FindString(source[i:]); match != "" {
+				if match := regexp.MustCompile(`^\\.`).FindString(source[i:]); !raw && match != "" {
 					// Convert escaped character to be a control character (https://pkg.go.dev/strconv#Unquote).
 					parsed, err := strconv.Unquote(fmt.Sprintf(`"%s"`, match))
 
@@ -267,7 +267,7 @@ func Tokenize(source string) ([]Token, error) {
 					str += parsed
 					i += len(match)
 					appended = true
-				} else if c0 == `"` {
+				} else if (raw && c0 == "`") || (!raw && c0 == `"`) {
 					// Detected string end.
 					i++
 					token = newToken(str, STRING_LITERAL, ogRow, ogColumn)

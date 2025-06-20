@@ -34,8 +34,7 @@ func New() *converter {
 }
 
 func (c *converter) StringToString(value string) string {
-	// Replace "\\n" with "\n".
-	return strings.ReplaceAll(value, "\\n", "\n")
+	return value
 }
 
 func (c *converter) Dump() (string, error) {
