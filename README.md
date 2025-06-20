@@ -157,17 +157,17 @@ for i := 0; i < len(s); i++ {
 ### Programs
 ```golang
 // Programs are called by stating the program name preceded by an @.
-@ls("-a")
+@dir("/b")
 ```
 
 ```golang
 // Similar to Bash/Batch, the output can be piped into another program.
-@ls("-a") | @sort()
+@dir("/b") | @sort("/r")
 ```
 
 ```golang
 // To capture the output, just assign the call chain to variables.
-stdout, stderr, code := @ls("-a") | @sort()
+stdout, stderr, code := @dir("/b") | @sort("/r")
 ```
 
 ### Imports
