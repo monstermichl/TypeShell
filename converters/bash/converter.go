@@ -34,8 +34,7 @@ func New() *converter {
 }
 
 func (c *converter) StringToString(value string) string {
-	// Replace "\\n" with "\n".
-	return strings.ReplaceAll(value, "\\n", "\n")
+	return value
 }
 
 func (c *converter) Dump() (string, error) {
@@ -81,14 +80,16 @@ func (c *converter) ProgramEnd() error {
 			"while [ ${_i} -lt ${_l} ]; do",
 			fmt.Sprintf("local _v=%s", c.sliceEvaluationString("${2}", "${_i}")),
 			c.sliceAssignmentString("${_n}", "${_i}", "${_v}", false),
-			"_i=$(expr ${_i} + 1)",
+			"_i=$((${_i}+1))",
 			"done",
 		)
 	}
 
 	if c.stringSubscriptHelperRequired {
 		c.addHelper("substring", "_ssh",
-			"echo \"${1}\" | cut -c $(expr ${2} \\+ 1)-$(expr ${3} \\+ 1)", // Cut index starts at 1, therefore 1 must be added to 0-based subscript.
+			`_ls=$((${2}))`,
+			`_ll=$(((${3}-${2})+1))`,
+			`_ret="${1:${_ls}:${_ll}}"`,
 		)
 	}
 	return nil
@@ -99,17 +100,7 @@ func (c *converter) VarDefinition(name string, value string, global bool) error 
 }
 
 func (c *converter) VarAssignment(name string, value string, global bool) error {
-	length := len(value)
-
-	if length > 0 {
-		if string(value[length-1]) != "\"" {
-			value = fmt.Sprintf("%s\"", value)
-		}
-		if string(value[0]) != "\"" {
-			value = fmt.Sprintf("\"%s", value)
-		}
-	}
-	c.addLine(fmt.Sprintf("%s=%s", c.varName(name, global), value))
+	c.addLine(c.varAssignmentString(name, value, global))
 	return nil
 }
 
@@ -127,7 +118,8 @@ func (c *converter) FuncStart(name string, params []string, returnTypes []parser
 	c.addLine(fmt.Sprintf("%s() {", name))
 
 	for i, param := range params {
-		c.VarAssignment(param, fmt.Sprintf("$%d", i+1), false)
+		s := c.varAssignmentString(param, fmt.Sprintf("$%d", i+1), false)
+		c.addLine(fmt.Sprintf("local %s", s))
 	}
 	return nil
 }
@@ -279,7 +271,7 @@ func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator,
 		default:
 			return notAllowedError()
 		}
-		c.VarAssignment(helper, fmt.Sprintf("$(expr %s \\%s %s)", left, operator, right), false) // Backslash is required for * operator to prevent pattern expansion (https://www.shell-tips.com/bash/math-arithmetic-calculation/#using-the-expr-command-line).
+		c.VarAssignment(helper, fmt.Sprintf("$((%s%s%s))", left, operator, right), false) // Backslash is required for * operator to prevent pattern expansion (https://www.shell-tips.com/bash/math-arithmetic-calculation/#using-the-expr-command-line).
 	case parser.DATA_TYPE_STRING:
 		switch operator {
 		case parser.BINARY_OPERATOR_ADDITION:
@@ -419,7 +411,8 @@ func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 func (c *converter) StringSubscript(value string, startIndex string, endIndex string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
-	c.VarAssignment(helper, fmt.Sprintf("$(_ssh \"%s\" %s %s)", value, startIndex, endIndex), false) // https://www.baeldung.com/linux/bash-substring#1-using-thecut-command
+	c.addLine(fmt.Sprintf(`_ssh "%s" %s %s`, value, startIndex, endIndex))
+	c.VarAssignment(helper, c.varEvaluationString("_ret", true), false) // https://www.baeldung.com/linux/bash-substring#1-using-thecut-command
 	c.stringSubscriptHelperRequired = true
 
 	return c.varEvaluationString(helper, false), nil
@@ -557,6 +550,20 @@ func (c *converter) varName(name string, global bool) string {
 		name = fmt.Sprintf("f%d_%s", c.funcCounter, name)
 	}
 	return name
+}
+
+func (c *converter) varAssignmentString(name string, value string, global bool) string {
+	length := len(value)
+
+	if length > 0 {
+		if string(value[length-1]) != `"` {
+			value = fmt.Sprintf(`%s"`, value)
+		}
+		if string(value[0]) != `"` {
+			value = fmt.Sprintf(`"%s`, value)
+		}
+	}
+	return fmt.Sprintf("%s=%s", c.varName(name, global), value)
 }
 
 func (c *converter) varEvaluationString(name string, global bool) string {

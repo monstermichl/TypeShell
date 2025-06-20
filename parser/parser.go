@@ -77,7 +77,7 @@ func (c context) buildPrefixedName(name string, prefix string, global bool, chec
 		hash, exists := c.imports[prefix]
 
 		if checkExistence && !exists {
-			return "", fmt.Errorf("prefix \"%s\" not found", prefix)
+			return "", fmt.Errorf(`prefix "%s" not found`, prefix)
 		}
 		name = buildPrefixedName(hash, name)
 	}
@@ -369,10 +369,10 @@ func (p Parser) findAllowed(searchTokenType lexer.TokenType, allowed ...lexer.To
 		}
 
 		if !slices.Contains(allowed, tokenType) {
-			return lexer.Token{}, fmt.Errorf("found illegal token \"%d\" before \"%d\"", tokenType, searchTokenType)
+			return lexer.Token{}, fmt.Errorf(`found illegal token "%d" before "%d"`, tokenType, searchTokenType)
 		}
 	}
-	return lexer.Token{}, fmt.Errorf("token type \"%d\" not found", searchTokenType)
+	return lexer.Token{}, fmt.Errorf(`token type "%d" not found`, searchTokenType)
 }
 
 func (p Parser) findBefore(searchTokenType lexer.TokenType, before ...lexer.TokenType) (lexer.Token, error) {
@@ -388,11 +388,11 @@ func (p Parser) findBefore(searchTokenType lexer.TokenType, before ...lexer.Toke
 
 		for _, tokenTypeTemp := range before {
 			if tokenTypeTemp == tokenType {
-				return lexer.Token{}, fmt.Errorf("found \"%d\" before \"%d\"", tokenTypeTemp, tokenType)
+				return lexer.Token{}, fmt.Errorf(`found "%d" before "%d"`, tokenTypeTemp, tokenType)
 			}
 		}
 	}
-	return lexer.Token{}, fmt.Errorf("token type \"%d\" not found", searchTokenType)
+	return lexer.Token{}, fmt.Errorf(`token type "%d" not found`, searchTokenType)
 }
 
 func (p *Parser) eat() lexer.Token {
@@ -504,7 +504,7 @@ func (p *Parser) evaluateValues(ctx context) (evaluatedValues, error) {
 			funcName = call.Name()
 
 			if returnValuesLength == 0 {
-				return evaluatedValues{}, p.expectedError(fmt.Sprintf("return value from function \"%s\"", funcName), exprToken)
+				return evaluatedValues{}, p.expectedError(fmt.Sprintf(`return value from function "%s"`, funcName), exprToken)
 			}
 		}
 		// Check if other values follow.
@@ -515,7 +515,7 @@ func (p *Parser) evaluateValues(ctx context) (evaluatedValues, error) {
 
 		// If other values follow, function must only return one value.
 		if returnValuesLength > 1 {
-			return evaluatedValues{}, p.expectedError(fmt.Sprintf("only one return value from function \"%s\"", funcName), exprToken)
+			return evaluatedValues{}, p.expectedError(fmt.Sprintf(`only one return value from function "%s"`, funcName), exprToken)
 		}
 	}
 	return evaluatedValues{
@@ -533,7 +533,7 @@ func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword stri
 
 	// Make sure after the print call comes a  opening round bracket.
 	if nextToken.Type() != lexer.OPENING_ROUND_BRACKET {
-		return nil, p.expectedError("\"(\"", nextToken)
+		return nil, p.expectedError(`"("`, nextToken)
 	}
 	expressions := []Expression{}
 	nextToken = p.peek()
@@ -555,7 +555,7 @@ func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword stri
 			} else if nextTokenType == lexer.CLOSING_ROUND_BRACKET {
 				break
 			} else {
-				return nil, p.expectedError("\",\" or \")\"", nextToken)
+				return nil, p.expectedError(`"," or ")"`, nextToken)
 			}
 		}
 	}
@@ -574,7 +574,7 @@ func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword stri
 
 	// Make sure print call is terminated with a closing round bracket.
 	if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
-		return nil, p.expectedError("\")\"", nextToken)
+		return nil, p.expectedError(`")"`, nextToken)
 	}
 	return stmtCallout(keywordToken, expressions)
 }
@@ -673,7 +673,7 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 				}
 			} else if aliasLen == 0 {
 				// If it's not a standard library path, an alias must be provided.
-				return nil, fmt.Errorf("an alias must be provided for the local import \"%s\" in \"%s\"", path, p.path)
+				return nil, fmt.Errorf(`an alias must be provided for the local import "%s" in "%s"`, path, p.path)
 			}
 			importParser := New()
 			importedProg, err := importParser.parse(absPath, true)
@@ -683,7 +683,7 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 			}
 
 			if _, exists := ctx.findImport(alias); exists {
-				return nil, fmt.Errorf("import alias \"%s\" already exists", alias)
+				return nil, fmt.Errorf(`import alias "%s" already exists`, alias)
 			}
 			err = ctx.addImport(alias, importParser.prefix)
 
@@ -716,7 +716,7 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 			} else if slices.Contains([]lexer.TokenType{lexer.IDENTIFIER, lexer.STRING_LITERAL}, nextTokenType) {
 				// Nothing to do, parse next import in the next cycle.
 			} else {
-				return nil, p.expectedError("\")\"", nextToken)
+				return nil, p.expectedError(`")"`, nextToken)
 			}
 		}
 	}
@@ -926,7 +926,7 @@ func (p *Parser) evaluateValueType() (ValueType, error) {
 		nextToken = p.eat() // Eat closing square bracket.
 
 		if nextToken.Type() != lexer.CLOSING_SQUARE_BRACKET {
-			return evaluatedType, p.expectedError("\"]\"", nextToken)
+			return evaluatedType, p.expectedError(`"]"`, nextToken)
 		}
 		nextToken = p.peek()
 		evaluatedType.isSlice = true
@@ -1041,7 +1041,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 
 		// If the variable already exists, make sure it has the same type as the specified type.
 		if exists && specifiedType.DataType() != DATA_TYPE_UNKNOWN && !specifiedType.Equals(variableValueType) {
-			return nil, p.atError(fmt.Sprintf("variable \"%s\" already exists but has type %s", name, variableValueType.String()), nextToken)
+			return nil, p.atError(fmt.Sprintf(`variable "%s" already exists but has type %s`, name, variableValueType.String()), nextToken)
 		}
 		storedName := name
 
@@ -1187,7 +1187,7 @@ func (p *Parser) evaluateCompoundAssignment(ctx context) (Statement, error) {
 	binaryOperator := string(assignOperator[0])
 
 	if !slices.Contains(allowedBinaryOperators(valueType), binaryOperator) {
-		return nil, p.expectedError(fmt.Sprintf("valid %s compound assign operator but got \"%s\"", valueType.String(), assignOperator), assignToken)
+		return nil, p.expectedError(fmt.Sprintf(`valid %s compound assign operator but got "%s"`, valueType.String(), assignOperator), assignToken)
 	}
 	return VariableAssignment{
 		variables: []Variable{definedVariable},
@@ -1211,7 +1211,7 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
 
 	// Check assign token.
 	if assignToken.Type() != lexer.ASSIGN_OPERATOR {
-		return nil, p.expectedError("\"=\"", assignToken)
+		return nil, p.expectedError(`"="`, assignToken)
 	}
 	valuesToken := p.peek()
 	evaluatedVals, err := p.evaluateValues(ctx)
@@ -1300,7 +1300,7 @@ func (p *Parser) evaluateParams(ctx context) ([]Variable, error) {
 		nextTokenType := nextToken.Type()
 
 		if nextTokenType != lexer.COMMA && nextTokenType != lexer.CLOSING_ROUND_BRACKET {
-			return params, p.expectedError("\",\" or \")\"", nextToken)
+			return params, p.expectedError(`"," or ")"`, nextToken)
 		} else if nextTokenType == lexer.COMMA {
 			p.eat()
 		}
@@ -1388,7 +1388,7 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 		if nextTokenType == lexer.CLOSING_ROUND_BRACKET {
 			break
 		} else if nextTokenType != lexer.COMMA {
-			return nil, p.expectedError("\",\" or \")\"", nextToken)
+			return nil, p.expectedError(`"," or ")"`, nextToken)
 		}
 		returnTypeToken = p.peek()
 	}
@@ -1420,16 +1420,16 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 			if last {
 				// TODO: Add token position to errors to raise clearer error messages.
 				if lastStatement == nil || lastStatement.StatementType() != STATEMENT_TYPE_RETURN {
-					errTemp = fmt.Errorf("function \"%s\" requires a return statement at the end of the block", name)
+					errTemp = fmt.Errorf(`function "%s" requires a return statement at the end of the block`, name)
 				} else if returnStatement := lastStatement.(Return); len(returnStatement.Values()) != len(returnTypes) {
-					errTemp = fmt.Errorf("function \"%s\" requires %d return values but returns %d", name, len(returnTypes), len(returnStatement.Values()))
+					errTemp = fmt.Errorf(`function "%s" requires %d return values but returns %d`, name, len(returnTypes), len(returnStatement.Values()))
 				} else {
 					for i, returnValue := range returnStatement.Values() {
 						returnType := returnTypes[i]
 						returnValueType := returnValue.ValueType()
 
 						if !returnValueType.Equals(returnType) {
-							errTemp = fmt.Errorf("function \"%s\" returns %s but expects %s", name, returnValueType.String(), returnType.String())
+							errTemp = fmt.Errorf(`function "%s" returns %s but expects %s`, name, returnValueType.String(), returnType.String())
 							break
 						}
 					}
@@ -1704,12 +1704,13 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 	var stmt Statement
 	nextToken := p.peek()
 	nextTokenType := nextToken.Type()
+	nextAfterNextTokenType := p.peekAt(1).Type()
 
 	// Clone context to avoid modification of the original.
 	ctx = ctx.clone()
 
-	// If next token is an identifier and the one after it a comma, parse a for-range statement.
-	if nextTokenType == lexer.IDENTIFIER && p.peekAt(1).Type() == lexer.COMMA {
+	// If next token is an identifier and the one after it a comma or a short-init operator and range keyword, parse a for-range statement.
+	if nextTokenType == lexer.IDENTIFIER && (nextAfterNextTokenType == lexer.COMMA || (nextAfterNextTokenType == lexer.SHORT_INIT_OPERATOR && p.peekAt(2).Type() == lexer.RANGE)) {
 		p.eat()
 		err := p.checkNewVariableNameToken(nextToken, ctx)
 
@@ -1717,22 +1718,28 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 			return nil, err
 		}
 		indexVarName := nextToken.Value()
-		nextToken = p.eat()
+		nextToken = p.peek()
+		valueVarName := ""
 
-		if nextToken.Type() != lexer.COMMA {
-			return nil, p.expectedError(`","`, nextToken)
+		if nextToken.Type() == lexer.COMMA {
+			p.eat()
+			nextToken = p.eat()
+
+			if nextToken.Type() != lexer.IDENTIFIER {
+				return nil, p.expectedError("identifier", nextToken)
+			}
+			err = p.checkNewVariableNameToken(nextToken, ctx)
+
+			if err != nil {
+				return nil, err
+			}
+			valueVarName = nextToken.Value()
 		}
 		nextToken = p.eat()
-		err = p.checkNewVariableNameToken(nextToken, ctx)
-
-		if err != nil {
-			return nil, err
-		}
-		valueVarName := nextToken.Value()
-		nextToken = p.eat()
+		hasNamedVar := len(valueVarName) > 0
 
 		if nextToken.Type() != lexer.SHORT_INIT_OPERATOR {
-			return nil, p.expectedError(`":="`, nextToken)
+			return nil, p.expectedError(`":=" or ","`, nextToken)
 		}
 		nextToken = p.eat()
 
@@ -1764,10 +1771,25 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 			return nil, p.expectedError("slice or string", nextToken)
 		}
 		iterableValueType.isSlice = false // Make sure the value var is not a slice.
-		valueVar := NewVariable(valueVarName, iterableValueType, false, false)
+		forRangeStatements := []Statement{}
 
-		// Add block variables.
-		ctx.addVariables(p.prefix, false, indexVar, valueVar)
+		// Add count variable.
+		ctx.addVariables(p.prefix, false, indexVar)
+
+		// If no value variable has been provided, there's no need to add it.
+		if hasNamedVar {
+			valueVar := NewVariable(valueVarName, iterableValueType, false, false)
+
+			// Add value variable.
+			ctx.addVariables(p.prefix, false, valueVar)
+
+			forRangeStatements = []Statement{
+				VariableAssignment{
+					variables: []Variable{valueVar},
+					values:    []Expression{iterableEvaluation},
+				},
+			}
+		}
 
 		init := VariableAssignment{
 			variables: []Variable{indexVar},
@@ -1779,12 +1801,6 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 			right:    Len{iterableExpression},
 		}
 		increment := incrementDecrementStatement(indexVar, true)
-		forRangeStatements := []Statement{
-			VariableAssignment{
-				variables: []Variable{valueVar},
-				values:    []Expression{iterableEvaluation},
-			},
-		}
 		statements, err := p.evaluateBlock(nil, ctx, SCOPE_FOR)
 
 		if err != nil {
@@ -1844,7 +1860,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 
 			// Next token must be a semicolon.
 			if nextToken.Type() != lexer.SEMICOLON {
-				return nil, p.expectedError("\";\"", nextToken)
+				return nil, p.expectedError(`";"`, nextToken)
 			}
 			nextToken = p.peek()
 			conditionToken = nextToken
@@ -1863,7 +1879,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 
 			// Next token must be a semicolon.
 			if nextToken.Type() != lexer.SEMICOLON {
-				return nil, p.expectedError("\";\"", nextToken)
+				return nil, p.expectedError(`";"`, nextToken)
 			}
 			nextToken = p.peek()
 
@@ -2031,7 +2047,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 		}
 
 	default:
-		return nil, p.atError(fmt.Sprintf("unknown expression type %d \"%s\"", tokenType, value), token)
+		return nil, p.atError(fmt.Sprintf(`unknown expression type %d "%s"`, tokenType, value), token)
 	}
 
 	if err != nil {
@@ -2049,9 +2065,12 @@ func (p *Parser) evaluateUnaryOperation(ctx context) (Expression, error) {
 	nextToken := p.peek()
 	negate := false
 
-	if nextToken.Value() == UNARY_OPERATOR_NEGATE {
-		negate = true
-		p.eat()
+	if nextToken.Type() == lexer.UNARY_OPERATOR {
+		// Use nested if for possible future unary operators.
+		if nextToken.Value() == UNARY_OPERATOR_NEGATE {
+			negate = true
+			p.eat()
+		}
 	}
 	valueToken := p.peek()
 	expr, err := p.evaluateSingleExpression(ctx)
@@ -2196,7 +2215,7 @@ func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperators []BinaryO
 		allowedTypeOperators := allowedBinaryOperators(leftType)
 
 		if !slices.Contains(allowedTypeOperators, operator) {
-			return nil, p.expectedError(fmt.Sprintf("valid %s operator but got \"%s\"", leftType.String(), operator), operatorToken)
+			return nil, p.expectedError(fmt.Sprintf(`valid %s operator but got "%s"`, leftType.String(), operator), operatorToken)
 		}
 		leftExpression = BinaryOperation{
 			left:     leftExpression,
@@ -2235,7 +2254,7 @@ func (p *Parser) evaluateComparison(ctx context) (Expression, error) {
 		allowedOperators := allowedCompareOperators(leftType)
 
 		if !slices.Contains(allowedOperators, operator) {
-			return nil, p.expectedError(fmt.Sprintf("valid %s operator but got \"%s\"", leftType.String(), operator), operatorToken)
+			return nil, p.expectedError(fmt.Sprintf(`valid %s operator but got "%s"`, leftType.String(), operator), operatorToken)
 		}
 		return NewComparison(leftExpression, operator, rightExpression), nil
 	}
@@ -2414,7 +2433,7 @@ func (p *Parser) evaluateAppCall(ctx context) (Call, error) {
 	nextToken := p.eat()
 
 	if nextToken.Type() != lexer.AT {
-		return nil, p.expectedError("\"@\"", nextToken)
+		return nil, p.expectedError(`"@"`, nextToken)
 	}
 	nextToken = p.eat()
 	name := nextToken.Value()
@@ -2458,7 +2477,7 @@ func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
 	nextToken = p.eat()
 
 	if nextToken.Type() != lexer.OPENING_CURLY_BRACKET {
-		return nil, p.expectedError("\"{\"", nextToken)
+		return nil, p.expectedError(`"{"`, nextToken)
 	}
 	nextToken = p.peek()
 	values := []Expression{}
@@ -2488,14 +2507,14 @@ func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
 			} else if nextTokenType == lexer.CLOSING_CURLY_BRACKET {
 				break
 			} else {
-				return nil, p.expectedError("\",\" or \"}\"", nextToken)
+				return nil, p.expectedError(`"," or "}"`, nextToken)
 			}
 		}
 	}
 	nextToken = p.eat()
 
 	if nextToken.Type() != lexer.CLOSING_CURLY_BRACKET {
-		return nil, p.expectedError("\"}\"", nextToken)
+		return nil, p.expectedError(`"}"`, nextToken)
 	}
 	return SliceInstantiation{
 		dataType: sliceValueType.DataType(),
@@ -2530,7 +2549,7 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 	nextToken := p.eat()
 
 	if nextToken.Type() != lexer.OPENING_SQUARE_BRACKET {
-		return nil, p.expectedError("\"[\"", nextToken)
+		return nil, p.expectedError(`"["`, nextToken)
 	}
 	nextToken = p.peek()
 	startToken := nextToken
@@ -2589,7 +2608,7 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 		nextToken = p.eat()
 
 		if nextToken.Type() != lexer.CLOSING_SQUARE_BRACKET {
-			return nil, p.expectedError("\"]\"", nextToken)
+			return nil, p.expectedError(`"]"`, nextToken)
 		}
 
 		// End-index is not included.
@@ -2639,7 +2658,7 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 	nextToken := p.eat()
 
 	if nextToken.Type() != lexer.OPENING_SQUARE_BRACKET {
-		return nil, p.expectedError("\"[\"", nextToken)
+		return nil, p.expectedError(`"["`, nextToken)
 	}
 	nextToken = p.peek()
 	index, err := p.evaluateExpression(ctx)
@@ -2655,12 +2674,12 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 	nextToken = p.eat()
 
 	if nextToken.Type() != lexer.CLOSING_SQUARE_BRACKET {
-		return nil, p.expectedError("\"]\"", nextToken)
+		return nil, p.expectedError(`"]"`, nextToken)
 	}
 	nextToken = p.eat()
 
 	if nextToken.Type() != lexer.ASSIGN_OPERATOR {
-		return nil, p.expectedError("\"=\"", nameToken)
+		return nil, p.expectedError(`"="`, nameToken)
 	}
 	valueToken := p.peek()
 	value, err := p.evaluateExpression(ctx)
@@ -2707,7 +2726,7 @@ func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
 	case lexer.DECREMENT_OPERATOR:
 		increment = false
 	default:
-		return nil, p.expectedError("\"++\" or \"--\"", operationToken)
+		return nil, p.expectedError(`"++" or "--"`, operationToken)
 	}
 	return incrementDecrementStatement(definedVariable, increment), nil
 }

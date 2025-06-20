@@ -32,6 +32,18 @@ func TestStringRangeNoIndicesSubscriptSuccess(t *testing.T) {
 	testStringRangeNoIndicesSubscriptSuccess(t, transpileBatch)
 }
 
+func TestStringWithNewlineSuccess(t *testing.T) {
+	testStringWithNewlineSuccess(t, transpileBatch)
+}
+
+func TestStringWithoutNewlineSuccess(t *testing.T) {
+	testStringWithoutNewlineSuccess(t, transpileBatch)
+}
+
+func TestMultilineStringSuccess(t *testing.T) {
+	testMultilineStringSuccess(t, transpileBatch)
+}
+
 func TestItoaSuccess(t *testing.T) {
 	testItoaSuccess(t, transpileBatch)
 }

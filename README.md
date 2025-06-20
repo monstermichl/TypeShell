@@ -287,3 +287,10 @@ print(s[0]) // Prints "Hello".
 print(s[1]) // Prints "".
 print(s[2]) // Prints "World".
 ```
+
+## Visual Studio Code
+There is no extension for VSCode yet. However, since the code is very Go-like, adding the ".tsh" extension to the settings should serve as a first workaround.
+- Open VSCode.
+- Go to File -> Preferences -> Settings.
+- Seach for "file associations".
+- Add "*.tsh" to the list and associate it with Go.

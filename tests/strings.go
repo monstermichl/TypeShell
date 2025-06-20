@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -82,6 +83,47 @@ func testStringRangeNoIndicesSubscriptSuccess(t *testing.T, transpilerFunc trans
 	`, func(output string, err error) {
 		require.Nil(t, err)
 		require.Equal(t, "test"[:], output)
+	})
+}
+
+func testStringWithNewlineSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		s := "hello\nworld"
+
+		print(s)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "hello\nworld", output)
+	})
+}
+
+func testStringWithoutNewlineSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		s := `+"`hello\\nworld`"+`
+
+		print(s)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, `hello\nworld`, output)
+	})
+}
+
+func testMultilineStringSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		s := `+"`"+`
+			hello
+			multiline
+			world
+		`+"`"+`
+
+		print(s)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, strings.TrimSpace(`
+		    hello
+			multiline
+			world
+		`), output)
 	})
 }
 

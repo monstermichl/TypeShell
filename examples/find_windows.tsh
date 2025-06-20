@@ -1,0 +1,10 @@
+import "strings" // Import standard library "strings".
+
+pattern := input("Find pattern: ")                          // Ask user for pattern input.
+filesString, stderr, code := @dir("/b") | @findstr(pattern) // Make program calls.
+files := strings.Split(filesString, "\n")                   // Split files list at newline.
+
+// Iterate files.
+for i, f := range files {
+	print(i, f)
+}
