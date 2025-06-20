@@ -1704,12 +1704,13 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 	var stmt Statement
 	nextToken := p.peek()
 	nextTokenType := nextToken.Type()
+	nextAfterNextTokenType := p.peekAt(1).Type()
 
 	// Clone context to avoid modification of the original.
 	ctx = ctx.clone()
 
-	// If next token is an identifier and the one after it a comma, parse a for-range statement.
-	if nextTokenType == lexer.IDENTIFIER && p.peekAt(1).Type() == lexer.COMMA {
+	// If next token is an identifier and the one after it a comma or a short-init operator and range keyword, parse a for-range statement.
+	if nextTokenType == lexer.IDENTIFIER && (nextAfterNextTokenType == lexer.COMMA || (nextAfterNextTokenType == lexer.SHORT_INIT_OPERATOR && p.peekAt(2).Type() == lexer.RANGE)) {
 		p.eat()
 		err := p.checkNewVariableNameToken(nextToken, ctx)
 
@@ -1717,22 +1718,28 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 			return nil, err
 		}
 		indexVarName := nextToken.Value()
-		nextToken = p.eat()
+		nextToken = p.peek()
+		valueVarName := ""
 
-		if nextToken.Type() != lexer.COMMA {
-			return nil, p.expectedError(`","`, nextToken)
+		if nextToken.Type() == lexer.COMMA {
+			p.eat()
+			nextToken = p.eat()
+
+			if nextToken.Type() != lexer.IDENTIFIER {
+				return nil, p.expectedError("identifier", nextToken)
+			}
+			err = p.checkNewVariableNameToken(nextToken, ctx)
+
+			if err != nil {
+				return nil, err
+			}
+			valueVarName = nextToken.Value()
 		}
 		nextToken = p.eat()
-		err = p.checkNewVariableNameToken(nextToken, ctx)
-
-		if err != nil {
-			return nil, err
-		}
-		valueVarName := nextToken.Value()
-		nextToken = p.eat()
+		hasNamedVar := len(valueVarName) > 0
 
 		if nextToken.Type() != lexer.SHORT_INIT_OPERATOR {
-			return nil, p.expectedError(`":="`, nextToken)
+			return nil, p.expectedError(`":=" or ","`, nextToken)
 		}
 		nextToken = p.eat()
 
@@ -1764,10 +1771,25 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 			return nil, p.expectedError("slice or string", nextToken)
 		}
 		iterableValueType.isSlice = false // Make sure the value var is not a slice.
-		valueVar := NewVariable(valueVarName, iterableValueType, false, false)
+		forRangeStatements := []Statement{}
 
-		// Add block variables.
-		ctx.addVariables(p.prefix, false, indexVar, valueVar)
+		// Add count variable.
+		ctx.addVariables(p.prefix, false, indexVar)
+
+		// If no value variable has been provided, there's no need to add it.
+		if hasNamedVar {
+			valueVar := NewVariable(valueVarName, iterableValueType, false, false)
+
+			// Add value variable.
+			ctx.addVariables(p.prefix, false, valueVar)
+
+			forRangeStatements = []Statement{
+				VariableAssignment{
+					variables: []Variable{valueVar},
+					values:    []Expression{iterableEvaluation},
+				},
+			}
+		}
 
 		init := VariableAssignment{
 			variables: []Variable{indexVar},
@@ -1779,12 +1801,6 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 			right:    Len{iterableExpression},
 		}
 		increment := incrementDecrementStatement(indexVar, true)
-		forRangeStatements := []Statement{
-			VariableAssignment{
-				variables: []Variable{valueVar},
-				values:    []Expression{iterableEvaluation},
-			},
-		}
 		statements, err := p.evaluateBlock(nil, ctx, SCOPE_FOR)
 
 		if err != nil {
