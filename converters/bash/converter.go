@@ -80,7 +80,7 @@ func (c *converter) ProgramEnd() error {
 			"while [ ${_i} -lt ${_l} ]; do",
 			fmt.Sprintf("local _v=%s", c.sliceEvaluationString("${2}", "${_i}")),
 			c.sliceAssignmentString("${_n}", "${_i}", "${_v}", false),
-			"_i=$(expr ${_i} + 1)",
+			"_i=$((${_i}+1))",
 			"done",
 		)
 	}
@@ -271,7 +271,7 @@ func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator,
 		default:
 			return notAllowedError()
 		}
-		c.VarAssignment(helper, fmt.Sprintf("$(expr %s \\%s %s)", left, operator, right), false) // Backslash is required for * operator to prevent pattern expansion (https://www.shell-tips.com/bash/math-arithmetic-calculation/#using-the-expr-command-line).
+		c.VarAssignment(helper, fmt.Sprintf("$((%s%s%s))", left, operator, right), false) // Backslash is required for * operator to prevent pattern expansion (https://www.shell-tips.com/bash/math-arithmetic-calculation/#using-the-expr-command-line).
 	case parser.DATA_TYPE_STRING:
 		switch operator {
 		case parser.BINARY_OPERATOR_ADDITION:
