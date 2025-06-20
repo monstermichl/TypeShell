@@ -87,7 +87,9 @@ func (c *converter) ProgramEnd() error {
 
 	if c.stringSubscriptHelperRequired {
 		c.addHelper("substring", "_ssh",
-			"echo \"${1}\" | cut -c $(expr ${2} \\+ 1)-$(expr ${3} \\+ 1)", // Cut index starts at 1, therefore 1 must be added to 0-based subscript.
+			`_ls=$((${2}))`,
+			`_ll=$(((${3}-${2})+1))`,
+			`_ret="${1:${_ls}:${_ll}}"`,
 		)
 	}
 	return nil
@@ -409,7 +411,8 @@ func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 func (c *converter) StringSubscript(value string, startIndex string, endIndex string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
-	c.VarAssignment(helper, fmt.Sprintf("$(_ssh \"%s\" %s %s)", value, startIndex, endIndex), false) // https://www.baeldung.com/linux/bash-substring#1-using-thecut-command
+	c.addLine(fmt.Sprintf(`_ssh "%s" %s %s`, value, startIndex, endIndex))
+	c.VarAssignment(helper, c.varEvaluationString("_ret", true), false) // https://www.baeldung.com/linux/bash-substring#1-using-thecut-command
 	c.stringSubscriptHelperRequired = true
 
 	return c.varEvaluationString(helper, false), nil
