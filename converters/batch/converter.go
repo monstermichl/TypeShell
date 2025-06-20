@@ -224,7 +224,7 @@ func (c *converter) ProgramEnd() error {
 		c.addHelper("string length", stringLengthHelper,
 			"set _l=0",
 			":_stlhl",
-			fmt.Sprintf(`if "!%s:~%%_l%%!" equ "" goto :_stlhle`, funcArgVar(0)), // https://www.geeksforgeeks.org/batch-script-string-length/
+			fmt.Sprintf(`if "!%s!" equ "" (goto :_stlhle) else if "!%s:~%%_l%%!" equ "" goto :_stlhle`, funcArgVar(0), funcArgVar(0)), // https://www.geeksforgeeks.org/batch-script-string-length/
 			`set /A "_l=%_l%+1"`,
 			"goto :_stlhl",
 			":_stlhle",
