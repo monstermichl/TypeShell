@@ -58,3 +58,46 @@ func HasSuffix(s string, suffix string) bool {
 	}
 	return false
 }
+
+func Split(s string, sep string) []string {
+	sLen := len(s)
+	sepLen := len(sep)
+	elems := []string{}
+
+	// If s and sep are empty, slice will be empty.
+	if sLen > 0 || sepLen > 0 {
+		startI := 0
+		endI := 0
+		elIndex := 0
+		boundary := len(s)
+
+		if sLen > 0 {
+			boundary -= sepLen
+		}
+
+		for endI <= boundary {
+			if s[endI:endI+sepLen] == sep {
+				sepEmpty := sepLen == 0
+
+				// If sep is empty, split after every char.
+				if sepEmpty {
+					endI++
+				}
+
+				if !sepEmpty || endI <= boundary {
+					elems[elIndex] = s[startI:endI]
+					endI += sepLen
+					startI = endI
+				}
+				elIndex++
+			} else if endI == boundary {
+				// Add last element to slice.
+				elems[elIndex] = s[startI:]
+				break
+			} else {
+				endI++
+			}
+		}
+	}
+	return elems
+}
