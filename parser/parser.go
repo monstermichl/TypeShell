@@ -2447,8 +2447,11 @@ func (p *Parser) evaluateAppCall(ctx context) (Call, error) {
 	nextToken = p.eat()
 	name := nextToken.Value()
 
-	if nextToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedError("program identifier", nextToken)
+	switch nextToken.Type() {
+	case lexer.IDENTIFIER, lexer.STRING_LITERAL:
+		// Nothing to do, those cases are valid.
+	default:
+		return nil, p.expectedError("program identifier or string literal", nextToken)
 	}
 	args, err := p.evaluateArguments("program", name, nil, ctx)
 

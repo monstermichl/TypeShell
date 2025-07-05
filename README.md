@@ -154,20 +154,25 @@ for i := 0; i < len(s); i++ {
 }
 ```
 
-### Programs
+### Programs/Scripts
 ```golang
-// Programs are called by stating the program name preceded by an @.
+// Programs/Scripts are called by stating the name preceded by an @.
 @dir("/b")
 ```
 
 ```golang
-// Similar to Bash/Batch, the output can be piped into another program.
+// Similar to Bash/Batch, the output can be piped into another program/script.
 @dir("/b") | @sort("/r")
 ```
 
 ```golang
 // To capture the output, just assign the call chain to variables.
 stdout, stderr, code := @dir("/b") | @sort("/r")
+```
+
+```golang
+// To specify the path to a program/script, a string literal is used.
+@`helper\dir.bat`("/b") // Equivalent to @"helper\\dir.bat"("/b")
 ```
 
 ### Imports
