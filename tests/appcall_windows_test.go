@@ -45,13 +45,13 @@ func TestBatFileFromSubDirCallPipeToFindstrCallSuccess(t *testing.T) {
 			return "", err
 		}
 		batFile := path.Join(subdir, "bat.bat")
-		err = os.WriteFile(batFile, []byte("dir /b %1"), 0700)
+		err = os.WriteFile(batFile, []byte("dir /b .."), 0700)
 
 		if err != nil {
 			return "", err
 		}
 		return `
-			` + fmt.Sprintf(`var stdout, stderr, code = @"%s"("..") | @findstr(".tsh")`, strings.ReplaceAll(strings.ReplaceAll(batFile, `/`, `\`), `\`, `\\`)) + `
+			` + fmt.Sprintf(`var stdout, stderr, code = @"%s"() | @findstr(".tsh")`, strings.ReplaceAll(strings.ReplaceAll(batFile, `/`, `\`), `\`, `\\`)) + `
 
 			print(stdout, code)
 		`, nil
