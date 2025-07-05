@@ -1076,7 +1076,16 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 
 		// Check if the amount of values is equal to the amount of variable names.
 		if valuesTypesLen != variablesLen {
-			return nil, p.atError(fmt.Sprintf("got %d initialisation values but %d variables", valuesTypesLen, variablesLen), nextToken)
+			pluralInit := ""
+			pluralValues := ""
+
+			if valuesTypesLen != 1 {
+				pluralInit = "s"
+			}
+			if variablesLen != 1 {
+				pluralValues = "s"
+			}
+			return nil, p.atError(fmt.Sprintf("got %d initialisation value%s but %d variable%s", valuesTypesLen, pluralInit, variablesLen, pluralValues), nextToken)
 		}
 
 		// If a type has been specified, make sure the returned types fit this type.
