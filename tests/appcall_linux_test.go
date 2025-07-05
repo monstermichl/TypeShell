@@ -44,13 +44,13 @@ func TestBashFileFromSubDirCallCallPipeToGrepCallSuccess(t *testing.T) {
 			return "", err
 		}
 		bashFile := path.Join(subdir, "bash.sh")
-		err = os.WriteFile(bashFile, []byte("ls .."), 0700)
+		err = os.WriteFile(bashFile, []byte("ls $1"), 0700)
 
 		if err != nil {
 			return "", err
 		}
 		return `
-			` + fmt.Sprintf(`var stdout, stderr, code = @"%s"() | @grep(".tsh")`, bashFile) + `
+			` + fmt.Sprintf(`var stdout, stderr, code = @"%s"("%s") | @grep(".tsh")`, bashFile, dir) + `
 
 			print(stdout, code)
 		`, nil
