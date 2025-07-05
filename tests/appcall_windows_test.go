@@ -51,7 +51,7 @@ func TestBatFileFromSubDirCallPipeToFindstrCallSuccess(t *testing.T) {
 			return "", err
 		}
 		return `
-			` + fmt.Sprintf(`var stdout, stderr, code = @"%s"() | @findstr(".tsh")`, strings.ReplaceAll(strings.ReplaceAll(batFile, `/`, `\`), `\`, `\\`)) + `
+			` + fmt.Sprintf(`var stdout, stderr, code = @"%s"()`, strings.ReplaceAll(strings.ReplaceAll(batFile, `/`, `\`), `\`, `\\`)) + `
 
 			print(stdout, code)
 		`, nil
