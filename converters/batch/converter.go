@@ -85,8 +85,13 @@ func forLabel(count int) string {
 func (c *converter) StringToString(value string) string {
 	c.addLf()
 
+	// Escape all "!".
+	value = strings.ReplaceAll(value, "!", "^!")
+
 	// Replace "\n" with Batch newline value.
-	return strings.ReplaceAll(value, "\n", "!LF!")
+	value = strings.ReplaceAll(value, "\n", "!LF!")
+
+	return value
 }
 
 func (c *converter) Dump() (string, error) {
