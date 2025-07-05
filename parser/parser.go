@@ -1076,7 +1076,16 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 
 		// Check if the amount of values is equal to the amount of variable names.
 		if valuesTypesLen != variablesLen {
-			return nil, p.atError(fmt.Sprintf("got %d initialisation values but %d variables", valuesTypesLen, variablesLen), nextToken)
+			pluralInit := ""
+			pluralValues := ""
+
+			if valuesTypesLen != 1 {
+				pluralInit = "s"
+			}
+			if variablesLen != 1 {
+				pluralValues = "s"
+			}
+			return nil, p.atError(fmt.Sprintf("got %d initialisation value%s but %d variable%s", valuesTypesLen, pluralInit, variablesLen, pluralValues), nextToken)
 		}
 
 		// If a type has been specified, make sure the returned types fit this type.
@@ -1355,7 +1364,7 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 		closingBrace := p.eat()
 
 		if closingBrace.Type() != lexer.CLOSING_ROUND_BRACKET {
-			return nil, p.expectedError("closing bracket", closingBrace)
+			return nil, p.expectedError(`")"`, closingBrace)
 		}
 	}
 	returnTypeToken := p.peek()
@@ -1994,7 +2003,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 		closingToken := p.eat()
 
 		if closingToken.Type() != lexer.CLOSING_ROUND_BRACKET {
-			return nil, p.expectedError("closing bracket", closingToken)
+			return nil, p.expectedError(`")"`, closingToken)
 		}
 
 	// Handle slice instantiation.
@@ -2300,7 +2309,7 @@ func (p *Parser) evaluateArguments(typeName string, name string, params []Variab
 	openingBraceToken := p.eat()
 
 	if openingBraceToken.Type() != lexer.OPENING_ROUND_BRACKET {
-		return nil, p.expectedError("opening bracket", openingBraceToken)
+		return nil, p.expectedError(`"("`, openingBraceToken)
 	}
 	nextToken := p.peek()
 	args := []Expression{}
@@ -2347,7 +2356,7 @@ func (p *Parser) evaluateArguments(typeName string, name string, params []Variab
 		tokenType := nextToken.Type()
 
 		if !slices.Contains([]lexer.TokenType{lexer.COMMA, lexer.CLOSING_ROUND_BRACKET}, tokenType) {
-			err = p.expectedError("comma or closing bracket", nextToken)
+			err = p.expectedError(`"," or ")"`, nextToken)
 			break
 		} else if tokenType == lexer.COMMA {
 			p.eat()
@@ -2370,7 +2379,7 @@ func (p *Parser) evaluateArguments(typeName string, name string, params []Variab
 	closingBraceToken := p.eat()
 
 	if closingBraceToken.Type() != lexer.CLOSING_ROUND_BRACKET {
-		return nil, p.expectedError("closing bracket", closingBraceToken)
+		return nil, p.expectedError(`")"`, closingBraceToken)
 	}
 	return args, nil
 }
@@ -2438,8 +2447,11 @@ func (p *Parser) evaluateAppCall(ctx context) (Call, error) {
 	nextToken = p.eat()
 	name := nextToken.Value()
 
-	if nextToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedError("program identifier", nextToken)
+	switch nextToken.Type() {
+	case lexer.IDENTIFIER, lexer.STRING_LITERAL:
+		// Nothing to do, those cases are valid.
+	default:
+		return nil, p.expectedError("program identifier or string literal", nextToken)
 	}
 	args, err := p.evaluateArguments("program", name, nil, ctx)
 

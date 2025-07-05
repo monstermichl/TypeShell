@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"os"
+	"path"
 	"strings"
 	"testing"
 
@@ -25,6 +27,31 @@ func TestDirCallPipeToFindstrCallSuccess(t *testing.T) {
 	transpileBatchFunc(t, func(dir string) (string, error) {
 		return `
 			` + fmt.Sprintf(`var stdout, stderr, code = @dir("/B", "%s") | @findstr(".tsh")`, strings.ReplaceAll(dir, `\`, `\\`)) + `
+
+			print(stdout, code)
+		`, nil
+	}, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "test.tsh 0", output)
+	})
+}
+
+func TestBatFileFromSubDirCallPipeToFindstrCallSuccess(t *testing.T) {
+	transpileBatchFunc(t, func(dir string) (string, error) {
+		subdir := path.Join(dir, "subdir")
+		err := os.Mkdir(subdir, 0700)
+
+		if err != nil {
+			return "", err
+		}
+		batFile := path.Join(subdir, "bat.bat")
+		err = os.WriteFile(batFile, []byte("dir /b %1"), 0700)
+
+		if err != nil {
+			return "", err
+		}
+		return `
+			` + fmt.Sprintf(`var stdout, stderr, code = @"%s"("%s") | @findstr(".tsh")`, strings.ReplaceAll(strings.ReplaceAll(batFile, `/`, `\`), `\`, `\\`), strings.ReplaceAll(dir, `\`, `\\`)) + `
 
 			print(stdout, code)
 		`, nil
