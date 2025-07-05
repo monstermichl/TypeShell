@@ -49,7 +49,7 @@ func testCopySuccess(t *testing.T, transpilerFunc transpilerFunc) {
 func testReadSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	file := "read-test.txt"
 	content := "Hello World"
-	os.WriteFile(file, []byte(content), 0x777)
+	os.WriteFile(file, []byte(content), 0700)
 	defer os.Remove(file)
 
 	transpilerFunc(t, `
@@ -156,7 +156,7 @@ func testCopyInFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 func testReadInFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	file := "read-test.txt"
 	content := "Hello World"
-	os.WriteFile(file, []byte(content), 0x777)
+	os.WriteFile(file, []byte(content), 0700)
 	defer os.Remove(file)
 
 	transpilerFunc(t, `

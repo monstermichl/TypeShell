@@ -33,7 +33,7 @@ func transpileFunc(t *testing.T, source sourceCallout, targetFileName string, co
 
 	if err == nil {
 		var code string
-		err = os.WriteFile(file, []byte(src), 0x777)
+		err = os.WriteFile(file, []byte(src), 0700)
 
 		require.Nil(t, err)
 		code, err = trans.Transpile(file, converter)
@@ -42,7 +42,7 @@ func transpileFunc(t *testing.T, source sourceCallout, targetFileName string, co
 		// If transpilation was successful, run the code.
 		if err == nil {
 			targetFile := filepath.Join(dir, targetFileName)
-			err = os.WriteFile(targetFile, []byte(code), 0x777)
+			err = os.WriteFile(targetFile, []byte(code), 0700)
 
 			require.Nil(t, err)
 			cmd := exec.Command(targetFile)
