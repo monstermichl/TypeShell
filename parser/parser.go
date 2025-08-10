@@ -48,6 +48,14 @@ type context struct {
 	scopeStack []scope                       // Stores the current scopes.
 }
 
+func newContext() context {
+	return context{
+		imports:   map[string]string{},
+		variables: map[string]Variable{},
+		functions: map[string]FunctionDefinition{},
+	}
+}
+
 func (c context) currentScope() scope {
 	return c.scopeStack[len(c.scopeStack)-1]
 }
@@ -342,6 +350,18 @@ func (p *Parser) expectedError(what string, token lexer.Token) error {
 	return p.atError(fmt.Sprintf("expected %s", what), token)
 }
 
+func (p *Parser) expectedKeywordError(keyword string, token lexer.Token) error {
+	return p.expectedError(fmt.Sprintf("%s-keyword", keyword), token)
+}
+
+func (p *Parser) expectedIdentifierError(token lexer.Token) error {
+	return p.expectedError("identifier", token)
+}
+
+func (p *Parser) expectedNewlineError(token lexer.Token) error {
+	return p.expectedError("newline", token)
+}
+
 func (p Parser) peek() lexer.Token {
 	return p.peekAt(0)
 }
@@ -527,7 +547,7 @@ func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword stri
 	keywordToken := p.eat()
 
 	if keywordToken.Type() != tokenType {
-		return nil, p.expectedError(fmt.Sprintf("%s-keyword", keyword), keywordToken)
+		return nil, p.expectedKeywordError(keyword, keywordToken)
 	}
 	nextToken := p.eat()
 
@@ -580,11 +600,7 @@ func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword stri
 }
 
 func (p *Parser) evaluateProgram() (Program, error) {
-	ctx := context{
-		imports:   map[string]string{},
-		variables: map[string]Variable{},
-		functions: map[string]FunctionDefinition{},
-	}
+	ctx := newContext()
 	statements, err := p.evaluateImports(ctx)
 
 	if err != nil {
@@ -633,7 +649,7 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 			nextToken = p.eat()
 
 			if nextToken.Type() != lexer.NEWLINE {
-				return nil, p.expectedError("newline", nextToken)
+				return nil, p.expectedNewlineError(nextToken)
 			}
 		}
 
@@ -787,7 +803,7 @@ func (p *Parser) evaluateBlockBegin() error {
 	newlineToken := p.eat()
 
 	if newlineToken.Type() != lexer.NEWLINE {
-		return p.expectedError("newline", newlineToken)
+		return p.expectedNewlineError(newlineToken)
 	}
 	return nil
 }
@@ -1471,7 +1487,7 @@ func (p *Parser) evaluateReturn(ctx context) (Statement, error) {
 		return nil, p.expectedError(fmt.Sprintf("return within %s-scope", SCOPE_FUNCTION), returnToken)
 	}
 	if returnToken.Type() != lexer.RETURN {
-		return nil, p.expectedError("return-keyword", returnToken)
+		return nil, p.expectedKeywordError("return", returnToken)
 	}
 	evaluatedVals, err := p.evaluateValues(ctx)
 
@@ -1532,7 +1548,7 @@ func (p *Parser) evaluateIf(ctx context) (Statement, error) {
 		// "if" needs to start with if-token.
 		if ifRequired {
 			if nextTokenType != lexer.IF {
-				return nil, p.expectedError("if-keyword", nextToken)
+				return nil, p.expectedKeywordError("if", nextToken)
 			}
 			p.eat()
 		} else {
@@ -1595,7 +1611,7 @@ func (p *Parser) evaluateSwitch(ctx context) (Statement, error) {
 	switchToken := p.eat()
 
 	if switchToken.Type() != lexer.SWITCH {
-		return nil, p.expectedError("switch-keyword", switchToken)
+		return nil, p.expectedKeywordError("switch", switchToken)
 	}
 	var switchExpr Expression
 	var err error
@@ -1624,7 +1640,7 @@ func (p *Parser) evaluateSwitch(ctx context) (Statement, error) {
 	nextToken := p.eat()
 
 	if nextToken.Type() != lexer.NEWLINE {
-		return nil, p.expectedError("newline", nextToken)
+		return nil, p.expectedNewlineError(nextToken)
 	}
 	fakeIf := If{
 		ifBranch: IfBranch{
@@ -1708,7 +1724,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 	forToken := p.eat()
 
 	if forToken.Type() != lexer.FOR {
-		return nil, p.expectedError("for-keyword", forToken)
+		return nil, p.expectedKeywordError("for", forToken)
 	}
 	var stmt Statement
 	nextToken := p.peek()
@@ -1735,7 +1751,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 			nextToken = p.eat()
 
 			if nextToken.Type() != lexer.IDENTIFIER {
-				return nil, p.expectedError("identifier", nextToken)
+				return nil, p.expectedIdentifierError(nextToken)
 			}
 			err = p.checkNewVariableNameToken(nextToken, ctx)
 
@@ -1753,7 +1769,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		nextToken = p.eat()
 
 		if nextToken.Type() != lexer.RANGE {
-			return nil, p.expectedError("range-keyword", nextToken)
+			return nil, p.expectedKeywordError("range", nextToken)
 		}
 		nextToken := p.peek()
 		iterableExpression, err := p.evaluateExpression(ctx)
@@ -1935,7 +1951,7 @@ func (p *Parser) evaluateVarEvaluation(ctx context) (Expression, error) {
 	identifierToken := p.eat() // Eat identifier token.
 
 	if identifierToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedError("identifier", identifierToken)
+		return nil, p.expectedIdentifierError(identifierToken)
 	}
 	name := identifierToken.Value()
 	variable, exists := ctx.findVariable(name, p.prefix, ctx.global())
@@ -2716,7 +2732,7 @@ func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
 	identifierToken := p.eat()
 
 	if identifierToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedError("identifier", identifierToken)
+		return nil, p.expectedIdentifierError(identifierToken)
 	}
 	name := identifierToken.Value()
 	definedVariable, exists := ctx.findVariable(name, p.prefix, ctx.global())
