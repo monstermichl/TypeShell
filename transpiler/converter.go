@@ -46,6 +46,12 @@ func (rv ReturnValue) ValueType() parser.ValueType {
 	return rv.valueType
 }
 
+type StructMember struct {
+	name      string
+	value     string
+	valueType parser.ValueType
+}
+
 type Converter interface {
 	// Common methods
 	StringToString(value string) string

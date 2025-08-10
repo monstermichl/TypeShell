@@ -84,6 +84,7 @@ const (
 	STATEMENT_TYPE_FOR_RANGE                      StatementType = "for range"
 	STATEMENT_TYPE_BREAK                          StatementType = "break"
 	STATEMENT_TYPE_CONTINUE                       StatementType = "continue"
+	STATEMENT_TYPE_STRUCT_DEFINITION              StatementType = "struct definition"
 	STATEMENT_TYPE_INSTANTIATION                  StatementType = "instantiation"
 	STATEMENT_TYPE_PRINT                          StatementType = "print"
 	STATEMENT_TYPE_ITOA                           StatementType = "itoa"
