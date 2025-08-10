@@ -67,6 +67,23 @@ func (t *transpiler) Transpile(path string, converter Converter) (string, error)
 	return t.converter.Dump()
 }
 
+func (t *transpiler) evaluateValueTypeDefaultValue(valueType parser.ValueType) (string, error) {
+	var defaultValue string
+	conv := t.converter
+
+	switch valueType.DataType() {
+	case parser.DATA_TYPE_BOOLEAN:
+		defaultValue = BoolToString(false)
+	case parser.DATA_TYPE_INTEGER:
+		defaultValue = IntToString(0)
+	case parser.DATA_TYPE_STRING:
+		defaultValue = conv.StringToString("")
+	default:
+		return "", fmt.Errorf(`no default value defined for %s`, valueType.String())
+	}
+	return defaultValue, nil
+}
+
 func (t *transpiler) evaluateIndex(index parser.Expression, valueUsed bool) (expressionResult, error) {
 	return t.evaluateExpression(index, true)
 }
@@ -442,19 +459,11 @@ func (t *transpiler) evaluateSliceAssignment(assignment parser.SliceAssignment) 
 	if err != nil {
 		return err
 	}
-	var defaultValue string
-	conv := t.converter
 	valueType := value.ValueType()
+	defaultValue, err := t.evaluateValueTypeDefaultValue(valueType)
 
-	switch valueType.DataType() {
-	case parser.DATA_TYPE_BOOLEAN:
-		defaultValue = BoolToString(false)
-	case parser.DATA_TYPE_INTEGER:
-		defaultValue = IntToString(0)
-	case parser.DATA_TYPE_STRING:
-		defaultValue = conv.StringToString("")
-	default:
-		return fmt.Errorf(`no default value defined for %s`, valueType.String())
+	if err != nil {
+		return err
 	}
 	return t.converter.SliceAssignment(assignment.Name(), indexResult.firstValue(), valueResult.firstValue(), defaultValue, assignment.Global())
 }
