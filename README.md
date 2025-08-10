@@ -11,11 +11,11 @@ tsh.exe -i helloworld.tsh -t batch -t bash -o .
 // helloworld.tsh
 
 func hello() string {
-	return "hello"
+    return "hello"
 }
 
 func buildGreeting(p string) string {
-	return hello() + " " + p
+    return hello() + " " + p
 }
 
 greeting := buildGreeting("world")
