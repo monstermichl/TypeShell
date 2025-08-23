@@ -184,10 +184,10 @@ func Cut(s string, sep string) (string, string, bool) {
 	lenS := len(s)
 
 	if lenS > 0 {
-		for i := 0; i < lenS; i++ {
-			if HasPrefix(s[i:], sep) {
-				return s[0:i], s[i+len(sep):], true
-			}
+		i := Index(s, sep)
+
+		if i >= 0 {
+			return s[0:i], s[i+len(sep):], true
 		}
 	}
 	return s, "", false
