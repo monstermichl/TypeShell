@@ -2,6 +2,8 @@ package tests
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -87,4 +89,26 @@ func shortenError(err error) error {
 		err = errors.New(s)
 	}
 	return err
+}
+
+func copyFile(fileName string, srcDir string, dstDir string) error {
+	src, err := os.Open(filepath.Join(srcDir, fileName))
+
+	if err != nil {
+		return err
+	}
+	dst, err := os.Create(filepath.Join(dstDir, fileName))
+
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(dst, src)
+	return err
+}
+
+func copyStd(fileName string, dstDir string) (string, error) {
+	fileParts := strings.Split(fileName, ".")
+	fileName = fmt.Sprintf("%s.tsh", fileParts[0])
+
+	return fileName, copyFile(fileName, filepath.Join("..", "std"), dstDir)
 }

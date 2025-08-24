@@ -2,9 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -12,8 +9,7 @@ import (
 
 func testSingleImportSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) {
 	transpilerFunc(t, func(dir string) (string, error) {
-		file := "strings.tsh"
-		err := copyFile(file, filepath.Join("..", "std"), dir)
+		file, err := copyStd("strings", dir)
 
 		if err != nil {
 			return "", err
@@ -29,8 +25,7 @@ func testSingleImportSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc)
 
 func testMultiImportSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) {
 	transpilerFunc(t, func(dir string) (string, error) {
-		file := "strings.tsh"
-		err := copyFile(file, filepath.Join("..", "std"), dir)
+		file, err := copyStd("strings", dir)
 
 		if err != nil {
 			return "", err
@@ -46,19 +41,4 @@ func testMultiImportSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) 
 		require.Nil(t, err)
 		require.Equal(t, "1\n1", output)
 	})
-}
-
-func copyFile(fileName string, srcDir string, dstDir string) error {
-	src, err := os.Open(filepath.Join(srcDir, fileName))
-
-	if err != nil {
-		return err
-	}
-	dst, err := os.Create(filepath.Join(dstDir, fileName))
-
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(dst, src)
-	return err
 }
