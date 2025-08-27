@@ -1,0 +1,10 @@
+import "strings"
+
+func Os() string {
+	os := "Linux"
+
+	if strings.HasPrefix("%OS%", "Win") {
+		os = "Windows"
+	}
+	return os
+}
