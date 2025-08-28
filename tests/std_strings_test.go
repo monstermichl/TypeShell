@@ -226,27 +226,5 @@ func testStdStringsTrimSpace(t *testing.T, transpilerCalloutFunc transpilerCallo
 }
 
 func testStringsFunc(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc, f string, args []string, quoteArgs bool, compare compareCallout) {
-	transpilerCalloutFunc(t, func(dir string) (string, error) {
-		file, err := copyStd("strings", dir)
-
-		if err != nil {
-			return "", err
-		}
-
-		if quoteArgs {
-			/* Wrap parameters in quotes. */
-			for i := range args {
-				args[i] = wrapInQuotes(args[i])
-			}
-		}
-		return `
-			import strings "` + file + `"
-
-			print(strings.` + f + `(` + strings.Join(args, ", ") + `))
-		`, nil
-	}, compare)
-}
-
-func wrapInQuotes(s string) string {
-	return fmt.Sprintf(`"%s"`, s)
+	testStdFunc(t, transpilerCalloutFunc, "strings", f, args, quoteArgs, compare)
 }

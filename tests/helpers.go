@@ -112,3 +112,29 @@ func copyStd(fileName string, dstDir string) (string, error) {
 
 	return fileName, copyFile(fileName, filepath.Join("..", "std"), dstDir)
 }
+
+func testStdFunc(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc, std string, f string, args []string, quoteArgs bool, compare compareCallout) {
+	transpilerCalloutFunc(t, func(dir string) (string, error) {
+		file, err := copyStd(std, dir)
+
+		if err != nil {
+			return "", err
+		}
+
+		if quoteArgs {
+			/* Wrap parameters in quotes. */
+			for i := range args {
+				args[i] = wrapInQuotes(args[i])
+			}
+		}
+		return `
+			import strings "` + file + `"
+
+			print(strings.` + f + `(` + strings.Join(args, ", ") + `))
+		`, nil
+	}, compare)
+}
+
+func wrapInQuotes(s string) string {
+	return fmt.Sprintf(`"%s"`, s)
+}
