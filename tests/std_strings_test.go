@@ -106,6 +106,125 @@ func testStdStringsReplaceAllSuccess(t *testing.T, transpilerCalloutFunc transpi
 	})
 }
 
+func testStdStringsCutPrefixSuccess(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc) {
+	s := "Hello World"
+	prefix := "Hel"
+
+	testStringsFunc(t, transpilerCalloutFunc, "CutPrefix", []string{s, prefix}, true, func(output string, err error) {
+		require.Nil(t, err)
+		after, found := strings.CutPrefix(s, prefix)
+		require.Equal(t, true, found)
+		require.EqualValues(t, fmt.Sprintf("%s 1", after), output)
+	})
+}
+
+func testStdStringsCutSuffixSuccess(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc) {
+	s := "Hello World"
+	suffix := "rld"
+
+	testStringsFunc(t, transpilerCalloutFunc, "CutSuffix", []string{s, suffix}, true, func(output string, err error) {
+		require.Nil(t, err)
+		after, found := strings.CutSuffix(s, suffix)
+		require.Equal(t, true, found)
+		require.EqualValues(t, fmt.Sprintf("%s 1", after), output)
+	})
+}
+
+func testStdStringsCutSuccess(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc) {
+	s := "Hello World"
+	sep := "o W"
+
+	testStringsFunc(t, transpilerCalloutFunc, "Cut", []string{s, sep}, true, func(output string, err error) {
+		require.Nil(t, err)
+		before, after, found := strings.Cut(s, sep)
+		require.Equal(t, true, found)
+		require.EqualValues(t, fmt.Sprintf("%s %s 1", before, after), output)
+	})
+	sep = "Hel"
+
+	testStringsFunc(t, transpilerCalloutFunc, "Cut", []string{s, sep}, true, func(output string, err error) {
+		require.Nil(t, err)
+		_, after, found := strings.Cut(s, sep)
+		require.Equal(t, true, found)
+		require.EqualValues(t, fmt.Sprintf("%s 1", after), output)
+	})
+	sep = "rld"
+
+	testStringsFunc(t, transpilerCalloutFunc, "Cut", []string{s, sep}, true, func(output string, err error) {
+		require.Nil(t, err)
+		before, _, found := strings.Cut(s, sep)
+		require.Equal(t, true, found)
+		require.EqualValues(t, fmt.Sprintf("%s  1", before), output)
+	})
+	sep = "not included"
+
+	testStringsFunc(t, transpilerCalloutFunc, "Cut", []string{s, sep}, true, func(output string, err error) {
+		require.Nil(t, err)
+		before, _, found := strings.Cut(s, sep)
+		require.Equal(t, false, found)
+		require.EqualValues(t, fmt.Sprintf("%s  0", before), output)
+	})
+}
+
+func testStdStringsTrimPrefixSuccess(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc) {
+	s := "Hello World"
+	prefix := "Hel"
+
+	testStringsFunc(t, transpilerCalloutFunc, "TrimPrefix", []string{s, prefix}, true, func(output string, err error) {
+		require.Nil(t, err)
+		require.EqualValues(t, strings.TrimPrefix(s, prefix), output)
+	})
+}
+
+func testStdStringsTrimSuffixSuccess(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc) {
+	s := "Hello World"
+	suffix := "rld"
+
+	testStringsFunc(t, transpilerCalloutFunc, "TrimSuffix", []string{s, suffix}, true, func(output string, err error) {
+		require.Nil(t, err)
+		require.EqualValues(t, strings.TrimSuffix(s, suffix), output)
+	})
+}
+
+func testStdStringsTrimLeftSuccess(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc) {
+	s := "--000abc123xyz"
+	cutset := "-0a1"
+
+	testStringsFunc(t, transpilerCalloutFunc, "TrimLeft", []string{s, cutset}, true, func(output string, err error) {
+		require.Nil(t, err)
+		require.EqualValues(t, strings.TrimLeft(s, cutset), output)
+	})
+}
+
+func testStdStringsTrimRightSuccess(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc) {
+	s := "user123000---"
+	cutset := "-03"
+
+	testStringsFunc(t, transpilerCalloutFunc, "TrimRight", []string{s, cutset}, true, func(output string, err error) {
+		require.Nil(t, err)
+		require.EqualValues(t, strings.TrimRight(s, cutset), output)
+	})
+}
+
+func testStdStringsTrimSuccess(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc) {
+	s := "--000abcXYZ000--"
+	cutset := "-0X"
+
+	testStringsFunc(t, transpilerCalloutFunc, "Trim", []string{s, cutset}, true, func(output string, err error) {
+		require.Nil(t, err)
+		require.EqualValues(t, strings.Trim(s, cutset), output)
+	})
+}
+
+func testStdStringsTrimSpace(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc) {
+	s := "\t\n   Hello, GoLang!   \r\f "
+
+	testStringsFunc(t, transpilerCalloutFunc, "TrimSpace", []string{s}, true, func(output string, err error) {
+		require.Nil(t, err)
+		require.EqualValues(t, strings.TrimSpace(s), output)
+	})
+}
+
 func testStringsFunc(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc, f string, args []string, quoteArgs bool, compare compareCallout) {
 	transpilerCalloutFunc(t, func(dir string) (string, error) {
 		file, err := copyStd("strings", dir)

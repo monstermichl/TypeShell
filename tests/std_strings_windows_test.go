@@ -37,3 +37,39 @@ func TestStdStringsReplaceSuccess(t *testing.T) {
 func TestStdStringsReplaceAllSuccess(t *testing.T) {
 	testStdStringsReplaceAllSuccess(t, transpileBatchFunc)
 }
+
+func TestStdStringsCutPrefixSuccess(t *testing.T) {
+	testStdStringsCutPrefixSuccess(t, transpileBatchFunc)
+}
+
+func TestStdStringsCutSuffixSuccess(t *testing.T) {
+	testStdStringsCutSuffixSuccess(t, transpileBatchFunc)
+}
+
+func TestStdStringsCutSuccess(t *testing.T) {
+	testStdStringsCutSuccess(t, transpileBatchFunc)
+}
+
+func TestStdStringsTrimPrefixSuccess(t *testing.T) {
+	testStdStringsTrimPrefixSuccess(t, transpileBatchFunc)
+}
+
+func TestStdStringsTrimSuffixSuccess(t *testing.T) {
+	testStdStringsTrimSuffixSuccess(t, transpileBatchFunc)
+}
+
+func TestStdStringsTrimLeftSuccess(t *testing.T) {
+	testStdStringsTrimLeftSuccess(t, transpileBatchFunc)
+}
+
+func TestStdStringsTrimRightSuccess(t *testing.T) {
+	testStdStringsTrimRightSuccess(t, transpileBatchFunc)
+}
+
+func TestStdStringsTrimSuccess(t *testing.T) {
+	testStdStringsTrimSuccess(t, transpileBatchFunc)
+}
+
+func TestStdStringsTrimSpace(t *testing.T) {
+	testStdStringsTrimSpace(t, transpileBatchFunc)
+}
