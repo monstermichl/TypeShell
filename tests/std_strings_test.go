@@ -71,7 +71,28 @@ func testStdStringsCountSuccess(t *testing.T, transpilerCalloutFunc transpilerCa
 	})
 }
 
-// TODO: Add test for Split-function.
+func testStdStringsSplitSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	s := "ba-na-na ban-da-na ba-na-na"
+	sep := "-"
+
+	transpilerFunc(t, `
+		import "strings"
+
+		vals := strings.Split(`+strings.Join([]string{wrapInQuotes(s), wrapInQuotes(sep)}, ", ")+`)
+		print(len(vals))
+
+		for i, v := range(vals) {
+			print(v)
+		}
+	`, func(output string, err error) {
+		require.Nil(t, err)
+
+		vals := strings.Split(s, sep)
+		joined := strings.Join([]string{strconv.Itoa(len(vals)), strings.Join(vals, "\n")}, "\n")
+
+		require.Equal(t, joined, output)
+	})
+}
 
 func testStdStringsRepeatSuccess(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc) {
 	s := "na"

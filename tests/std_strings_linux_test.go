@@ -26,6 +26,10 @@ func TestStdStringsCountSuccess(t *testing.T) {
 	testStdStringsCountSuccess(t, transpileBashFunc)
 }
 
+func TestStdStringsSplitSuccess(t *testing.T) {
+	testStdStringsSplitSuccess(t, transpileBash)
+}
+
 func TestStdStringsRepeatSuccess(t *testing.T) {
 	testStdStringsRepeatSuccess(t, transpileBashFunc)
 }

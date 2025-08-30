@@ -22,6 +22,10 @@ func TestStdStringsHasSuffixSuccess(t *testing.T) {
 	testStdStringsHasSuffixSuccess(t, transpileBatchFunc)
 }
 
+func TestStdStringsSplitSuccess(t *testing.T) {
+	testStdStringsSplitSuccess(t, transpileBatch)
+}
+
 func TestStdStringsCountSuccess(t *testing.T) {
 	testStdStringsCountSuccess(t, transpileBatchFunc)
 }
