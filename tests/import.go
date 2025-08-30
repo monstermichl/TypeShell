@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -9,12 +8,8 @@ import (
 
 func testSingleImportSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) {
 	transpilerFunc(t, func(dir string) (string, error) {
-		file, err := copyStd("strings", dir)
-
-		if err != nil {
-			return "", err
-		}
-		return fmt.Sprintf(`import strings "%s"`, file) + `
+		return `
+			import "strings"
 			print(strings.Contains("Hello World", "Wor"))
 		`, nil
 	}, func(output string, err error) {
@@ -25,14 +20,9 @@ func testSingleImportSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc)
 
 func testMultiImportSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) {
 	transpilerFunc(t, func(dir string) (string, error) {
-		file, err := copyStd("strings", dir)
-
-		if err != nil {
-			return "", err
-		}
 		return `import (
-			` + fmt.Sprintf(`strings1 "%s"`, file) + `
-			` + fmt.Sprintf(`strings2 "%s"`, file) + `
+			strings1 "strings"
+			strings2 "strings"
 			)
 			print(strings1.Contains("Hello World", "Wor"))
 			print(strings2.HasPrefix("Hello World", "Hel"))
