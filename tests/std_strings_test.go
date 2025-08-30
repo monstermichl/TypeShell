@@ -216,7 +216,7 @@ func testStdStringsTrimSuccess(t *testing.T, transpilerCalloutFunc transpilerCal
 	})
 }
 
-func testStdStringsTrimSpace(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc) {
+func testStdStringsTrimSpaceSuccess(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc) {
 	s := "\t\n   Hello, GoLang!   \r\f "
 
 	testStringsFunc(t, transpilerCalloutFunc, "TrimSpace", []string{s}, true, func(output string, err error) {

@@ -70,6 +70,6 @@ func TestStdStringsTrimSuccess(t *testing.T) {
 	testStdStringsTrimSuccess(t, transpileBatchFunc)
 }
 
-func TestStdStringsTrimSpace(t *testing.T) {
-	testStdStringsTrimSpace(t, transpileBatchFunc)
+func TestStdStringsTrimSpaceSuccess(t *testing.T) {
+	testStdStringsTrimSpaceSuccess(t, transpileBatchFunc)
 }

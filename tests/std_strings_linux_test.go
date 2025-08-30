@@ -70,6 +70,6 @@ func TestStdStringsTrimSuccess(t *testing.T) {
 	testStdStringsTrimSuccess(t, transpileBashFunc)
 }
 
-func TestStdStringsTrimSpace(t *testing.T) {
-	testStdStringsTrimSpace(t, transpileBashFunc)
+func TestStdStringsTrimSpaceSuccess(t *testing.T) {
+	testStdStringsTrimSpaceSuccess(t, transpileBashFunc)
 }
