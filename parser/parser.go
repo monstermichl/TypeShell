@@ -15,13 +15,6 @@ import (
 	"github.com/monstermichl/typeshell/lexer"
 )
 
-var typeMapping = map[lexer.VarType]DataType{
-	lexer.DATA_TYPE_BOOLEAN: DATA_TYPE_BOOLEAN,
-	lexer.DATA_TYPE_INTEGER: DATA_TYPE_INTEGER,
-	lexer.DATA_TYPE_STRING:  DATA_TYPE_STRING,
-	lexer.DATA_TYPE_ERROR:   DATA_TYPE_STRING, // error is internally just a string to make heandling easier.
-}
-
 type scope string
 
 const (
@@ -41,19 +34,35 @@ func scopesToString(scopes []scope) []string {
 	return strings
 }
 
+type typeDefinition struct {
+	dataType     DataType
+	isAlias      bool
+	isElementary bool
+}
+
 type context struct {
 	imports    map[string]string             // Maps import aliases to file hashes.
+	types      map[string]typeDefinition     // Stores the defined types.
 	variables  map[string]Variable           // Stores the variable name to variable relation.
 	functions  map[string]FunctionDefinition // Stores the function name to function relation.
 	scopeStack []scope                       // Stores the current scopes.
 }
 
 func newContext() context {
-	return context{
+	c := context{
 		imports:   map[string]string{},
+		types:     map[string]typeDefinition{},
 		variables: map[string]Variable{},
 		functions: map[string]FunctionDefinition{},
 	}
+
+	// Define elementary types.
+	c.addType(DATA_TYPE_BOOLEAN, DATA_TYPE_BOOLEAN, false, true)
+	c.addType(DATA_TYPE_INTEGER, DATA_TYPE_INTEGER, false, true)
+	c.addType(DATA_TYPE_STRING, DATA_TYPE_STRING, false, true)
+	c.addType(DATA_TYPE_ERROR, DATA_TYPE_STRING, false, true)
+
+	return c
 }
 
 func (c context) currentScope() scope {
@@ -97,6 +106,15 @@ func (c context) addImport(alias string, hash string) error {
 	return nil
 }
 
+func (c context) addType(name string, dataType DataType, isAlias bool, isElementary bool) error {
+	c.types[name] = typeDefinition{
+		dataType,
+		isAlias,
+		isElementary,
+	}
+	return nil
+}
+
 func (c context) addVariables(prefix string, global bool, variables ...Variable) error {
 	for _, variable := range variables {
 		prefixedName, err := c.buildPrefixedName(variable.Name(), prefix, global, false)
@@ -126,6 +144,21 @@ func (c context) findImport(alias string) (string, bool) {
 	return hash, exists
 }
 
+func (c context) findType(dataType DataType) (DataType, bool) {
+	var foundType string
+	typeDefinition, exists := c.types[dataType]
+
+	if exists {
+		if typeDefinition.isAlias {
+			foundType, exists = c.findType(typeDefinition.dataType)
+		}
+		if exists {
+			foundType = typeDefinition.dataType
+		}
+	}
+	return foundType, exists
+}
+
 func (c context) findVariable(name string, prefix string, global bool) (Variable, bool) {
 	prefixedName, err := c.buildPrefixedName(name, prefix, global, true)
 
@@ -149,6 +182,7 @@ func (c context) findFunction(name string, prefix string) (FunctionDefinition, b
 func (c context) clone() context {
 	return context{
 		imports:    maps.Clone(c.imports),
+		types:      maps.Clone(c.types),
 		variables:  maps.Clone(c.variables),
 		functions:  maps.Clone(c.functions),
 		scopeStack: slices.Clone(c.scopeStack),
@@ -932,7 +966,7 @@ func (p *Parser) evaluateBlock(callback blockCallback, ctx context, scope scope)
 	return statements, nil
 }
 
-func (p *Parser) evaluateValueType() (ValueType, error) {
+func (p *Parser) evaluateValueType(ctx context) (ValueType, error) {
 	nextToken := p.peek()
 	evaluatedType := NewValueType(DATA_TYPE_UNKNOWN, false)
 
@@ -949,11 +983,11 @@ func (p *Parser) evaluateValueType() (ValueType, error) {
 	}
 
 	// Evaluate data type.
-	if nextToken.Type() != lexer.DATA_TYPE {
+	if nextToken.Type() != lexer.IDENTIFIER {
 		return evaluatedType, p.expectedError("data type", nextToken)
 	}
 	p.eat() // Eat data type token.
-	dataType, exists := typeMapping[nextToken.Value()]
+	dataType, exists := ctx.findType(nextToken.Value())
 
 	if !exists {
 		return evaluatedType, p.expectedError("valid data type", nextToken)
@@ -1024,8 +1058,8 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 		nextToken := p.peek()
 
 		// If next token starts a type definition, evaluate value type.
-		if slices.Contains([]lexer.TokenType{lexer.DATA_TYPE, lexer.OPENING_SQUARE_BRACKET}, nextToken.Type()) {
-			specifiedTypeTemp, err := p.evaluateValueType()
+		if slices.Contains([]lexer.TokenType{lexer.IDENTIFIER, lexer.OPENING_SQUARE_BRACKET}, nextToken.Type()) {
+			specifiedTypeTemp, err := p.evaluateValueType(ctx)
 
 			if err != nil {
 				return nil, err
@@ -1316,7 +1350,7 @@ func (p *Parser) evaluateParams(ctx context) ([]Variable, error) {
 		if exists {
 			return params, fmt.Errorf("scope already contains a variable with the name %s", name)
 		}
-		valueType, err := p.evaluateValueType()
+		valueType, err := p.evaluateValueType(ctx)
 
 		if err != nil {
 			return nil, err
@@ -1395,8 +1429,8 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 
 	for {
 		// Check if a return type has been specified.
-		if slices.Contains([]lexer.TokenType{lexer.DATA_TYPE, lexer.OPENING_SQUARE_BRACKET}, returnTypeToken.Type()) {
-			returnTypeTemp, err := p.evaluateValueType()
+		if slices.Contains([]lexer.TokenType{lexer.IDENTIFIER, lexer.OPENING_SQUARE_BRACKET}, returnTypeToken.Type()) {
+			returnTypeTemp, err := p.evaluateValueType(ctx)
 
 			if err != nil {
 				return nil, err
@@ -2494,7 +2528,7 @@ func (p *Parser) evaluateAppCall(ctx context) (Call, error) {
 
 func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
 	nextToken := p.peek()
-	sliceValueType, err := p.evaluateValueType()
+	sliceValueType, err := p.evaluateValueType(ctx)
 
 	if err != nil {
 		return nil, err

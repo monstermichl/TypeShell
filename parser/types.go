@@ -3,7 +3,7 @@ package parser
 import "fmt"
 
 type StatementType string
-type DataType string
+type DataType = string
 type CompareOperator = string
 type UnaryOperator = string
 type BinaryOperator = string
@@ -105,7 +105,7 @@ const (
 	DATA_TYPE_BOOLEAN  DataType = "bool"
 	DATA_TYPE_INTEGER  DataType = "int"
 	DATA_TYPE_STRING   DataType = "string"
-	DATA_TYPE_ERROR    DataType = DATA_TYPE_STRING
+	DATA_TYPE_ERROR    DataType = "error"
 )
 
 const (
