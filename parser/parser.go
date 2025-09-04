@@ -2048,7 +2048,7 @@ func (p *Parser) evaluateTypeDefinition(ctx context) (Expression, error) {
 		return nil, p.expectedIdentifierError(identifierToken)
 	}
 	typeName := identifierToken.Value()
-	foundBaseDefinition, exists := ctx.findType(typeName, true)
+	foundElementaryDefinition, exists := ctx.findType(typeName, true)
 
 	if !exists {
 		return nil, p.atError(fmt.Sprintf("type %s has not been defined", typeName), identifierToken)
@@ -2067,10 +2067,12 @@ func (p *Parser) evaluateTypeDefinition(ctx context) (Expression, error) {
 	exprValueType := expr.ValueType()
 	exprBaseTypeDefinition, _ := ctx.findType(exprValueType.DataType(), true)
 	exprBaseValueType := exprBaseTypeDefinition.valueType
-	foundBaseDefinitionValueType := foundBaseDefinition.valueType
+	foundElementaryDefinitionValueType := foundElementaryDefinition.valueType
+	baseDefinition, _ := ctx.findType(typeName, false)
+	baseTypeName := baseDefinition.name
 
-	if !foundBaseDefinitionValueType.Equals(exprBaseValueType) {
-		return nil, p.atError(fmt.Sprintf(`%s cannot be converted into %s`, exprValueType.String(), typeName), nextToken)
+	if !foundElementaryDefinitionValueType.Equals(exprBaseValueType) {
+		return nil, p.atError(fmt.Sprintf(`%s cannot be converted into %s`, exprValueType.String(), baseTypeName), nextToken)
 	}
 	nextToken = p.eat()
 
@@ -2080,7 +2082,7 @@ func (p *Parser) evaluateTypeDefinition(ctx context) (Expression, error) {
 
 	return TypeDefinition{
 		value:     expr,
-		valueType: NewValueType(typeName, exprValueType.IsSlice()),
+		valueType: NewValueType(baseTypeName, exprValueType.IsSlice()),
 	}, nil
 }
 
