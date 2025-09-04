@@ -196,6 +196,25 @@ import (
 print(strings.Contains("Hello World", "World")) // Prints 1.
 ```
 
+### Type declarations
+TypeShell supports the declaration of types. However, types which result in slices are not supported yet.
+
+```golang
+// Define a type.
+type myType int
+
+var a myType
+a = myType(24)
+```
+
+```golang
+// Define an alias.
+type myType = int
+
+var a myType
+a = 24
+```
+
 ### Builtin
 ```golang
 // Returns the length of a slice or a string.

@@ -2,6 +2,8 @@ package tests
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,12 +23,22 @@ type transpilerFunc func(t *testing.T, source string, compare compareCallout)
 type transpilerCalloutFunc func(t *testing.T, callout sourceCallout, compare compareCallout)
 
 func transpileFunc(t *testing.T, source sourceCallout, targetFileName string, converter transpiler.Converter, compare compareCallout) {
-	trans := transpiler.New()
-	dir, err := os.MkdirTemp("", "typeshell_tests")
-
+	exe, err := os.Executable()
 	require.Nil(t, err)
-	defer os.RemoveAll(dir)
 
+	exePath := filepath.Dir(exe)
+
+	// Copy std to executable path.
+	err = copyStd(exePath)
+	require.Nil(t, err)
+
+	dir := filepath.Join(exePath, t.Name())
+
+	err = os.MkdirAll(dir, 0700)
+	require.Nil(t, err)
+	defer os.RemoveAll(dir) // Make sure test dir is removed after test case execution.
+
+	trans := transpiler.New()
 	file := filepath.Join(dir, "test.tsh")
 	outputString := ""
 	src, err := source(dir)
@@ -87,4 +99,73 @@ func shortenError(err error) error {
 		err = errors.New(s)
 	}
 	return err
+}
+
+func copyFile(fileName string, srcDir string, dstDir string) error {
+	src, err := os.Open(filepath.Join(srcDir, fileName))
+
+	if err != nil {
+		return err
+	}
+	dst, err := os.Create(filepath.Join(dstDir, fileName))
+
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(dst, src)
+	return err
+}
+
+func copyStd(dstDir string) error {
+	stdFolder := "std"
+	srcDir := filepath.Join("..", stdFolder)
+	file, err := os.Open(srcDir)
+
+	if err != nil {
+		return err
+	}
+	dirEntries, err := file.ReadDir(0)
+
+	if err != nil {
+		return err
+	}
+	dstDir = filepath.Join(dstDir, stdFolder)
+	err = os.MkdirAll(dstDir, 0700)
+
+	if err != nil {
+		return err
+	}
+
+	for _, dirEntry := range dirEntries {
+		name := dirEntry.Name()
+
+		if strings.HasSuffix(name, ".tsh") {
+			err := copyFile(name, srcDir, dstDir)
+
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func testStdFunc(t *testing.T, transpilerCalloutFunc transpilerCalloutFunc, stdLib string, f string, args []string, quoteArgs bool, compare compareCallout) {
+	transpilerCalloutFunc(t, func(dir string) (string, error) {
+		if quoteArgs {
+			/* Wrap parameters in quotes. */
+			for i := range args {
+				args[i] = wrapInQuotes(args[i])
+			}
+		}
+		return `
+			import "` + stdLib + `"
+
+			print(` + stdLib + `.` + f + `(` + strings.Join(args, ", ") + `))
+		`, nil
+	}, compare)
+}
+
+func wrapInQuotes(s string) string {
+	return fmt.Sprintf(`"%s"`, s)
 }

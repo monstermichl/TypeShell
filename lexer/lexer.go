@@ -42,9 +42,6 @@ const (
 	STRING_LITERAL
 	NIL_LITERAL
 
-	// Types.
-	DATA_TYPE
-
 	// Separators.
 	COMMA
 	COLON
@@ -58,6 +55,7 @@ const (
 
 	// Keywords.
 	IMPORT
+	TYPE_DECLARATION
 	VAR_DEFINITION
 	FUNCTION_DEFINITION
 	RETURN
@@ -180,6 +178,7 @@ var nonAlphabeticTokens = []tokenMapping{
 var keywords = map[string]TokenType{
 	// Common keywords.
 	"import":   IMPORT,
+	"type":     TYPE_DECLARATION,
 	"var":      VAR_DEFINITION,
 	"func":     FUNCTION_DEFINITION,
 	"return":   RETURN,
@@ -204,12 +203,6 @@ var keywords = map[string]TokenType{
 	"read":   READ,
 	"write":  WRITE,
 	"panic":  PANIC,
-
-	// Types.
-	DATA_TYPE_BOOLEAN: DATA_TYPE,
-	DATA_TYPE_INTEGER: DATA_TYPE,
-	DATA_TYPE_STRING:  DATA_TYPE,
-	DATA_TYPE_ERROR:   DATA_TYPE,
 }
 
 func newToken(value string, tokenType TokenType, row int, column int) Token {

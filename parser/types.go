@@ -3,7 +3,7 @@ package parser
 import "fmt"
 
 type StatementType string
-type DataType string
+type DataType = string
 type CompareOperator = string
 type UnaryOperator = string
 type BinaryOperator = string
@@ -60,6 +60,8 @@ func (vt ValueType) isNonSliceType(dataType DataType) bool {
 
 const (
 	STATEMENT_TYPE_PROGRAM                        StatementType = "program"
+	STATEMENT_TYPE_TYPE_DECLARATION               StatementType = "type declaration"
+	STATEMENT_TYPE_TYPE_DEFINITION                StatementType = "type definition"
 	STATEMENT_TYPE_BOOL_LITERAL                   StatementType = "boolean"
 	STATEMENT_TYPE_INT_LITERAL                    StatementType = "integer"
 	STATEMENT_TYPE_STRING_LITERAL                 StatementType = "string"
@@ -105,7 +107,7 @@ const (
 	DATA_TYPE_BOOLEAN  DataType = "bool"
 	DATA_TYPE_INTEGER  DataType = "int"
 	DATA_TYPE_STRING   DataType = "string"
-	DATA_TYPE_ERROR    DataType = DATA_TYPE_STRING
+	DATA_TYPE_ERROR    DataType = "error"
 )
 
 const (

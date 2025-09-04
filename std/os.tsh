@@ -1,0 +1,12 @@
+func Shell() string {
+	shell := "unknown"
+	win := "%OS%"
+
+	if win[:3] == "Win" {
+		shell = "batch"
+	} else {
+		stdout, stderr, code := @ps("-p", "$$", "-o", "args=") | @cut("-d", " ", "-f1") | @grep("-o", "-e", `"[0-9a-zA-Z][0-9a-zA-Z]*$"`)
+		shell = stdout
+	}
+	return shell
+}
