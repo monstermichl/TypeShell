@@ -52,6 +52,6 @@ func TestPassValueWithSameBaseTypeToFunctionSuccess(t *testing.T) {
 	testPassValueWithSameBaseTypeToFunctionSuccess(t, transpileBash)
 }
 
-func TtestAssignDifferentDefinedTypeFail(t *testing.T) {
+func TestAssignDifferentDefinedTypeFail(t *testing.T) {
 	testAssignDifferentDefinedTypeFail(t, transpileBash)
 }
