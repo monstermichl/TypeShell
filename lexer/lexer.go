@@ -55,7 +55,7 @@ const (
 
 	// Keywords.
 	IMPORT
-	TYPE
+	TYPE_DEFINITION
 	VAR_DEFINITION
 	FUNCTION_DEFINITION
 	RETURN
@@ -178,7 +178,7 @@ var nonAlphabeticTokens = []tokenMapping{
 var keywords = map[string]TokenType{
 	// Common keywords.
 	"import":   IMPORT,
-	"type":     TYPE,
+	"type":     TYPE_DEFINITION,
 	"var":      VAR_DEFINITION,
 	"func":     FUNCTION_DEFINITION,
 	"return":   RETURN,

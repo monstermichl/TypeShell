@@ -106,6 +106,10 @@ func (t *transpiler) evaluateProgram(program parser.Program) error {
 	return err
 }
 
+func (t *transpiler) evaluateTypeInstantiation(instantiation parser.TypeInstantiation, valueUsed bool) (expressionResult, error) {
+	return t.evaluateExpression(instantiation.Value(), valueUsed)
+}
+
 func (t *transpiler) evaluateBooleanLiteral(literal parser.BooleanLiteral, valueUsed bool) (expressionResult, error) {
 	return newExpressionResult(BoolToString(literal.Value())), nil
 }
@@ -773,6 +777,8 @@ func (t *transpiler) evaluate(statement parser.Statement) error {
 	switch statementType {
 	case parser.STATEMENT_TYPE_PROGRAM:
 		return t.evaluateProgram(statement.(parser.Program))
+	case parser.STATEMENT_TYPE_TYPE_DEFINITION:
+		return nil // Nothing to handle here, types are just relevant for the parser.
 	case parser.STATEMENT_TYPE_VAR_DEFINITION:
 		return t.evaluateVarDefinition(statement.(parser.VariableDefinition))
 	case parser.STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT:
@@ -816,6 +822,8 @@ func (t *transpiler) evaluateExpression(expression parser.Expression, valueUsed 
 	expressionType := expression.StatementType()
 
 	switch expressionType {
+	case parser.STATEMENT_TYPE_TYPE_INSTANTIATION:
+		return t.evaluateTypeInstantiation(expression.(parser.TypeInstantiation), valueUsed)
 	case parser.STATEMENT_TYPE_BOOL_LITERAL:
 		return t.evaluateBooleanLiteral(expression.(parser.BooleanLiteral), valueUsed)
 	case parser.STATEMENT_TYPE_INT_LITERAL:
