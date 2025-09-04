@@ -32,6 +32,10 @@ func (v Variable) Public() bool {
 	return v.public
 }
 
+func (v Variable) IsConstant() bool {
+	return false
+}
+
 type VariableDefinition struct {
 	variables []Variable
 	values    []Expression

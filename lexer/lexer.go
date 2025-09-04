@@ -56,6 +56,7 @@ const (
 	// Keywords.
 	IMPORT
 	TYPE_DECLARATION
+	CONST_DEFINITION
 	VAR_DEFINITION
 	FUNCTION_DEFINITION
 	RETURN
@@ -86,13 +87,6 @@ const (
 
 	// End of file.
 	EOF
-)
-
-const (
-	DATA_TYPE_BOOLEAN VarType = "bool"
-	DATA_TYPE_INTEGER VarType = "int"
-	DATA_TYPE_STRING  VarType = "string"
-	DATA_TYPE_ERROR   VarType = "error"
 )
 
 type Token struct {
@@ -179,6 +173,7 @@ var keywords = map[string]TokenType{
 	// Common keywords.
 	"import":   IMPORT,
 	"type":     TYPE_DECLARATION,
+	"const":    CONST_DEFINITION,
 	"var":      VAR_DEFINITION,
 	"func":     FUNCTION_DEFINITION,
 	"return":   RETURN,

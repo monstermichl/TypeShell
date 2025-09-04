@@ -71,6 +71,8 @@ const (
 	STATEMENT_TYPE_BINARY_OPERATION               StatementType = "binary operation"
 	STATEMENT_TYPE_LOGICAL_OPERATION              StatementType = "logical operation"
 	STATEMENT_TYPE_COMPARISON                     StatementType = "comparison"
+	STATEMENT_TYPE_CONST_DEFINITION               StatementType = "constant definition"
+	STATEMENT_TYPE_CONST_EVALUATION               StatementType = "constant evaluation"
 	STATEMENT_TYPE_VAR_DEFINITION                 StatementType = "variable definition"
 	STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT StatementType = "variable definition func assignment"
 	STATEMENT_TYPE_VAR_ASSIGNMENT                 StatementType = "variable assignment"
