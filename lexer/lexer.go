@@ -70,8 +70,6 @@ const (
 	RANGE
 	BREAK
 	CONTINUE
-	TYPE
-	STRUCT
 
 	// Builtin functions.
 	LEN
@@ -195,8 +193,6 @@ var keywords = map[string]TokenType{
 	"break":    BREAK,
 	"continue": CONTINUE,
 	"nil":      NIL_LITERAL,
-	"type":     TYPE,
-	"struct":   STRUCT,
 
 	// Builtin functions.
 	"len":    LEN,

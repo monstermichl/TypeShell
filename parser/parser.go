@@ -45,7 +45,6 @@ type context struct {
 	imports    map[string]string             // Maps import aliases to file hashes.
 	variables  map[string]Variable           // Stores the variable name to variable relation.
 	functions  map[string]FunctionDefinition // Stores the function name to function relation.
-	structs    map[string]StructDefinition   // Stores the struct name to struct relation.
 	scopeStack []scope                       // Stores the current scopes.
 }
 
@@ -54,7 +53,6 @@ func newContext() context {
 		imports:   map[string]string{},
 		variables: map[string]Variable{},
 		functions: map[string]FunctionDefinition{},
-		structs:   map[string]StructDefinition{},
 	}
 }
 
@@ -123,18 +121,6 @@ func (c context) addFunctions(prefix string, global bool, functions ...FunctionD
 	return nil
 }
 
-func (c context) addStructs(prefix string, global bool, structs ...StructDefinition) error {
-	for _, strct := range structs {
-		prefixedName, err := c.buildPrefixedName(strct.Name(), prefix, global, false)
-
-		if err != nil {
-			return err
-		}
-		c.structs[prefixedName] = strct
-	}
-	return nil
-}
-
 func (c context) findImport(alias string) (string, bool) {
 	hash, exists := c.imports[alias]
 	return hash, exists
@@ -160,22 +146,11 @@ func (c context) findFunction(name string, prefix string) (FunctionDefinition, b
 	return function, exists
 }
 
-func (c context) findStruct(name string, prefix string, global bool) (StructDefinition, bool) {
-	prefixedName, err := c.buildPrefixedName(name, prefix, global, true)
-
-	if err != nil {
-		return StructDefinition{}, false
-	}
-	strct, exists := c.structs[prefixedName]
-	return strct, exists
-}
-
 func (c context) clone() context {
 	return context{
 		imports:    maps.Clone(c.imports),
 		variables:  maps.Clone(c.variables),
 		functions:  maps.Clone(c.functions),
-		structs:    maps.Clone(c.structs),
 		scopeStack: slices.Clone(c.scopeStack),
 	}
 }
@@ -895,13 +870,6 @@ func (p *Parser) evaluateBlockContent(terminationTokenTypes []lexer.TokenType, c
 					if err != nil {
 						return nil, err
 					}
-				case STATEMENT_TYPE_STRUCT_DEFINITION:
-					// Store new type.
-					err = ctx.addStructs(prefix, global, stmt.(StructDefinition))
-
-					if err != nil {
-						return nil, err
-					}
 				}
 			}
 		}
@@ -1567,84 +1535,6 @@ func (p *Parser) evaluateContinue(ctx context) (Statement, error) {
 	return Continue{}, nil
 }
 
-func (p *Parser) evaluateTypeDefinition(ctx context) (Statement, error) {
-	nextToken := p.eat()
-
-	if nextToken.Type() != lexer.TYPE {
-		return nil, p.expectedKeywordError("type", nextToken)
-	}
-	nextToken = p.eat()
-
-	if nextToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedIdentifierError(nextToken)
-	}
-	structName := nextToken.Value()
-	_, exists := ctx.findStruct(structName, p.prefix, ctx.global())
-
-	if exists {
-		return nil, p.atError(fmt.Sprintf(`the struct "%s" has already been defined`, structName), nextToken)
-	}
-	nextToken = p.eat()
-
-	// For now, only struct definitions are allowed.
-	if nextToken.Type() != lexer.STRUCT {
-		return nil, p.expectedKeywordError("struct", nextToken)
-	}
-	nextToken = p.eat()
-
-	if nextToken.Type() != lexer.OPENING_CURLY_BRACKET {
-		return nil, p.expectedError(`"{"`, nextToken)
-	}
-	nextToken = p.eat()
-
-	if nextToken.Type() != lexer.NEWLINE {
-		return nil, p.expectedNewlineError(nextToken)
-	}
-	structDefinition := StructDefinition{
-		name: structName,
-	}
-	propertyNames := []string{}
-
-	for {
-		nextToken = p.peek()
-		nextTokenType := nextToken.Type()
-
-		if slices.Contains([]lexer.TokenType{lexer.CLOSING_CURLY_BRACKET, lexer.EOF}, nextTokenType) {
-			break
-		}
-		p.eat()
-
-		if nextTokenType != lexer.IDENTIFIER {
-			return nil, p.expectedIdentifierError(nextToken)
-		}
-		propertyName := nextToken.Value()
-
-		if slices.Contains(propertyNames, propertyName) {
-			return nil, p.atError(fmt.Sprintf(`struct "%s" already contains a property "%s"`, structName, propertyName), nextToken)
-		}
-		valueType, err := p.evaluateValueType()
-
-		if err != nil {
-			return nil, err
-		}
-		structDefinition.members = append(structDefinition.members, StructMember{
-			propertyName,
-			valueType,
-		})
-		nextToken = p.eat()
-
-		if nextToken.Type() != lexer.NEWLINE {
-			return nil, p.expectedNewlineError(nextToken)
-		}
-	}
-	nextToken = p.eat()
-
-	if nextToken.Type() != lexer.CLOSING_CURLY_BRACKET {
-		return nil, p.expectedError(`"}"`, nextToken)
-	}
-	return structDefinition, nil
-}
-
 func (p *Parser) evaluateIf(ctx context) (Statement, error) {
 	var ifStatement If
 
@@ -2279,8 +2169,6 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 		stmt, err = p.evaluateWrite(ctx)
 	case lexer.PANIC:
 		stmt, err = p.evaluatePanic(ctx)
-	case lexer.TYPE:
-		stmt, err = p.evaluateTypeDefinition(ctx)
 	default:
 		// Variable initialization also starts with identifier but is a statement (e.g. x := 1234).
 		if p.isShortVarInit() {
