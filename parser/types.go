@@ -60,8 +60,8 @@ func (vt ValueType) isNonSliceType(dataType DataType) bool {
 
 const (
 	STATEMENT_TYPE_PROGRAM                        StatementType = "program"
+	STATEMENT_TYPE_TYPE_DECLARATION               StatementType = "type declaration"
 	STATEMENT_TYPE_TYPE_DEFINITION                StatementType = "type definition"
-	STATEMENT_TYPE_TYPE_INSTANTIATION             StatementType = "type instantiation"
 	STATEMENT_TYPE_BOOL_LITERAL                   StatementType = "boolean"
 	STATEMENT_TYPE_INT_LITERAL                    StatementType = "integer"
 	STATEMENT_TYPE_STRING_LITERAL                 StatementType = "string"

@@ -1053,7 +1053,7 @@ func (p *Parser) evaluateTypeDefinition(ctx context) (Statement, error) {
 	if err != nil {
 		return nil, p.atError(err.Error(), valueTypeToken)
 	}
-	return TypeDefinition{name}, nil
+	return TypeDeclaration{name}, nil
 }
 
 func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
@@ -2078,7 +2078,7 @@ func (p *Parser) evaluateTypeInstantiation(ctx context) (Expression, error) {
 		return nil, p.expectedError(`")"`, nextToken)
 	}
 
-	return TypeInstantiation{
+	return TypeDefinition{
 		value:     expr,
 		valueType: NewValueType(typeName, exprValueType.IsSlice()),
 	}, nil
