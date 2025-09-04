@@ -117,7 +117,7 @@ func (c context) addType(typeName string, valueType ValueType, isAlias bool, isE
 	_, exists := c.findType(typeName, false)
 
 	if exists {
-		return fmt.Errorf(`type "%s" has already been defined`, typeName)
+		return fmt.Errorf("%s has already been defined", typeName)
 	}
 	if valueType.IsSlice() {
 		// TODO: Add support.
@@ -1022,10 +1022,10 @@ func (p *Parser) evaluateValueType(ctx context) (ValueType, error) {
 	return evaluatedType, nil
 }
 
-func (p *Parser) evaluateTypeDefinition(ctx context) (Statement, error) {
+func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 	typeToken := p.eat()
 
-	if typeToken.Type() != lexer.TYPE_DEFINITION {
+	if typeToken.Type() != lexer.TYPE_DECLARATION {
 		return nil, p.expectedKeywordError("type", typeToken)
 	}
 	nameToken := p.eat()
@@ -2041,7 +2041,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 	return stmt, nil
 }
 
-func (p *Parser) evaluateTypeInstantiation(ctx context) (Expression, error) {
+func (p *Parser) evaluateTypeDefinition(ctx context) (Expression, error) {
 	identifierToken := p.eat() // Eat identifier token.
 
 	if identifierToken.Type() != lexer.IDENTIFIER {
@@ -2205,7 +2205,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 			_, exists := ctx.findType(value, false)
 
 			if exists {
-				expr, err = p.evaluateTypeInstantiation(ctx)
+				expr, err = p.evaluateTypeDefinition(ctx)
 			} else {
 				expr, err = p.evaluateFunctionCall(ctx)
 			}
@@ -2291,8 +2291,8 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 	tokenType := token.Type()
 
 	switch tokenType {
-	case lexer.TYPE_DEFINITION:
-		stmt, err = p.evaluateTypeDefinition(ctx)
+	case lexer.TYPE_DECLARATION:
+		stmt, err = p.evaluateTypeDeclaration(ctx)
 	case lexer.VAR_DEFINITION:
 		stmt, err = p.evaluateVarDefinition(ctx)
 	case lexer.FUNCTION_DEFINITION:
