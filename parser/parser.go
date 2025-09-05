@@ -932,24 +932,33 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 		exists := false
 
 		switch statement.StatementType() {
-		case STATEMENT_TYPE_VAR_DEFINITION_VALUE_ASSIGNMENT:
-			definedVariable := statement.(VariableDefinitionValueAssignment)
+		case STATEMENT_TYPE_NAMED_VALUES_DEFINITION:
+			for _, assignment := range statement.(NamedValuesDefinition).Assignments() {
+				switch t := assignment.(type) {
+				case VariableDefinitionValueAssignment:
+					for _, variable := range t.Variables() {
+						name := variable.Name()
 
-			for _, variable := range definedVariable.Variables() {
-				name := variable.Name()
+						if _, exists = ctx.namedValues[name]; !exists && variable.Public() {
+							ctx.namedValues[name] = variable
+						}
+					}
+				case ConstDefinition:
+					for _, variable := range t.Constants() {
+						name := variable.Name()
 
-				if _, exists = ctx.namedValues[name]; !exists && variable.Public() {
-					ctx.namedValues[name] = variable
-				}
-			}
-		case STATEMENT_TYPE_CONST_DEFINITION:
-			definedConstant := statement.(ConstDefinition)
+						if _, exists = ctx.namedValues[name]; !exists && variable.Public() {
+							ctx.namedValues[name] = variable
+						}
+					}
+				case VariableDefinitionCallAssignment:
+					for _, variable := range t.Variables() {
+						name := variable.Name()
 
-			for _, variable := range definedConstant.Constants() {
-				name := variable.Name()
-
-				if _, exists = ctx.namedValues[name]; !exists && variable.Public() {
-					ctx.namedValues[name] = variable
+						if _, exists = ctx.namedValues[name]; !exists && variable.Public() {
+							ctx.namedValues[name] = variable
+						}
+					}
 				}
 			}
 		case STATEMENT_TYPE_FUNCTION_DEFINITION:
