@@ -1230,7 +1230,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 		isPublicValue := isPublic(name)
 
 		if evalConst {
-			newNamedValue = NewVariable(storedName, specifiedType, global, isPublicValue)
+			newNamedValue = NewConst(storedName, specifiedType, global, isPublicValue)
 		} else {
 			newNamedValue = NewVariable(storedName, specifiedType, global, isPublicValue)
 		}
