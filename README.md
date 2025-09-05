@@ -62,7 +62,7 @@ const b, c = 1, 2
 ```
 
 ```golang
-// constant definition via grouping.
+// Constant definition via grouping.
 const (
     a = -1
     b = iota
