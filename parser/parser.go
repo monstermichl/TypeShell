@@ -1237,7 +1237,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 		} else if evalConst {
 			for i, evaluatedVal := range evaluatedVals.values {
 				if !evaluatedVal.IsConstant() {
-					return nil, p.expectedError("constant values", evaluatedVals.tokens[i])
+					return nil, p.expectedError("constant value", evaluatedVals.tokens[i])
 				}
 			}
 		}
