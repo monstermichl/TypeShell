@@ -438,6 +438,14 @@ func (p *Parser) constantError(constant string, token lexer.Token) error {
 	return p.atError(fmt.Sprintf("cannot assign a value to constant %s", constant), token)
 }
 
+func (p *Parser) notDefinedError(what string, name string, token lexer.Token) error {
+	return p.atError(fmt.Sprintf("%s %s has not been defined", what, name), token)
+}
+
+func (p *Parser) variableNotDefinedError(variable string, token lexer.Token) error {
+	return p.notDefinedError("variable", variable, token)
+}
+
 func (p Parser) peek() lexer.Token {
 	return p.peekAt(0)
 }
@@ -1385,7 +1393,7 @@ func (p *Parser) evaluateCompoundAssignment(ctx context) (Statement, error) {
 	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
 
 	if !exists {
-		return nil, p.atError(fmt.Sprintf("variable %s has not been defined", name), nameToken)
+		return nil, p.variableNotDefinedError(name, nameToken)
 	} else if namedValue.IsConstant() {
 		return nil, p.constantError(name, nameToken)
 	}
@@ -1459,7 +1467,7 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
 		definedVariable, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
 
 		if !exists {
-			return nil, p.atError(fmt.Sprintf("variable %s has not been defined", name), nameToken)
+			return nil, p.variableNotDefinedError(name, nameToken)
 		}
 		valueType := valuesTypes[i]
 		expectedValueType := definedVariable.ValueType()
@@ -2151,7 +2159,7 @@ func (p *Parser) evaluateTypeDefinition(ctx context) (Expression, error) {
 	foundElementaryDefinition, exists := ctx.findType(typeName, true)
 
 	if !exists {
-		return nil, p.atError(fmt.Sprintf("type %s has not been defined", typeName), identifierToken)
+		return nil, p.notDefinedError("type", typeName, identifierToken)
 	}
 	nextToken := p.eat()
 
@@ -2196,7 +2204,7 @@ func (p *Parser) evaluateNamedValueEvaluation(ctx context) (Expression, error) {
 	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
 
 	if !exists {
-		return nil, p.atError(fmt.Sprintf("variable %s has not been defined", name), identifierToken)
+		return nil, p.variableNotDefinedError(name, identifierToken)
 	}
 
 	if namedValue.IsConstant() {
@@ -2685,7 +2693,7 @@ func (p *Parser) evaluateFunctionCall(ctx context) (Call, error) {
 	definedFunction, exists := ctx.findFunction(name, prefix)
 
 	if !exists {
-		return nil, p.atError(fmt.Sprintf("function %s has not been defined", dotedName), nextToken)
+		return nil, p.notDefinedError("function", dotedName, nextToken)
 	}
 	args, err := p.evaluateArguments("function", dotedName, definedFunction.params, ctx)
 
@@ -2932,7 +2940,7 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
 
 	if !exists {
-		return nil, p.atError(fmt.Sprintf("variable %s has not been defined", name), nameToken)
+		return nil, p.variableNotDefinedError(name, nameToken)
 	} else if namedValue.IsConstant() {
 		return nil, p.constantError(name, nameToken)
 	}
@@ -2996,7 +3004,7 @@ func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
 	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
 
 	if !exists {
-		return nil, p.atError(fmt.Sprintf("variable %s has not been defined", name), identifierToken)
+		return nil, p.variableNotDefinedError(name, identifierToken)
 	} else if namedValue.IsConstant() {
 		return nil, p.constantError(name, identifierToken)
 	}
