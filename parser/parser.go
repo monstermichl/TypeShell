@@ -2188,7 +2188,7 @@ func (p *Parser) evaluateTypeDefinition(ctx context) (Expression, error) {
 		return nil, p.expectedError(`"("`, nextToken)
 	}
 	nextToken = p.peek()
-	expr, err := p.evaluateSingleExpression(ctx)
+	expr, err := p.evaluateExpression(ctx)
 
 	if err != nil {
 		return nil, err
