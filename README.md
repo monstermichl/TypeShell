@@ -54,6 +54,22 @@ b, c := 5, 6
 d, e := divisionWithRemainder(5, 2)
 ```
 
+### Constants
+```golang
+// Constant definition.
+const a = 0
+const b, c = 1, 2
+```
+
+```golang
+// constant definition via grouping.
+const (
+    a = -1
+    b = iota
+    c
+)
+```
+
 ### Control flow
 ```golang
 // If-statement.
