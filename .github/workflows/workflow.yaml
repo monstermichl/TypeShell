@@ -81,18 +81,24 @@ jobs:
             EXT=
           fi
 
-          EXECUTABLE="tsh_${{ matrix.os }}_${{ matrix.arch }}${EXT}"
-          echo "EXECUTABLE<<EOF" >> $GITHUB_ENV
-          echo "${EXECUTABLE}" >> $GITHUB_ENV
+          NAME="tsh_${{ matrix.os }}_${{ matrix.arch }}"
+          PACKAGE="${NAME}.zip"
+
+          echo "PACKAGE<<EOF" >> $GITHUB_ENV
+          echo "${PACKAGE}" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
+          EXECUTABLE="${NAME}${EXT}""
+
           echo "Building for ${{ matrix.os }} ${{ matrix.arch }}"
-          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -o ${EXECUTABLE} tsh.go
+          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -o "${EXECUTABLE}" tsh.go
+
+          zip -r "${}" std/ "${EXECUTABLE}"
 
       - name: Release
         if: ${{ github.event_name == 'release' }}
         run: |
-          echo "Uploading ${{ env.EXECUTABLE }} release file"
-          gh release upload ${{ github.event.release.tag_name }} ${{ env.EXECUTABLE }}
+          echo "Uploading ${{ env.PACKAGE }} release file"
+          gh release upload ${{ github.event.release.tag_name }} ${{ env.PACKAGE }}
         env:
             GH_TOKEN: ${{ github.TOKEN }}
