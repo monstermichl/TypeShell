@@ -19,3 +19,7 @@ func TestMultiImportSuccess(t *testing.T) {
 func TestWildlyMixedImportsSuccess(t *testing.T) {
 	testWildlyMixedImportsSuccess(t, transpileBatchFunc)
 }
+
+func TestImportsFromExternalSourceSuccess(t *testing.T) {
+	testImportsFromExternalSourceSuccess(t, transpileBatchFunc)
+}

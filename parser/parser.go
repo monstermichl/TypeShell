@@ -4,7 +4,9 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -427,6 +429,33 @@ func buildPrefixedName(prefix string, funcName string) string {
 	return funcName
 }
 
+func updateExtInfo(infoPath string, remotePath string, localPath string) error {
+	var lines = []string{}
+
+	// If info file doesn't exist yet, create it.
+	if _, err := os.Stat(infoPath); err != nil {
+		lines = append(lines, "| Remote | Local |", "|-|-|")
+	} else {
+		contentBytes, err := os.ReadFile(infoPath)
+
+		if err != nil {
+			return err
+		}
+		content := string(contentBytes)
+		lines = strings.Split(content, "\n")
+	}
+
+	i := slices.IndexFunc(lines, func(line string) bool {
+		return strings.Contains(line, remotePath)
+	})
+
+	// If entry is new, add it.
+	if i < 0 {
+		lines = append(lines, fmt.Sprintf("| %s | %s |", remotePath, localPath))
+	}
+	return os.WriteFile(infoPath, []byte(strings.Join(lines, "\n")), 0700)
+}
+
 func (p *Parser) atError(what string, token lexer.Token) error {
 	return fmt.Errorf("%s at row %d, column %d: %s", what, token.Row(), token.Column(), p.path)
 }
@@ -766,9 +795,64 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 				if err != nil {
 					return nil, err
 				}
+				ex, err := os.Executable()
+
+				if err != nil {
+					return nil, err
+				}
 				path := imp.path
 				alias := imp.alias
 				absPath := path
+				sourceLocation := "local"
+
+				// If path is a remote address, download file to executable path and
+				// change path to the loaded path.
+				if strings.Contains(path, "://") {
+					sourceLocation = "remote"
+					externalPath := filepath.Join(filepath.Dir(ex), "ext")
+					err = os.MkdirAll(externalPath, 0700)
+
+					if err != nil {
+						return nil, err
+					}
+					hash := sha256.New()
+					_, err = hash.Write([]byte(path))
+
+					if err != nil {
+						return nil, err
+					}
+					hashString := ""
+
+					for _, b := range hash.Sum(nil) {
+						hashString = fmt.Sprintf("%s%02x", hashString, b)
+					}
+					absPath = filepath.Join(externalPath, fmt.Sprintf("%s.tsh", hashString))
+
+					// If file doesn't exist, download it.
+					if _, err = os.Stat(absPath); err != nil {
+						resp, err := http.Get(path)
+
+						if err != nil {
+							return nil, err
+						}
+						defer resp.Body.Close() // Make sure stream gets closed.
+						bodyBytes, err := io.ReadAll(resp.Body)
+
+						if err != nil {
+							return nil, err
+						}
+						err = os.WriteFile(absPath, bodyBytes, 0400)
+
+						if err != nil {
+							return nil, err
+						}
+						err = updateExtInfo(filepath.Join(externalPath, "info.md"), path, absPath)
+
+						if err != nil {
+							return nil, err
+						}
+					}
+				}
 
 				// If path is relative, create an absolute path by combining the loaded path with the import path.
 				if !filepath.IsAbs(absPath) {
@@ -778,11 +862,6 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 
 				// If path doesn't exist, try to find it in the standard library.
 				if _, err := os.Stat(absPath); err != nil {
-					ex, err := os.Executable()
-
-					if err != nil {
-						return nil, err
-					}
 					pathWithoutExt := strings.TrimSuffix(path, filepath.Ext(path))
 					absPathTemp := filepath.Join(filepath.Dir(ex), "std", fmt.Sprintf("%s.tsh", pathWithoutExt)) // Standart library is at <executable-path>/std.
 
@@ -796,7 +875,7 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 					}
 				} else if aliasLen == 0 {
 					// If it's not a standard library path, an alias must be provided.
-					return nil, fmt.Errorf(`an alias must be provided for the local import "%s" in "%s"`, path, p.path)
+					return nil, fmt.Errorf(`an alias must be provided for the %s import "%s" in %s`, sourceLocation, path, p.path)
 				}
 				importParser := New()
 				importedProg, err := importParser.parse(absPath, true)

@@ -47,7 +47,6 @@ func testMultiImportSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) 
 	})
 }
 
-
 func testWildlyMixedImportsSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) {
 	transpilerFunc(t, func(dir string) (string, error) {
 		return `import (
@@ -68,5 +67,18 @@ func testWildlyMixedImportsSuccess(t *testing.T, transpilerFunc transpilerCallou
 	}, func(output string, err error) {
 		require.Nil(t, err)
 		require.Equal(t, "1\n1\n1\n0\n0", output)
+	})
+}
+
+func testImportsFromExternalSourceSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) {
+	transpilerFunc(t, func(dir string) (string, error) {
+		return `
+			import strings "https://raw.githubusercontent.com/monstermichl/TypeShell/refs/heads/main/std/strings.tsh"
+
+			print(strings.Contains("Hello World", "Hel"))
+		`, nil
+	}, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "1", output)
 	})
 }
