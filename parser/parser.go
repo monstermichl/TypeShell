@@ -732,113 +732,118 @@ func (p *Parser) evaluateProgram() (Program, error) {
 }
 
 func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
-	var nextToken lexer.Token
 	statementsTemp := []Statement{}
 
-	// Skip empty characters.
 	for {
-		nextToken = p.peek()
-		if !slices.Contains([]lexer.TokenType{lexer.NEWLINE}, nextToken.Type()) {
-			break
-		}
-		p.eat()
-	}
+		var nextToken lexer.Token
 
-	if nextToken.Type() == lexer.IMPORT {
-		p.eat()
-		nextToken := p.peek()
-		multiple := nextToken.Type() == lexer.OPENING_ROUND_BRACKET
-
-		if multiple {
-			p.eat()
-			nextToken = p.eat()
-
-			if nextToken.Type() != lexer.NEWLINE {
-				return nil, p.expectedNewlineError(nextToken)
-			}
-		}
-
+		// Skip empty characters.
 		for {
-			imp, err := p.evaluateImport()
-
-			if err != nil {
-				return nil, err
+			nextToken = p.peek()
+			if !slices.Contains([]lexer.TokenType{lexer.NEWLINE}, nextToken.Type()) {
+				break
 			}
-			path := imp.path
-			alias := imp.alias
-			absPath := path
+			p.eat()
+		}
 
-			// If path is relative, create an absolute path by combining the loaded path with the import path.
-			if !filepath.IsAbs(absPath) {
-				absPath = filepath.Join(filepath.Dir(p.path), absPath)
+		if nextToken.Type() == lexer.IMPORT {
+			p.eat()
+			nextToken := p.peek()
+			multiple := nextToken.Type() == lexer.OPENING_ROUND_BRACKET
+
+			if multiple {
+				p.eat()
+				nextToken = p.eat()
+
+				if nextToken.Type() != lexer.NEWLINE {
+					return nil, p.expectedNewlineError(nextToken)
+				}
 			}
-			aliasLen := len(alias)
 
-			// If path doesn't exist, try to find it in the standard library.
-			if _, err := os.Stat(absPath); err != nil {
-				ex, err := os.Executable()
+			for {
+				imp, err := p.evaluateImport()
 
 				if err != nil {
 					return nil, err
 				}
-				pathWithoutExt := strings.TrimSuffix(path, filepath.Ext(path))
-				absPathTemp := filepath.Join(filepath.Dir(ex), "std", fmt.Sprintf("%s.tsh", pathWithoutExt)) // Standart library is at <executable-path>/std.
+				path := imp.path
+				alias := imp.alias
+				absPath := path
 
-				// If path exists, use it.
-				if _, err := os.Stat(absPath); err != nil {
-					absPath = absPathTemp
-
-					if aliasLen == 0 {
-						alias = filepath.Base(pathWithoutExt)
-					}
+				// If path is relative, create an absolute path by combining the loaded path with the import path.
+				if !filepath.IsAbs(absPath) {
+					absPath = filepath.Join(filepath.Dir(p.path), absPath)
 				}
-			} else if aliasLen == 0 {
-				// If it's not a standard library path, an alias must be provided.
-				return nil, fmt.Errorf(`an alias must be provided for the local import "%s" in "%s"`, path, p.path)
-			}
-			importParser := New()
-			importedProg, err := importParser.parse(absPath, true)
+				aliasLen := len(alias)
 
-			if err != nil {
-				return nil, err
-			}
+				// If path doesn't exist, try to find it in the standard library.
+				if _, err := os.Stat(absPath); err != nil {
+					ex, err := os.Executable()
 
-			if _, exists := ctx.findImport(alias); exists {
-				return nil, fmt.Errorf(`import alias "%s" already exists`, alias)
-			}
-			err = ctx.addImport(alias, importParser.prefix)
+					if err != nil {
+						return nil, err
+					}
+					pathWithoutExt := strings.TrimSuffix(path, filepath.Ext(path))
+					absPathTemp := filepath.Join(filepath.Dir(ex), "std", fmt.Sprintf("%s.tsh", pathWithoutExt)) // Standart library is at <executable-path>/std.
 
-			if err != nil {
-				return nil, err
-			}
-			statementsTemp = append(statementsTemp, importedProg.Body()...)
+					// If path exists, use it.
+					if _, err := os.Stat(absPath); err != nil {
+						absPath = absPathTemp
 
-			// Import-parser funcs with current parser funcs.
-			for funcName, usedFuncs := range importParser.usedFuncs {
-				if foundUsedFuncs, exists := p.usedFuncs[funcName]; !exists {
-					p.usedFuncs[funcName] = usedFuncs
-				} else {
-					for _, usedFunc := range foundUsedFuncs {
-						if !slices.Contains(foundUsedFuncs, usedFunc) {
-							p.usedFuncs[funcName] = append(p.usedFuncs[funcName], usedFunc)
+						if aliasLen == 0 {
+							alias = filepath.Base(pathWithoutExt)
+						}
+					}
+				} else if aliasLen == 0 {
+					// If it's not a standard library path, an alias must be provided.
+					return nil, fmt.Errorf(`an alias must be provided for the local import "%s" in "%s"`, path, p.path)
+				}
+				importParser := New()
+				importedProg, err := importParser.parse(absPath, true)
+
+				if err != nil {
+					return nil, err
+				}
+
+				if _, exists := ctx.findImport(alias); exists {
+					return nil, fmt.Errorf(`import alias "%s" already exists`, alias)
+				}
+				err = ctx.addImport(alias, importParser.prefix)
+
+				if err != nil {
+					return nil, err
+				}
+				statementsTemp = append(statementsTemp, importedProg.Body()...)
+
+				// Import-parser funcs with current parser funcs.
+				for funcName, usedFuncs := range importParser.usedFuncs {
+					if foundUsedFuncs, exists := p.usedFuncs[funcName]; !exists {
+						p.usedFuncs[funcName] = usedFuncs
+					} else {
+						for _, usedFunc := range foundUsedFuncs {
+							if !slices.Contains(foundUsedFuncs, usedFunc) {
+								p.usedFuncs[funcName] = append(p.usedFuncs[funcName], usedFunc)
+							}
 						}
 					}
 				}
-			}
 
-			nextToken = p.peek()
-			nextTokenType := nextToken.Type()
+				nextToken = p.peek()
+				nextTokenType := nextToken.Type()
 
-			if !multiple {
-				break
-			} else if nextTokenType == lexer.CLOSING_ROUND_BRACKET {
-				p.eat()
-				break
-			} else if slices.Contains([]lexer.TokenType{lexer.IDENTIFIER, lexer.STRING_LITERAL}, nextTokenType) {
-				// Nothing to do, parse next import in the next cycle.
-			} else {
-				return nil, p.expectedError(`")"`, nextToken)
+				if !multiple {
+					break
+				} else if nextTokenType == lexer.CLOSING_ROUND_BRACKET {
+					p.eat()
+					break
+				} else if slices.Contains([]lexer.TokenType{lexer.IDENTIFIER, lexer.STRING_LITERAL}, nextTokenType) {
+					// Nothing to do, parse next import in the next cycle.
+				} else {
+					return nil, p.expectedError(`")"`, nextToken)
+				}
 			}
+		} else {
+			break
 		}
 	}
 	statements := []Statement{}

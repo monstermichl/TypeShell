@@ -18,6 +18,20 @@ func testSingleImportSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc)
 	})
 }
 
+func testSeveralSingleImportsSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) {
+	transpilerFunc(t, func(dir string) (string, error) {
+		return `
+			import strings1 "strings"
+			import strings2 "strings"
+
+			print(strings1.Contains("Hello World", "Wor"))
+		`, nil
+	}, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "1", output)
+	})
+}
+
 func testMultiImportSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) {
 	transpilerFunc(t, func(dir string) (string, error) {
 		return `import (
@@ -30,5 +44,29 @@ func testMultiImportSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) 
 	}, func(output string, err error) {
 		require.Nil(t, err)
 		require.Equal(t, "1\n1", output)
+	})
+}
+
+
+func testWildlyMixedImportsSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) {
+	transpilerFunc(t, func(dir string) (string, error) {
+		return `import (
+			strings1 "strings"
+			)
+			import strings2 "strings"
+			import strings3 "strings"
+			import (
+				strings4 "strings"
+				"strings"
+			)
+			print(strings1.Contains("Hello World", "Wor"))
+			print(strings2.HasPrefix("Hello World", "Hel"))
+			print(strings.Contains("Hello World", "Hel"))
+			print(strings3.Contains("Hello World", "Bel"))
+			print(strings4.Contains("Hello World", "Bel"))
+		`, nil
+	}, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "1\n1\n1\n0\n0", output)
 	})
 }
