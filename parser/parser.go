@@ -1482,13 +1482,15 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
 		name := nameToken.Value()
 
 		// Make sure variable has been defined.
-		definedVariable, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
+		namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
 
 		if !exists {
 			return nil, p.variableNotDefinedError(name, nameToken)
+		} else if namedValue.IsConstant() {
+			return nil, p.constantError(name, nameToken)
 		}
 		valueType := valuesTypes[i]
-		expectedValueType := definedVariable.ValueType()
+		expectedValueType := namedValue.ValueType()
 
 		if valueType != expectedValueType {
 			return nil, p.expectedError(fmt.Sprintf("%s but got %s", expectedValueType.String(), valueType.String()), valuesToken)
