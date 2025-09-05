@@ -830,7 +830,7 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 	}
 	statements := []Statement{}
 
-	// Add functions add variables.
+	// Add functions, variables and constants.
 	for _, statement := range statementsTemp {
 		exists := false
 
@@ -839,6 +839,16 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 			definedVariable := statement.(VariableDefinition)
 
 			for _, variable := range definedVariable.Variables() {
+				name := variable.Name()
+
+				if _, exists = ctx.namedValues[name]; !exists && variable.Public() {
+					ctx.namedValues[name] = variable
+				}
+			}
+		case STATEMENT_TYPE_CONST_DEFINITION:
+			definedConstant := statement.(ConstDefinition)
+
+			for _, variable := range definedConstant.Constants() {
 				name := variable.Name()
 
 				if _, exists = ctx.namedValues[name]; !exists && variable.Public() {
@@ -953,6 +963,15 @@ func (p *Parser) evaluateBlockContent(terminationTokenTypes []lexer.TokenType, c
 				case STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT:
 					// Store new variables.
 					for _, variable := range stmt.(VariableDefinitionCallAssignment).Variables() {
+						err = ctx.addNamedValues(prefix, global, variable)
+
+						if err != nil {
+							return nil, err
+						}
+					}
+				case STATEMENT_TYPE_CONST_DEFINITION:
+					// Store new constants.
+					for _, variable := range stmt.(ConstDefinition).Constants() {
 						err = ctx.addNamedValues(prefix, global, variable)
 
 						if err != nil {
@@ -2072,6 +2091,15 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 				case STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT:
 					// Store new variable.
 					for _, variable := range init.(VariableDefinitionCallAssignment).Variables() {
+						err = ctx.addNamedValues(prefix, false, variable)
+
+						if err != nil {
+							return nil, err
+						}
+					}
+				case STATEMENT_TYPE_CONST_DEFINITION:
+					// Store new variable.
+					for _, variable := range init.(ConstDefinition).Constants() {
 						err = ctx.addNamedValues(prefix, false, variable)
 
 						if err != nil {

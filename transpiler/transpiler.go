@@ -369,6 +369,16 @@ func (t *transpiler) evaluateFor(forStatement parser.For) error {
 	return conv.ForEnd()
 }
 
+func (t *transpiler) evaluateConstDefinition(definition parser.ConstDefinition) error {
+	variables := []parser.Variable{}
+
+	// Map const definition to var definition since constant check has already been performed by parser.
+	for _, constant := range definition.Constants() {
+		variables = append(variables, parser.NewVariable(constant.Name(), constant.ValueType(), constant.Global(), constant.Public()))
+	}
+	return t.evaluateVarDefinition(parser.NewVariableDefinition(variables, definition.Values()))
+}
+
 func (t *transpiler) evaluateVarDefinition(definition parser.VariableDefinition) error {
 	for i, variable := range definition.Variables() {
 		result, err := t.evaluateExpression(definition.Values()[i], true)
@@ -470,6 +480,13 @@ func (t *transpiler) evaluateSliceAssignment(assignment parser.SliceAssignment) 
 		return err
 	}
 	return t.converter.SliceAssignment(assignment.Name(), indexResult.firstValue(), valueResult.firstValue(), defaultValue, assignment.Global())
+}
+
+func (t *transpiler) evaluateConstEvaluation(evaluation parser.ConstEvaluation, valueUsed bool) (expressionResult, error) {
+	// Map const evaluation to var evaluation since constant evaluation works the same.
+	varEvaluation := parser.NewVariableEvaluation(evaluation.Name(), evaluation.ValueType(), evaluation.Global(), evaluation.Public())
+
+	return t.evaluateVarEvaluation(varEvaluation, valueUsed)
 }
 
 func (t *transpiler) evaluateVarEvaluation(evaluation parser.VariableEvaluation, valueUsed bool) (expressionResult, error) {
@@ -779,6 +796,8 @@ func (t *transpiler) evaluate(statement parser.Statement) error {
 		return t.evaluateProgram(statement.(parser.Program))
 	case parser.STATEMENT_TYPE_TYPE_DECLARATION:
 		return nil // Nothing to handle here, types are just relevant for the parser.
+	case parser.STATEMENT_TYPE_CONST_DEFINITION:
+		return t.evaluateConstDefinition(statement.(parser.ConstDefinition))
 	case parser.STATEMENT_TYPE_VAR_DEFINITION:
 		return t.evaluateVarDefinition(statement.(parser.VariableDefinition))
 	case parser.STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT:
@@ -838,6 +857,8 @@ func (t *transpiler) evaluateExpression(expression parser.Expression, valueUsed 
 		return t.evaluateCompareOperation(expression.(parser.Comparison), valueUsed)
 	case parser.STATEMENT_TYPE_LOGICAL_OPERATION:
 		return t.evaluateLogicalOperation(expression.(parser.LogicalOperation), valueUsed)
+	case parser.STATEMENT_TYPE_CONST_EVALUATION:
+		return t.evaluateConstEvaluation(expression.(parser.ConstEvaluation), valueUsed)
 	case parser.STATEMENT_TYPE_VAR_EVALUATION:
 		return t.evaluateVarEvaluation(expression.(parser.VariableEvaluation), valueUsed)
 	case parser.STATEMENT_TYPE_SLICE_EVALUATION:

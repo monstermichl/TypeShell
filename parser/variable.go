@@ -45,6 +45,13 @@ type VariableDefinition struct {
 	values    []Expression
 }
 
+func NewVariableDefinition(variables []Variable, values []Expression) VariableDefinition {
+	return VariableDefinition{
+		variables,
+		values,
+	}
+}
+
 func (v VariableDefinition) StatementType() StatementType {
 	return STATEMENT_TYPE_VAR_DEFINITION
 }
@@ -110,6 +117,17 @@ func (v VariableAssignmentCallAssignment) Call() Call {
 
 type VariableEvaluation struct {
 	Variable
+}
+
+func NewVariableEvaluation(name string, valueType ValueType, global bool, public bool) VariableEvaluation {
+	return VariableEvaluation{
+		Variable{
+			name,
+			valueType,
+			global,
+			public,
+		},
+	}
 }
 
 func (e VariableEvaluation) StatementType() StatementType {
