@@ -1226,6 +1226,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 		namedValues = append(namedValues, newNamedValue)
 	}
 	values := []Expression{}
+	firstValueToken := p.peek()
 
 	// TODO: Improve check (avoid NEWLINE and EOF check).
 	if nextTokenType != lexer.NEWLINE && nextTokenType != lexer.EOF {
@@ -1312,9 +1313,14 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 			return call, nil
 		}
 	}
+	lenValues := len(values)
+
+	if evalConst && lenValues != nameTokensLength {
+		return nil, p.atError("all constants must be initialized", firstValueToken)
+	}
 
 	// If no value has been specified, define default value.
-	if len(values) == 0 {
+	if lenValues == 0 {
 		for _, variable := range namedValues {
 			value, err := defaultVarValue(variable.ValueType(), ctx)
 
