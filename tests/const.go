@@ -37,6 +37,38 @@ func testDefineConstantsInFunctionSuccess(t *testing.T, transpilerFunc transpile
 	})
 }
 
+func testDefineConstantsGroupedSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		const (
+			a = 0
+			b, c = 1, 2
+			d = iota
+			e = 4
+			f
+			g, h = iota, iota
+		)
+
+		print(a, b, c, d, e, f, g, h)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "0 1 2 3 4 5 6 7", output)
+	})
+}
+
+func testDefineConstantsMissingValueFail(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		const (
+			a = 0
+			b, c = 1, 2
+			d
+			e = 4
+			f, g = iota, iota
+		)
+	`, func(output string, err error) {
+		require.EqualError(t, shortenError(err), "expected data type or value assignment")
+	})
+}
+
 func testDefineSameConstantFail(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		const a = 1

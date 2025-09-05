@@ -12,6 +12,14 @@ func TestDefineConstantsInFunctionSuccess(t *testing.T) {
 	testDefineConstantsInFunctionSuccess(t, transpileBash)
 }
 
+func TestDefineConstantsGroupedSuccess(t *testing.T) {
+	testDefineConstantsGroupedSuccess(t, transpileBash)
+}
+
+func TestDefineConstantsMissingValueFail(t *testing.T) {
+	testDefineConstantsMissingValueFail(t, transpileBash)
+}
+
 func TestDefineSameConstantFail(t *testing.T) {
 	testDefineSameConstantFail(t, transpileBash)
 }
