@@ -7,12 +7,25 @@ type Const struct {
 	public    bool
 }
 
+func NewConst(name string, valueType ValueType, global bool, public bool) Const {
+	return Const{
+		name,
+		valueType,
+		global,
+		public,
+	}
+}
+
 func (c Const) Name() string {
 	return c.name
 }
 
 func (c Const) ValueType() ValueType {
 	return c.valueType
+}
+
+func (c *Const) SetValueType(valueType ValueType) {
+	c.valueType = valueType
 }
 
 func (c Const) Global() bool {

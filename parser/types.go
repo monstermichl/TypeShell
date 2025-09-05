@@ -1,6 +1,9 @@
 package parser
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 type StatementType string
 type DataType = string
@@ -8,6 +11,15 @@ type CompareOperator = string
 type UnaryOperator = string
 type BinaryOperator = string
 type LogicalOperator = string
+
+func (s StatementType) IsConstant() bool {
+	return slices.Contains([]StatementType{
+		STATEMENT_TYPE_BOOL_LITERAL,
+		STATEMENT_TYPE_STRING_LITERAL,
+		STATEMENT_TYPE_INT_LITERAL,
+		STATEMENT_TYPE_CONST_EVALUATION,
+	}, s)
+}
 
 type ValueType struct {
 	dataType DataType

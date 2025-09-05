@@ -24,6 +24,10 @@ func (v Variable) ValueType() ValueType {
 	return v.valueType
 }
 
+func (v *Variable) SetValueType(valueType ValueType) {
+	v.valueType = valueType
+}
+
 func (v Variable) Global() bool {
 	return v.global
 }
