@@ -369,6 +369,17 @@ func (t *transpiler) evaluateFor(forStatement parser.For) error {
 	return conv.ForEnd()
 }
 
+func (t *transpiler) evaluateNamedValuesDefinition(definition parser.NamedValuesDefinition) error {
+	for _, assignment := range definition.Assignments() {
+		err := t.evaluate(assignment)
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (t *transpiler) evaluateConstDefinition(definition parser.ConstDefinition) error {
 	variables := []parser.Variable{}
 
@@ -379,7 +390,7 @@ func (t *transpiler) evaluateConstDefinition(definition parser.ConstDefinition) 
 	return t.evaluateVarDefinition(parser.NewVariableDefinition(variables, definition.Values()))
 }
 
-func (t *transpiler) evaluateVarDefinition(definition parser.VariableDefinition) error {
+func (t *transpiler) evaluateVarDefinition(definition parser.VariableDefinitionValueAssignment) error {
 	for i, variable := range definition.Variables() {
 		result, err := t.evaluateExpression(definition.Values()[i], true)
 
@@ -420,7 +431,7 @@ func (t *transpiler) evaluateVarDefinitionCallAssignment(definition parser.Varia
 	return nil
 }
 
-func (t *transpiler) evaluateVarAssignment(assignment parser.VariableAssignment) error {
+func (t *transpiler) evaluateVarAssignment(assignment parser.VariableAssignmentValueAssignment) error {
 	for i, variable := range assignment.Variables() {
 		result, err := t.evaluateExpression(assignment.Values()[i], true)
 
@@ -796,14 +807,16 @@ func (t *transpiler) evaluate(statement parser.Statement) error {
 		return t.evaluateProgram(statement.(parser.Program))
 	case parser.STATEMENT_TYPE_TYPE_DECLARATION:
 		return nil // Nothing to handle here, types are just relevant for the parser.
+	case parser.STATEMENT_TYPE_NAMED_VALUES_DEFINITION:
+		return t.evaluateNamedValuesDefinition(statement.(parser.NamedValuesDefinition))
 	case parser.STATEMENT_TYPE_CONST_DEFINITION:
 		return t.evaluateConstDefinition(statement.(parser.ConstDefinition))
-	case parser.STATEMENT_TYPE_VAR_DEFINITION:
-		return t.evaluateVarDefinition(statement.(parser.VariableDefinition))
+	case parser.STATEMENT_TYPE_VAR_DEFINITION_VALUE_ASSIGNMENT:
+		return t.evaluateVarDefinition(statement.(parser.VariableDefinitionValueAssignment))
 	case parser.STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT:
 		return t.evaluateVarDefinitionCallAssignment(statement.(parser.VariableDefinitionCallAssignment))
-	case parser.STATEMENT_TYPE_VAR_ASSIGNMENT:
-		return t.evaluateVarAssignment(statement.(parser.VariableAssignment))
+	case parser.STATEMENT_TYPE_VAR_ASSIGNMENT_VALUE_ASSIGNMENT:
+		return t.evaluateVarAssignment(statement.(parser.VariableAssignmentValueAssignment))
 	case parser.STATEMENT_TYPE_VAR_ASSIGNMENT_CALL_ASSIGNMENT:
 		return t.evaluateVarAssignmentCallAssignment(statement.(parser.VariableAssignmentCallAssignment))
 	case parser.STATEMENT_TYPE_SLICE_ASSIGNMENT:

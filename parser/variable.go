@@ -40,27 +40,31 @@ func (v Variable) Public() bool {
 	return v.public
 }
 
-type VariableDefinition struct {
+type VariableDefinitionValueAssignment struct {
 	variables []Variable
 	values    []Expression
 }
 
-func NewVariableDefinition(variables []Variable, values []Expression) VariableDefinition {
-	return VariableDefinition{
+func NewVariableDefinition(variables []Variable, values []Expression) VariableDefinitionValueAssignment {
+	return VariableDefinitionValueAssignment{
 		variables,
 		values,
 	}
 }
 
-func (v VariableDefinition) StatementType() StatementType {
-	return STATEMENT_TYPE_VAR_DEFINITION
+func (v VariableDefinitionValueAssignment) StatementType() StatementType {
+	return STATEMENT_TYPE_VAR_DEFINITION_VALUE_ASSIGNMENT
 }
 
-func (v VariableDefinition) Variables() []Variable {
+func (v VariableDefinitionValueAssignment) AssignmentType() AssignmentType {
+	return ASSIGNMENT_TYPE_VALUE
+}
+
+func (v VariableDefinitionValueAssignment) Variables() []Variable {
 	return v.variables
 }
 
-func (v VariableDefinition) Values() []Expression {
+func (v VariableDefinitionValueAssignment) Values() []Expression {
 	return v.values
 }
 
@@ -73,6 +77,10 @@ func (v VariableDefinitionCallAssignment) StatementType() StatementType {
 	return STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT
 }
 
+func (v VariableDefinitionCallAssignment) AssignmentType() AssignmentType {
+	return ASSIGNMENT_TYPE_CALL
+}
+
 func (v VariableDefinitionCallAssignment) Variables() []Variable {
 	return v.variables
 }
@@ -82,19 +90,39 @@ func (v VariableDefinitionCallAssignment) Call() Call {
 }
 
 type VariableAssignment struct {
-	variables []Variable
-	values    []Expression
+	assignments []Assignment
 }
 
 func (v VariableAssignment) StatementType() StatementType {
 	return STATEMENT_TYPE_VAR_ASSIGNMENT
 }
 
-func (v VariableAssignment) Variables() []Variable {
+func (v *VariableAssignment) AddAssignment(assignment Assignment) {
+	v.assignments = append(v.assignments, assignment)
+}
+
+func (v VariableAssignment) Assignments() []Assignment {
+	return v.assignments
+}
+
+type VariableAssignmentValueAssignment struct {
+	variables []Variable
+	values    []Expression
+}
+
+func (v VariableAssignmentValueAssignment) StatementType() StatementType {
+	return STATEMENT_TYPE_VAR_ASSIGNMENT_VALUE_ASSIGNMENT
+}
+
+func (v VariableAssignmentValueAssignment) AssignmentType() AssignmentType {
+	return ASSIGNMENT_TYPE_VALUE
+}
+
+func (v VariableAssignmentValueAssignment) Variables() []Variable {
 	return v.variables
 }
 
-func (v VariableAssignment) Values() []Expression {
+func (v VariableAssignmentValueAssignment) Values() []Expression {
 	return v.values
 }
 
@@ -105,6 +133,10 @@ type VariableAssignmentCallAssignment struct {
 
 func (v VariableAssignmentCallAssignment) StatementType() StatementType {
 	return STATEMENT_TYPE_VAR_ASSIGNMENT_CALL_ASSIGNMENT
+}
+
+func (v VariableAssignmentCallAssignment) AssignmentType() AssignmentType {
+	return ASSIGNMENT_TYPE_CALL
 }
 
 func (v VariableAssignmentCallAssignment) Variables() []Variable {

@@ -49,6 +49,10 @@ func (c ConstDefinition) StatementType() StatementType {
 	return STATEMENT_TYPE_CONST_DEFINITION
 }
 
+func (c ConstDefinition) AssignmentType() AssignmentType {
+	return ASSIGNMENT_TYPE_VALUE
+}
+
 func (c ConstDefinition) Constants() []Const {
 	return c.constants
 }
