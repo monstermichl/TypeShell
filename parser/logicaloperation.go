@@ -14,6 +14,10 @@ func (l LogicalOperation) ValueType() ValueType {
 	return ValueType{dataType: DATA_TYPE_BOOLEAN}
 }
 
+func (l LogicalOperation) IsConstant() bool {
+	return l.Left().IsConstant() && l.Right().IsConstant()
+}
+
 func (l LogicalOperation) Left() Expression {
 	return l.left
 }

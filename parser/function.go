@@ -20,6 +20,10 @@ func (e FunctionDefinition) ValueType() ValueType {
 	return functionValueType(e.returnTypes)
 }
 
+func (e FunctionDefinition) IsConstant() bool {
+	return false
+}
+
 func (e FunctionDefinition) ReturnTypes() []ValueType {
 	return e.returnTypes
 }
@@ -52,6 +56,10 @@ func (e FunctionCall) Name() string {
 
 func (e FunctionCall) ValueType() ValueType {
 	return functionValueType(e.returnTypes)
+}
+
+func (e FunctionCall) IsConstant() bool {
+	return false
 }
 
 func (e FunctionCall) ReturnTypes() []ValueType {

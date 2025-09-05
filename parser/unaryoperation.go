@@ -14,6 +14,10 @@ func (b UnaryOperation) ValueType() ValueType {
 	return b.valueType
 }
 
+func (b UnaryOperation) IsConstant() bool {
+	return b.Expression().IsConstant()
+}
+
 func (b UnaryOperation) Expression() Expression {
 	return b.expr
 }

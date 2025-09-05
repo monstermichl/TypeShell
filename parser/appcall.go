@@ -14,6 +14,10 @@ func (a AppCall) ValueType() ValueType {
 	return NewValueType(DATA_TYPE_MULTIPLE, false)
 }
 
+func (a AppCall) IsConstant() bool {
+	return false
+}
+
 func (a AppCall) Name() string {
 	return a.name
 }

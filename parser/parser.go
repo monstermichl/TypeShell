@@ -15,13 +15,6 @@ import (
 	"github.com/monstermichl/typeshell/lexer"
 )
 
-var typeMapping = map[lexer.VarType]DataType{
-	lexer.DATA_TYPE_BOOLEAN: DATA_TYPE_BOOLEAN,
-	lexer.DATA_TYPE_INTEGER: DATA_TYPE_INTEGER,
-	lexer.DATA_TYPE_STRING:  DATA_TYPE_STRING,
-	lexer.DATA_TYPE_ERROR:   DATA_TYPE_STRING, // error is internally just a string to make heandling easier.
-}
-
 type scope string
 
 const (
@@ -30,6 +23,7 @@ const (
 	SCOPE_IF       scope = "if"
 	SCOPE_FOR      scope = "for"
 	SCOPE_SWITCH   scope = "switch"
+	SCOPE_CONST    scope = "const"
 )
 
 func scopesToString(scopes []scope) []string {
@@ -41,19 +35,60 @@ func scopesToString(scopes []scope) []string {
 	return strings
 }
 
+type typeDefinition struct {
+	valueType    ValueType
+	isAlias      bool
+	isElementary bool
+}
+
+type foundTypeDefinition struct {
+	typeDefinition
+	name string
+}
+
 type context struct {
-	imports    map[string]string             // Maps import aliases to file hashes.
-	variables  map[string]Variable           // Stores the variable name to variable relation.
-	functions  map[string]FunctionDefinition // Stores the function name to function relation.
-	scopeStack []scope                       // Stores the current scopes.
+	imports     map[string]string             // Maps import aliases to file hashes.
+	types       map[string]typeDefinition     // Stores the defined types.
+	namedValues map[string]NamedValue         // Stores the variable/constant name to variable/constant relation.
+	functions   map[string]FunctionDefinition // Stores the function name to function relation.
+	scopeStack  []scope                       // Stores the current scopes.
+	iotaCounter int
 }
 
 func newContext() context {
-	return context{
-		imports:   map[string]string{},
-		variables: map[string]Variable{},
-		functions: map[string]FunctionDefinition{},
+	c := context{
+		imports:     map[string]string{},
+		types:       map[string]typeDefinition{},
+		namedValues: map[string]NamedValue{},
+		functions:   map[string]FunctionDefinition{},
+		iotaCounter: 0,
 	}
+
+	// Define elementary types.
+	c.addType(DATA_TYPE_BOOLEAN, NewValueType(DATA_TYPE_BOOLEAN, false), false, true)
+	c.addType(DATA_TYPE_INTEGER, NewValueType(DATA_TYPE_INTEGER, false), false, true)
+	c.addType(DATA_TYPE_STRING, NewValueType(DATA_TYPE_STRING, false), false, true)
+
+	// Define error alias.
+	c.addType(DATA_TYPE_ERROR, NewValueType(DATA_TYPE_STRING, false), true, false)
+
+	return c
+}
+
+func (c *context) pushScope(scope scope) error {
+	c.scopeStack = append(c.scopeStack, scope)
+
+	// If new const scope is pushed, reset iota counter.
+	if scope == SCOPE_CONST {
+		c.iotaCounter = 0
+	}
+	return nil
+}
+
+func (c *context) popScope() error {
+	i := len(c.scopeStack) - 1
+	c.scopeStack = slices.Delete(c.scopeStack, i, i+1)
+	return nil
 }
 
 func (c context) currentScope() scope {
@@ -71,6 +106,10 @@ func (c context) findScope(s scope) bool {
 		}
 	}
 	return false
+}
+
+func (c *context) incrementIota() {
+	c.iotaCounter++
 }
 
 func (c context) buildPrefixedName(name string, prefix string, global bool, checkExistence bool) (string, error) {
@@ -97,14 +136,32 @@ func (c context) addImport(alias string, hash string) error {
 	return nil
 }
 
-func (c context) addVariables(prefix string, global bool, variables ...Variable) error {
-	for _, variable := range variables {
-		prefixedName, err := c.buildPrefixedName(variable.Name(), prefix, global, false)
+func (c context) addType(typeName string, valueType ValueType, isAlias bool, isElementary bool) error {
+	_, exists := c.findType(typeName, false)
+
+	if exists {
+		return fmt.Errorf("%s has already been defined", typeName)
+	}
+	if valueType.IsSlice() {
+		// TODO: Add support.
+		return errors.New("slices are not allowed yet in type definitions")
+	}
+	c.types[typeName] = typeDefinition{
+		valueType,
+		isAlias,
+		isElementary,
+	}
+	return nil
+}
+
+func (c context) addNamedValues(prefix string, global bool, namedValues ...NamedValue) error {
+	for _, namedValue := range namedValues {
+		prefixedName, err := c.buildPrefixedName(namedValue.Name(), prefix, global, false)
 
 		if err != nil {
 			return err
 		}
-		c.variables[prefixedName] = variable
+		c.namedValues[prefixedName] = namedValue
 	}
 	return nil
 }
@@ -126,14 +183,35 @@ func (c context) findImport(alias string) (string, bool) {
 	return hash, exists
 }
 
-func (c context) findVariable(name string, prefix string, global bool) (Variable, bool) {
+func (c context) findType(typeName string, searchUntilElementary bool) (foundTypeDefinition, bool) {
+	var foundDefinition foundTypeDefinition
+	typeDefinition, exists := c.types[typeName]
+
+	if exists {
+		foundDefinitionTemp := foundTypeDefinition{
+			typeDefinition: typeDefinition,
+			name:           typeName,
+		}
+
+		// If the defined type is an alias, trace it down to the root.
+		if typeDefinition.isAlias || (searchUntilElementary && !typeDefinition.isElementary) {
+			foundDefinitionTemp, exists = c.findType(typeDefinition.valueType.DataType(), searchUntilElementary)
+		}
+		if exists {
+			foundDefinition = foundDefinitionTemp
+		}
+	}
+	return foundDefinition, exists
+}
+
+func (c context) findNamedValue(name string, prefix string, global bool) (NamedValue, bool) {
 	prefixedName, err := c.buildPrefixedName(name, prefix, global, true)
 
 	if err != nil {
 		return Variable{}, false
 	}
-	variable, exists := c.variables[prefixedName]
-	return variable, exists
+	namedValue, exists := c.namedValues[prefixedName]
+	return namedValue, exists
 }
 
 func (c context) findFunction(name string, prefix string) (FunctionDefinition, bool) {
@@ -148,10 +226,12 @@ func (c context) findFunction(name string, prefix string) (FunctionDefinition, b
 
 func (c context) clone() context {
 	return context{
-		imports:    maps.Clone(c.imports),
-		variables:  maps.Clone(c.variables),
-		functions:  maps.Clone(c.functions),
-		scopeStack: slices.Clone(c.scopeStack),
+		imports:     maps.Clone(c.imports),
+		types:       maps.Clone(c.types),
+		namedValues: maps.Clone(c.namedValues),
+		functions:   maps.Clone(c.functions),
+		scopeStack:  slices.Clone(c.scopeStack),
+		iotaCounter: 0,
 	}
 }
 
@@ -162,6 +242,7 @@ type evaluatedImport struct {
 
 type evaluatedValues struct {
 	values []Expression
+	tokens []lexer.Token
 }
 
 func (ev evaluatedValues) isMultiReturnCall() (bool, Call) {
@@ -285,20 +366,24 @@ func allowedCompareOperators(t ValueType) []CompareOperator {
 	return operators
 }
 
-func defaultVarValue(valueType ValueType) (Expression, error) {
-	dataType := valueType.DataType()
+func defaultVarValue(valueType ValueType, ctx context) (Expression, error) {
+	foundType, exists := ctx.findType(valueType.DataType(), true)
 
-	if !valueType.IsSlice() {
-		switch dataType {
-		case DATA_TYPE_BOOLEAN:
-			return BooleanLiteral{}, nil
-		case DATA_TYPE_INTEGER:
-			return IntegerLiteral{}, nil
-		case DATA_TYPE_STRING:
-			return StringLiteral{}, nil
+	if exists {
+		dataType := foundType.valueType.dataType
+
+		if !valueType.IsSlice() {
+			switch dataType {
+			case DATA_TYPE_BOOLEAN:
+				return BooleanLiteral{}, nil
+			case DATA_TYPE_INTEGER:
+				return IntegerLiteral{}, nil
+			case DATA_TYPE_STRING:
+				return StringLiteral{}, nil
+			}
+		} else {
+			return SliceInstantiation{dataType: dataType}, nil
 		}
-	} else {
-		return SliceInstantiation{dataType: dataType}, nil
 	}
 	return nil, fmt.Errorf("no default value found for type %s", valueType.String())
 }
@@ -309,7 +394,7 @@ func incrementDecrementStatement(variable Variable, increment bool) Statement {
 	if !increment {
 		operation = BINARY_OPERATOR_SUBTRACTION
 	}
-	return VariableAssignment{
+	return VariableAssignmentValueAssignment{
 		variables: []Variable{variable},
 		values: []Expression{
 			BinaryOperation{
@@ -360,6 +445,18 @@ func (p *Parser) expectedIdentifierError(token lexer.Token) error {
 
 func (p *Parser) expectedNewlineError(token lexer.Token) error {
 	return p.expectedError("newline", token)
+}
+
+func (p *Parser) constantError(constant string, token lexer.Token) error {
+	return p.atError(fmt.Sprintf("cannot assign a value to constant %s", constant), token)
+}
+
+func (p *Parser) notDefinedError(what string, name string, token lexer.Token) error {
+	return p.atError(fmt.Sprintf("%s %s has not been defined", what, name), token)
+}
+
+func (p *Parser) variableNotDefinedError(variable string, token lexer.Token) error {
+	return p.notDefinedError("variable", variable, token)
 }
 
 func (p Parser) peek() lexer.Token {
@@ -429,12 +526,17 @@ func (p *Parser) isShortVarInit() bool {
 	return err == nil
 }
 
-func (p *Parser) checkNewVariableNameToken(token lexer.Token, ctx context) error {
+func (p *Parser) checkNewNamedValueNameToken(token lexer.Token, ctx context) error {
 	name := token.Value()
-	_, exists := ctx.findVariable(name, p.prefix, ctx.global())
+	foundNamedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
 
 	if exists {
-		return p.atError(fmt.Sprintf("variable %s has already been defined", name), token)
+		namedValueType := "variable"
+
+		if foundNamedValue.IsConstant() {
+			namedValueType = "constant"
+		}
+		return p.atError(fmt.Sprintf("%s %s has already been defined", namedValueType, name), token)
 	}
 	return nil
 }
@@ -482,7 +584,7 @@ func (p *Parser) cleanProgram(program Program) (Program, error) {
 	}, nil
 }
 
-func (p *Parser) evaluateVarNames() ([]lexer.Token, error) {
+func (p *Parser) evaluateNames() ([]lexer.Token, error) {
 	nameTokens := []lexer.Token{}
 
 	for {
@@ -504,6 +606,7 @@ func (p *Parser) evaluateVarNames() ([]lexer.Token, error) {
 
 func (p *Parser) evaluateValues(ctx context) (evaluatedValues, error) {
 	expressions := []Expression{}
+	tokens := []lexer.Token{}
 
 	for {
 		exprToken := p.peek()
@@ -513,6 +616,7 @@ func (p *Parser) evaluateValues(ctx context) (evaluatedValues, error) {
 			return evaluatedValues{}, err
 		}
 		expressions = append(expressions, expr)
+		tokens = append(tokens, exprToken)
 		nextToken := p.peek()
 		returnValuesLength := -1
 		funcName := ""
@@ -540,6 +644,7 @@ func (p *Parser) evaluateValues(ctx context) (evaluatedValues, error) {
 	}
 	return evaluatedValues{
 		values: expressions,
+		tokens: tokens,
 	}, nil
 }
 
@@ -738,19 +843,29 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 	}
 	statements := []Statement{}
 
-	// Add functions add variables.
+	// Add functions, variables and constants.
 	for _, statement := range statementsTemp {
 		exists := false
 
 		switch statement.StatementType() {
-		case STATEMENT_TYPE_VAR_DEFINITION:
-			definedVariable := statement.(VariableDefinition)
+		case STATEMENT_TYPE_VAR_DEFINITION_VALUE_ASSIGNMENT:
+			definedVariable := statement.(VariableDefinitionValueAssignment)
 
 			for _, variable := range definedVariable.Variables() {
 				name := variable.Name()
 
-				if _, exists = ctx.variables[name]; !exists && variable.Public() {
-					ctx.variables[name] = variable
+				if _, exists = ctx.namedValues[name]; !exists && variable.Public() {
+					ctx.namedValues[name] = variable
+				}
+			}
+		case STATEMENT_TYPE_CONST_DEFINITION:
+			definedConstant := statement.(ConstDefinition)
+
+			for _, variable := range definedConstant.Constants() {
+				name := variable.Name()
+
+				if _, exists = ctx.namedValues[name]; !exists && variable.Public() {
+					ctx.namedValues[name] = variable
 				}
 			}
 		case STATEMENT_TYPE_FUNCTION_DEFINITION:
@@ -826,7 +941,7 @@ func (p *Parser) evaluateBlockContent(terminationTokenTypes []lexer.TokenType, c
 	ctx = ctx.clone()
 
 	// Add scope to context.
-	ctx.scopeStack = append(ctx.scopeStack, scope)
+	ctx.pushScope(scope)
 
 	for loop {
 		token := p.peek()
@@ -849,19 +964,37 @@ func (p *Parser) evaluateBlockContent(terminationTokenTypes []lexer.TokenType, c
 				global := ctx.global()
 
 				switch stmt.StatementType() {
-				case STATEMENT_TYPE_VAR_DEFINITION:
-					// Store new variable.
-					err = ctx.addVariables(prefix, global, stmt.(VariableDefinition).Variables()...)
+				case STATEMENT_TYPE_NAMED_VALUES_DEFINITION:
+					for _, assignment := range stmt.(NamedValuesDefinition).Assignments() {
+						switch t := assignment.(type) {
+						case VariableDefinitionValueAssignment:
+							// Store new variables.
+							for _, variable := range t.Variables() {
+								err = ctx.addNamedValues(prefix, global, variable)
 
-					if err != nil {
-						return nil, err
-					}
-				case STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT:
-					// Store new variable.
-					err = ctx.addVariables(prefix, global, stmt.(VariableDefinitionCallAssignment).Variables()...)
+								if err != nil {
+									return nil, err
+								}
+							}
+						case VariableDefinitionCallAssignment:
+							// Store new variables.
+							for _, variable := range t.Variables() {
+								err = ctx.addNamedValues(prefix, global, variable)
 
-					if err != nil {
-						return nil, err
+								if err != nil {
+									return nil, err
+								}
+							}
+						case ConstDefinition:
+							// Store new constants.
+							for _, variable := range t.Constants() {
+								err = ctx.addNamedValues(prefix, global, variable)
+
+								if err != nil {
+									return nil, err
+								}
+							}
+						}
 					}
 				case STATEMENT_TYPE_FUNCTION_DEFINITION:
 					// Store new function.
@@ -932,7 +1065,7 @@ func (p *Parser) evaluateBlock(callback blockCallback, ctx context, scope scope)
 	return statements, nil
 }
 
-func (p *Parser) evaluateValueType() (ValueType, error) {
+func (p *Parser) evaluateValueType(ctx context) (ValueType, error) {
 	nextToken := p.peek()
 	evaluatedType := NewValueType(DATA_TYPE_UNKNOWN, false)
 
@@ -949,212 +1082,395 @@ func (p *Parser) evaluateValueType() (ValueType, error) {
 	}
 
 	// Evaluate data type.
-	if nextToken.Type() != lexer.DATA_TYPE {
+	if nextToken.Type() != lexer.IDENTIFIER {
 		return evaluatedType, p.expectedError("data type", nextToken)
 	}
 	p.eat() // Eat data type token.
-	dataType, exists := typeMapping[nextToken.Value()]
+	foundDefinition, exists := ctx.findType(nextToken.Value(), false)
 
 	if !exists {
 		return evaluatedType, p.expectedError("valid data type", nextToken)
 	}
-	evaluatedType.dataType = dataType
+	evaluatedType.dataType = foundDefinition.name
 	return evaluatedType, nil
 }
 
-func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
-	// Possible variable declarations/definitions:
-	// var v int
-	// var v int = 1
-	// var v = 1
-	// v := 1
-	isShortVarInit := p.isShortVarInit()
+func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
+	typeToken := p.eat()
 
-	// Eat "var" token only, if the variable is not defined using the short init operator (:=).
-	if !isShortVarInit {
-		varToken := p.eat()
-
-		if varToken.Type() != lexer.VAR_DEFINITION {
-			return nil, p.expectedError("variable definition", varToken)
-		}
+	if typeToken.Type() != lexer.TYPE_DECLARATION {
+		return nil, p.expectedKeywordError("type", typeToken)
 	}
-	nameTokens, err := p.evaluateVarNames()
+	nameToken := p.eat()
+
+	if nameToken.Type() != lexer.IDENTIFIER {
+		return nil, p.expectedIdentifierError(nameToken)
+	}
+	isAlias := false
+
+	// If a type is assigned to the new type with an assign-operator,
+	// then it's just an alias.
+	if p.peek().Type() == lexer.ASSIGN_OPERATOR {
+		isAlias = true
+		p.eat()
+	}
+	valueTypeToken := p.peek()
+	valueType, err := p.evaluateValueType(ctx)
 
 	if err != nil {
 		return nil, err
 	}
-	nameTokensLength := len(nameTokens)
-	firstNameToken := nameTokens[0]
+	name := nameToken.Value()
+	err = ctx.addType(name, valueType, isAlias, false)
 
-	// Check if all variables are already defined.
-	if nameTokensLength > 1 {
-		alreadyDefined := 0
+	if err != nil {
+		return nil, p.atError(err.Error(), valueTypeToken)
+	}
+	return TypeDeclaration{name}, nil
+}
 
-		for _, nameToken := range nameTokens {
-			err := p.checkNewVariableNameToken(nameToken, ctx)
+func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Statement, error) {
+	isShortVarInit := !evalConst && p.isShortVarInit()
+	noun := "variable"
+
+	if evalConst {
+		noun = "constant"
+		ctx.pushScope(SCOPE_CONST)
+	}
+
+	// Eat "var" token only, if the variable is not defined using the short init operator (:=).
+	if !isShortVarInit {
+		keywordToken := p.eat()
+		varTokenType := keywordToken.Type()
+
+		if !evalConst {
+			if varTokenType != lexer.VAR_DEFINITION {
+				return nil, p.expectedKeywordError("var", keywordToken)
+			}
+		} else if varTokenType != lexer.CONST_DEFINITION {
+			return nil, p.expectedKeywordError("const", keywordToken)
+		}
+	}
+	grouped := p.peek().Type() == lexer.OPENING_ROUND_BRACKET
+
+	if grouped {
+		p.eat() // Eat round bracket.
+		nextToken := p.eat()
+
+		if nextToken.Type() != lexer.NEWLINE {
+			return nil, p.expectedNewlineError(nextToken)
+		}
+	}
+	namedValuesDefinition := NamedValuesDefinition{}
+	useIota := false
+
+	for {
+		nameTokens, err := p.evaluateNames()
+
+		if err != nil {
+			return nil, err
+		}
+		nameTokensLength := len(nameTokens)
+		firstNameToken := nameTokens[0]
+
+		// Check if all named values are already defined.
+		if nameTokensLength > 1 {
+			alreadyDefined := 0
+
+			for _, nameToken := range nameTokens {
+				err := p.checkNewNamedValueNameToken(nameToken, ctx)
+
+				if err != nil {
+					// Only allow "re-definition" of variable via the short init operator.
+					if !isShortVarInit {
+						return nil, err
+					}
+					alreadyDefined++
+				}
+			}
+
+			if alreadyDefined == nameTokensLength {
+				return nil, p.atError(fmt.Sprintf("no new %ss", noun), firstNameToken)
+			}
+		} else {
+			err := p.checkNewNamedValueNameToken(firstNameToken, ctx)
 
 			if err != nil {
-				// Only allow "re-definition" of variable via the short init operator.
-				if !isShortVarInit {
+				return nil, err
+			}
+		}
+		specifiedType := NewValueType(DATA_TYPE_UNKNOWN, false)
+		namedValues := []NamedValue{}
+		reuseIota := false
+
+		if isShortVarInit {
+			nextToken := p.eat() // Eat short init operator.
+
+			if nextToken.Type() != lexer.SHORT_INIT_OPERATOR {
+				return nil, p.expectedError("short initialization operator", nextToken)
+			}
+		} else {
+			nextToken := p.peek()
+
+			// If next token starts a type definition, evaluate value type.
+			if slices.Contains([]lexer.TokenType{lexer.IDENTIFIER, lexer.OPENING_SQUARE_BRACKET}, nextToken.Type()) {
+				specifiedTypeTemp, err := p.evaluateValueType(ctx)
+
+				if err != nil {
 					return nil, err
 				}
-				alreadyDefined++
+				specifiedType = specifiedTypeTemp
+				nextToken = p.peek()
+			}
+			nextTokenType := nextToken.Type()
+			dataType := specifiedType.DataType()
+
+			// If no data type has been specified and no value is being assigned, return an error.
+			if dataType == DATA_TYPE_UNKNOWN && nextTokenType != lexer.ASSIGN_OPERATOR {
+				// If iota has already been used in constant definition and only one value
+				// needs to be assigned, the iota value gets used automatically.
+				if evalConst && useIota && nameTokensLength == 1 {
+					reuseIota = true
+				} else {
+					return nil, p.expectedError("data type or value assignment", nextToken)
+				}
+			} else if nextTokenType == lexer.ASSIGN_OPERATOR {
+				p.eat()
 			}
 		}
-
-		if alreadyDefined == nameTokensLength {
-			return nil, p.atError("no new variables", firstNameToken)
-		}
-	} else {
-		err := p.checkNewVariableNameToken(firstNameToken, ctx)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-	specifiedType := NewValueType(DATA_TYPE_UNKNOWN, false)
-
-	if isShortVarInit {
-		nextToken := p.eat() // Eat short init operator.
-
-		if nextToken.Type() != lexer.SHORT_INIT_OPERATOR {
-			return nil, p.expectedError("short initialization operator", nextToken)
-		}
-	} else {
 		nextToken := p.peek()
+		nextTokenType := nextToken.Type()
 
-		// If next token starts a type definition, evaluate value type.
-		if slices.Contains([]lexer.TokenType{lexer.DATA_TYPE, lexer.OPENING_SQUARE_BRACKET}, nextToken.Type()) {
-			specifiedTypeTemp, err := p.evaluateValueType()
+		// Fill variables slice (might not contain the final type after this step).
+		for _, nameToken := range nameTokens {
+			prefix := p.prefix
+			global := ctx.global()
+			name := nameToken.Value()
+			namedValue, exists := ctx.findNamedValue(name, prefix, global)
+
+			if !exists {
+				if evalConst {
+					namedValue = Const{}
+				} else {
+					namedValue = Variable{}
+				}
+			}
+			variableValueType := namedValue.ValueType()
+
+			// If the variable already exists, make sure it has the same type as the specified type.
+			if exists && specifiedType.DataType() != DATA_TYPE_UNKNOWN && !specifiedType.Equals(variableValueType) {
+				return nil, p.atError(fmt.Sprintf(`%s %s already exists but has type %s`, noun, name, variableValueType.String()), nextToken)
+			}
+			storedName := name
+
+			if global {
+				storedName = buildPrefixedName(prefix, name)
+			}
+			var newNamedValue NamedValue
+			isPublicValue := isPublic(name)
+
+			if evalConst {
+				newNamedValue = NewConst(storedName, specifiedType, global, isPublicValue)
+			} else {
+				newNamedValue = NewVariable(storedName, specifiedType, global, isPublicValue)
+			}
+			namedValues = append(namedValues, newNamedValue)
+		}
+		values := []Expression{}
+		firstValueToken := p.peek()
+		var assignment Assignment
+
+		// TODO: Improve check (avoid NEWLINE and EOF check).
+		if nextTokenType != lexer.NEWLINE && nextTokenType != lexer.EOF {
+			evaluatedVals, err := p.evaluateValues(ctx)
+
+			// Check if iota is used.
+			if slices.ContainsFunc(evaluatedVals.values, func(value Expression) bool {
+				return value.StatementType() == STATEMENT_TYPE_IOTA
+			}) {
+				useIota = true
+				reuseIota = true
+			}
 
 			if err != nil {
 				return nil, err
+			} else if evalConst {
+				for i, evaluatedVal := range evaluatedVals.values {
+					if !evaluatedVal.IsConstant() {
+						return nil, p.expectedError("constant value", evaluatedVals.tokens[i])
+					}
+				}
 			}
-			specifiedType = specifiedTypeTemp
-			nextToken = p.peek()
-		}
-		nextTokenType := nextToken.Type()
-		dataType := specifiedType.DataType()
+			values = evaluatedVals.values
+			valuesTypes := []ValueType{}
+			isMultiReturnFuncCall, call := evaluatedVals.isMultiReturnCall()
 
-		// If no data type has been specified and no value is being assigned, return an error.
-		if dataType == DATA_TYPE_UNKNOWN && nextTokenType != lexer.ASSIGN_OPERATOR {
-			return nil, p.expectedError("data type or value assignment", nextToken)
-		} else if nextTokenType == lexer.ASSIGN_OPERATOR {
-			p.eat()
-		}
-	}
-	nextToken := p.peek()
-	nextTokenType := nextToken.Type()
-	variables := []Variable{}
-
-	// Fill variables slice (might not contain the final type after this step).
-	for _, nameToken := range nameTokens {
-		prefix := p.prefix
-		global := ctx.global()
-		name := nameToken.Value()
-		variable, exists := ctx.findVariable(name, prefix, global)
-		variableValueType := variable.ValueType()
-
-		// If the variable already exists, make sure it has the same type as the specified type.
-		if exists && specifiedType.DataType() != DATA_TYPE_UNKNOWN && !specifiedType.Equals(variableValueType) {
-			return nil, p.atError(fmt.Sprintf(`variable "%s" already exists but has type %s`, name, variableValueType.String()), nextToken)
-		}
-		storedName := name
-
-		if global {
-			storedName = buildPrefixedName(prefix, name)
-		}
-		variables = append(variables, NewVariable(storedName, specifiedType, global, isPublic(name)))
-	}
-	values := []Expression{}
-
-	// TODO: Improve check (avoid NEWLINE and EOF check).
-	if nextTokenType != lexer.NEWLINE && nextTokenType != lexer.EOF {
-		evaluatedVals, err := p.evaluateValues(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-		values = evaluatedVals.values
-		valuesTypes := []ValueType{}
-		isMultiReturnFuncCall, call := evaluatedVals.isMultiReturnCall()
-
-		// If multi-return function, get function return types, else get value types.
-		if isMultiReturnFuncCall {
-			valuesTypes = call.ReturnTypes()
-		} else {
-			for _, valueTemp := range values {
-				valuesTypes = append(valuesTypes, valueTemp.ValueType())
+			// If multi-return function, get function return types, else get value types.
+			if isMultiReturnFuncCall {
+				valuesTypes = call.ReturnTypes()
+			} else {
+				for _, valueTemp := range values {
+					valuesTypes = append(valuesTypes, valueTemp.ValueType())
+				}
 			}
-		}
-		valuesTypesLen := len(valuesTypes)
-		variablesLen := len(variables)
+			valuesTypesLen := len(valuesTypes)
+			variablesLen := len(namedValues)
 
-		// Check if the amount of values is equal to the amount of variable names.
-		if valuesTypesLen != variablesLen {
-			pluralInit := ""
-			pluralValues := ""
+			// Check if the amount of values is equal to the amount of variable names.
+			if valuesTypesLen != variablesLen {
+				// If only one constant needs to be initialized and iota can be used, use it.
+				if evalConst && variablesLen == 1 && reuseIota {
+					iotaExpr := IntegerLiteral{ctx.iotaCounter}
 
-			if valuesTypesLen != 1 {
-				pluralInit = "s"
+					values = append(values, iotaExpr)
+					valuesTypes = append(valuesTypes, iotaExpr.ValueType())
+				} else {
+					pluralInit := ""
+					pluralValues := ""
+
+					if valuesTypesLen != 1 {
+						pluralInit = "s"
+					}
+					if variablesLen != 1 {
+						pluralValues = "s"
+					}
+					return nil, p.atError(fmt.Sprintf("got %d initialisation value%s but %d %s%s", valuesTypesLen, pluralInit, variablesLen, noun, pluralValues), nextToken)
+				}
 			}
-			if variablesLen != 1 {
-				pluralValues = "s"
-			}
-			return nil, p.atError(fmt.Sprintf("got %d initialisation value%s but %d variable%s", valuesTypesLen, pluralInit, variablesLen, pluralValues), nextToken)
-		}
 
-		// If a type has been specified, make sure the returned types fit this type.
-		if specifiedType.DataType() != DATA_TYPE_UNKNOWN {
-			for _, valueType := range valuesTypes {
-				if !valueType.Equals(specifiedType) {
-					return nil, p.expectedError(fmt.Sprintf("%s but got %s", specifiedType.String(), valueType.String()), nextToken)
+			// If a type has been specified, make sure the returned types fit this type.
+			if specifiedType.DataType() != DATA_TYPE_UNKNOWN {
+				for _, valueType := range valuesTypes {
+					if !valueType.Equals(specifiedType) {
+						return nil, p.expectedError(fmt.Sprintf("%s but got %s", specifiedType.String(), valueType.String()), nextToken)
+					}
+				}
+			}
+
+			// Check if variables exist and if, check if the types match.
+			for i, namedValue := range namedValues {
+				valueValueType := valuesTypes[i]
+				variableValueType := namedValue.ValueType()
+
+				if variableValueType.DataType() == DATA_TYPE_UNKNOWN {
+					var updatedNamedValue NamedValue
+					name, global, public := namedValue.Name(), namedValue.Global(), namedValue.Public()
+
+					if evalConst {
+						updatedNamedValue = NewConst(name, valueValueType, global, public)
+					} else {
+						updatedNamedValue = NewVariable(name, valueValueType, global, public)
+					}
+					namedValues[i] = updatedNamedValue
+				} else if !variableValueType.Equals(valueValueType) {
+					return nil, p.expectedError(fmt.Sprintf("%s but got %s for %s %s", variableValueType.String(), valueValueType.String(), noun, namedValue.Name()), nextToken)
+				}
+			}
+
+			// If it's a function call multi assignment, build return value here.
+			if isMultiReturnFuncCall {
+				variables := []Variable{}
+
+				for _, namedValue := range namedValues {
+					variables = append(variables, namedValue.(Variable))
+				}
+				assignment = VariableDefinitionCallAssignment{
+					variables,
+					call,
 				}
 			}
 		}
 
-		// Check if variables exist and if, check if the types match.
-		for i, variable := range variables {
-			valueValueType := valuesTypes[i]
-			variableValueType := variable.ValueType()
+		if assignment == nil {
+			// If only one value needs to be initialized and iota has been assigned previously, use iota.
+			if evalConst && useIota && nameTokensLength == 1 && len(values) < nameTokensLength {
+				values = append(values, Iota{})
+			}
+			lenValues := len(values)
 
-			if variableValueType.DataType() == DATA_TYPE_UNKNOWN {
-				variables[i].valueType = valueValueType // Use index here to make sure the original variable is modified, not the copy.
-			} else if !variableValueType.Equals(valueValueType) {
-				return nil, p.expectedError(fmt.Sprintf("%s but got %s for variable %s", variableValueType.String(), valueValueType.String(), variable.Name()), nextToken)
+			if evalConst && lenValues != nameTokensLength {
+				return nil, p.atError("all constants must be initialized", firstValueToken)
+			}
+
+			// Increase iota counter.
+			for i, value := range values {
+				// Replace iota by actual values.
+				if value.StatementType() == STATEMENT_TYPE_IOTA {
+					values[i] = IntegerLiteral{ctx.iotaCounter}
+				}
+				ctx.incrementIota()
+			}
+
+			// If no value has been specified, define default value.
+			if lenValues == 0 {
+				for _, variable := range namedValues {
+					value, err := defaultVarValue(variable.ValueType(), ctx)
+
+					if err != nil {
+						return nil, err
+					}
+					values = append(values, value)
+				}
+			}
+
+			if evalConst {
+				constants := []Const{}
+
+				for _, namedValue := range namedValues {
+					constants = append(constants, namedValue.(Const))
+				}
+				assignment = ConstDefinition{
+					constants,
+					values,
+				}
+			} else {
+				variables := []Variable{}
+
+				for _, namedValue := range namedValues {
+					variables = append(variables, namedValue.(Variable))
+				}
+				assignment = VariableDefinitionValueAssignment{
+					variables,
+					values,
+				}
 			}
 		}
+		namedValuesDefinition.AddAssignment(assignment)
 
-		// If it's a function call multi assignment, build return value here.
-		if isMultiReturnFuncCall {
-			call := VariableDefinitionCallAssignment{
-				variables,
-				call,
-			}
-			return call, nil
+		// If it's not a grouped definition, no looping is required.
+		if !grouped {
+			break
+		}
+		nextToken = p.eat()
+
+		if nextToken.Type() != lexer.NEWLINE {
+			return nil, p.expectedNewlineError(nextToken)
+		}
+		nextToken = p.peek()
+
+		if nextToken.Type() == lexer.CLOSING_ROUND_BRACKET {
+			p.eat() // Eat closing round bracket and break.
+			break
 		}
 	}
 
-	// If no value has been specified, define default value.
-	if len(values) == 0 {
-		for _, variable := range variables {
-			value, err := defaultVarValue(variable.ValueType())
+	// Pop SCOPE_CONST.
+	if evalConst {
+		ctx.popScope()
+	}
+	return namedValuesDefinition, nil
+}
 
-			if err != nil {
-				return nil, err
-			}
-			values = append(values, value)
-		}
-	}
-	variable := VariableDefinition{
-		variables,
-		values,
-	}
-	return variable, nil
+func (p *Parser) evaluateConstDefinition(ctx context) (Statement, error) {
+	return p.evaluateNamedValueDefinition(true, ctx)
+}
+
+func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
+	return p.evaluateNamedValueDefinition(false, ctx)
 }
 
 func (p *Parser) evaluateCompoundAssignment(ctx context) (Statement, error) {
-	nameTokens, err := p.evaluateVarNames()
+	nameTokens, err := p.evaluateNames()
 
 	if err != nil {
 		return nil, err
@@ -1197,13 +1513,16 @@ func (p *Parser) evaluateCompoundAssignment(ctx context) (Statement, error) {
 	name := nameToken.Value()
 
 	// Make sure variable has been defined.
-	definedVariable, exists := ctx.findVariable(name, p.prefix, ctx.global())
+	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
 
 	if !exists {
-		return nil, p.atError(fmt.Sprintf("variable %s has not been defined", name), nameToken)
+		return nil, p.variableNotDefinedError(name, nameToken)
+	} else if namedValue.IsConstant() {
+		return nil, p.constantError(name, nameToken)
 	}
+	definedVariable := namedValue.(Variable)
 	valueType := valuesTypes[0]
-	expectedValueType := definedVariable.ValueType()
+	expectedValueType := namedValue.ValueType()
 
 	if valueType != expectedValueType {
 		return nil, p.expectedError(fmt.Sprintf("%s but got %s", expectedValueType.String(), valueType.String()), valuesToken)
@@ -1214,7 +1533,7 @@ func (p *Parser) evaluateCompoundAssignment(ctx context) (Statement, error) {
 	if !slices.Contains(allowedBinaryOperators(valueType), binaryOperator) {
 		return nil, p.expectedError(fmt.Sprintf(`valid %s compound assign operator but got "%s"`, valueType.String(), assignOperator), assignToken)
 	}
-	return VariableAssignment{
+	return VariableAssignmentValueAssignment{
 		variables: []Variable{definedVariable},
 		values: []Expression{
 			BinaryOperation{
@@ -1227,7 +1546,7 @@ func (p *Parser) evaluateCompoundAssignment(ctx context) (Statement, error) {
 }
 
 func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
-	nameTokens, err := p.evaluateVarNames()
+	nameTokens, err := p.evaluateNames()
 
 	if err != nil {
 		return nil, err
@@ -1268,13 +1587,15 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
 		name := nameToken.Value()
 
 		// Make sure variable has been defined.
-		definedVariable, exists := ctx.findVariable(name, p.prefix, ctx.global())
+		namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
 
 		if !exists {
-			return nil, p.atError(fmt.Sprintf("variable %s has not been defined", name), nameToken)
+			return nil, p.variableNotDefinedError(name, nameToken)
+		} else if namedValue.IsConstant() {
+			return nil, p.constantError(name, nameToken)
 		}
 		valueType := valuesTypes[i]
-		expectedValueType := definedVariable.ValueType()
+		expectedValueType := namedValue.ValueType()
 
 		if valueType != expectedValueType {
 			return nil, p.expectedError(fmt.Sprintf("%s but got %s", expectedValueType.String(), valueType.String()), valuesToken)
@@ -1288,7 +1609,7 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
 			call,
 		}, nil
 	}
-	return VariableAssignment{
+	return VariableAssignmentValueAssignment{
 		variables: variables,
 		values:    evaluatedVals.values,
 	}, nil
@@ -1311,12 +1632,12 @@ func (p *Parser) evaluateParams(ctx context) ([]Variable, error) {
 		p.eat()
 
 		name := nameToken.Value()
-		_, exists := ctx.findVariable(name, p.prefix, false)
+		_, exists := ctx.findNamedValue(name, p.prefix, false)
 
 		if exists {
 			return params, fmt.Errorf("scope already contains a variable with the name %s", name)
 		}
-		valueType, err := p.evaluateValueType()
+		valueType, err := p.evaluateValueType(ctx)
 
 		if err != nil {
 			return nil, err
@@ -1363,7 +1684,7 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 	ctx = ctx.clone()
 
 	// Remove all variables which are not global.
-	maps.DeleteFunc(ctx.variables, func(_ string, v Variable) bool {
+	maps.DeleteFunc(ctx.namedValues, func(_ string, v NamedValue) bool {
 		return !v.Global()
 	})
 
@@ -1395,8 +1716,8 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 
 	for {
 		// Check if a return type has been specified.
-		if slices.Contains([]lexer.TokenType{lexer.DATA_TYPE, lexer.OPENING_SQUARE_BRACKET}, returnTypeToken.Type()) {
-			returnTypeTemp, err := p.evaluateValueType()
+		if slices.Contains([]lexer.TokenType{lexer.IDENTIFIER, lexer.OPENING_SQUARE_BRACKET}, returnTypeToken.Type()) {
+			returnTypeTemp, err := p.evaluateValueType(ctx)
 
 			if err != nil {
 				return nil, err
@@ -1420,7 +1741,7 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 
 	// Add parameters to variables.
 	for _, param := range params {
-		err := ctx.addVariables(p.prefix, false, param)
+		err := ctx.addNamedValues(p.prefix, false, param)
 
 		if err != nil {
 			return nil, err
@@ -1515,6 +1836,17 @@ func (p *Parser) evaluateBreak(ctx context) (Statement, error) {
 		return nil, p.expectedError(fmt.Sprintf("break statement within %s-scope", strings.Join(scopesToString(breakScopes), "- or ")), breakToken)
 	}
 	return Break{}, nil
+}
+
+func (p *Parser) evaluateIota(ctx context) (Expression, error) {
+	iotaToken := p.eat()
+
+	if iotaToken.Type() != lexer.IOTA {
+		return nil, p.expectedKeywordError("iota", iotaToken)
+	} else if ctx.currentScope() != SCOPE_CONST {
+		return nil, p.atError("cannot use iota outside constant declaration", iotaToken)
+	}
+	return Iota{}, nil
 }
 
 func (p *Parser) evaluateContinue(ctx context) (Statement, error) {
@@ -1737,7 +2069,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 	// If next token is an identifier and the one after it a comma or a short-init operator and range keyword, parse a for-range statement.
 	if nextTokenType == lexer.IDENTIFIER && (nextAfterNextTokenType == lexer.COMMA || (nextAfterNextTokenType == lexer.SHORT_INIT_OPERATOR && p.peekAt(2).Type() == lexer.RANGE)) {
 		p.eat()
-		err := p.checkNewVariableNameToken(nextToken, ctx)
+		err := p.checkNewNamedValueNameToken(nextToken, ctx)
 
 		if err != nil {
 			return nil, err
@@ -1753,7 +2085,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 			if nextToken.Type() != lexer.IDENTIFIER {
 				return nil, p.expectedIdentifierError(nextToken)
 			}
-			err = p.checkNewVariableNameToken(nextToken, ctx)
+			err = p.checkNewNamedValueNameToken(nextToken, ctx)
 
 			if err != nil {
 				return nil, err
@@ -1799,24 +2131,24 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		forRangeStatements := []Statement{}
 
 		// Add count variable.
-		ctx.addVariables(p.prefix, false, indexVar)
+		ctx.addNamedValues(p.prefix, false, indexVar)
 
 		// If no value variable has been provided, there's no need to add it.
 		if hasNamedVar {
 			valueVar := NewVariable(valueVarName, iterableValueType, false, false)
 
 			// Add value variable.
-			ctx.addVariables(p.prefix, false, valueVar)
+			ctx.addNamedValues(p.prefix, false, valueVar)
 
 			forRangeStatements = []Statement{
-				VariableAssignment{
+				VariableAssignmentValueAssignment{
 					variables: []Variable{valueVar},
 					values:    []Expression{iterableEvaluation},
 				},
 			}
 		}
 
-		init := VariableAssignment{
+		init := VariableAssignmentValueAssignment{
 			variables: []Variable{indexVar},
 			values:    []Expression{IntegerLiteral{0}},
 		}
@@ -1861,24 +2193,45 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 				if err != nil {
 					return nil, err
 				}
+				prefix := p.prefix
+
 				switch init.StatementType() {
-				case STATEMENT_TYPE_VAR_DEFINITION:
-					// Store new variable.
-					err = ctx.addVariables(p.prefix, false, init.(VariableDefinition).Variables()...)
+				case STATEMENT_TYPE_NAMED_VALUES_DEFINITION:
+					assignment := init.(NamedValuesDefinition).Assignments()[0]
 
-					if err != nil {
-						return nil, err
-					}
-				case STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT:
-					// Store new variable.
-					err = ctx.addVariables(p.prefix, false, init.(VariableDefinitionCallAssignment).Variables()...)
+					switch t := assignment.(type) {
+					case VariableDefinitionValueAssignment:
+						// Store new variable.
+						for _, variable := range t.Variables() {
+							err = ctx.addNamedValues(prefix, false, variable)
 
-					if err != nil {
-						return nil, err
+							if err != nil {
+								return nil, err
+							}
+						}
+					case VariableDefinitionCallAssignment:
+						// Store new variable.
+						for _, variable := range t.Variables() {
+							err = ctx.addNamedValues(prefix, false, variable)
+
+							if err != nil {
+								return nil, err
+							}
+						}
+					case ConstDefinition:
+						// Store new variable.
+						for _, variable := range t.Constants() {
+							err = ctx.addNamedValues(prefix, false, variable)
+
+							if err != nil {
+								return nil, err
+							}
+						}
 					}
-				case STATEMENT_TYPE_VAR_ASSIGNMENT:
+				case STATEMENT_TYPE_VAR_ASSIGNMENT_VALUE_ASSIGNMENT:
 				default:
 					return nil, p.expectedError("variable assignment or variable definition", nextToken)
+
 				}
 			}
 			nextToken = p.eat()
@@ -1915,7 +2268,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 					return nil, err
 				}
 				switch increment.StatementType() {
-				case STATEMENT_TYPE_VAR_ASSIGNMENT:
+				case STATEMENT_TYPE_VAR_ASSIGNMENT_VALUE_ASSIGNMENT:
 				default:
 					return nil, p.expectedError("variable assignment", nextToken)
 				}
@@ -1947,20 +2300,71 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 	return stmt, nil
 }
 
-func (p *Parser) evaluateVarEvaluation(ctx context) (Expression, error) {
+func (p *Parser) evaluateTypeDefinition(ctx context) (Expression, error) {
+	identifierToken := p.eat() // Eat identifier token.
+
+	if identifierToken.Type() != lexer.IDENTIFIER {
+		return nil, p.expectedIdentifierError(identifierToken)
+	}
+	typeName := identifierToken.Value()
+	foundElementaryDefinition, exists := ctx.findType(typeName, true)
+
+	if !exists {
+		return nil, p.notDefinedError("type", typeName, identifierToken)
+	}
+	nextToken := p.eat()
+
+	if nextToken.Type() != lexer.OPENING_ROUND_BRACKET {
+		return nil, p.expectedError(`"("`, nextToken)
+	}
+	nextToken = p.peek()
+	expr, err := p.evaluateExpression(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	exprValueType := expr.ValueType()
+	exprBaseTypeDefinition, _ := ctx.findType(exprValueType.DataType(), true)
+	exprBaseValueType := exprBaseTypeDefinition.valueType
+	foundElementaryDefinitionValueType := foundElementaryDefinition.valueType
+	baseDefinition, _ := ctx.findType(typeName, false)
+	baseTypeName := baseDefinition.name
+
+	if !foundElementaryDefinitionValueType.Equals(exprBaseValueType) {
+		return nil, p.atError(fmt.Sprintf(`%s cannot be converted into %s`, exprValueType.String(), baseTypeName), nextToken)
+	}
+	nextToken = p.eat()
+
+	if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
+		return nil, p.expectedError(`")"`, nextToken)
+	}
+
+	return TypeDefinition{
+		value:     expr,
+		valueType: NewValueType(baseTypeName, exprValueType.IsSlice()),
+	}, nil
+}
+
+func (p *Parser) evaluateNamedValueEvaluation(ctx context) (Expression, error) {
 	identifierToken := p.eat() // Eat identifier token.
 
 	if identifierToken.Type() != lexer.IDENTIFIER {
 		return nil, p.expectedIdentifierError(identifierToken)
 	}
 	name := identifierToken.Value()
-	variable, exists := ctx.findVariable(name, p.prefix, ctx.global())
+	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
 
 	if !exists {
-		return nil, p.atError(fmt.Sprintf("variable %s has not been defined", name), identifierToken)
+		return nil, p.variableNotDefinedError(name, identifierToken)
+	}
+
+	if namedValue.IsConstant() {
+		return ConstEvaluation{
+			Const: namedValue.(Const),
+		}, nil
 	}
 	return VariableEvaluation{
-		Variable: variable,
+		Variable: namedValue.(Variable),
 	}, nil
 }
 
@@ -2026,6 +2430,10 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 	case lexer.OPENING_SQUARE_BRACKET:
 		expr, err = p.evaluateSliceInstantiation(ctx)
 
+	// Handle iota.
+	case lexer.IOTA:
+		expr, err = p.evaluateIota(ctx)
+
 	// Handle input.
 	case lexer.INPUT:
 		expr, err = p.evaluateInput(ctx)
@@ -2064,11 +2472,18 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 		// a variable evaluation.
 		switch nextToken.Type() {
 		case lexer.OPENING_ROUND_BRACKET, lexer.DOT:
-			expr, err = p.evaluateFunctionCall(ctx)
+			// If a type exists with the provided name, it's a type-cast/-instantiation.
+			_, exists := ctx.findType(value, false)
+
+			if exists {
+				expr, err = p.evaluateTypeDefinition(ctx)
+			} else {
+				expr, err = p.evaluateFunctionCall(ctx)
+			}
 		case lexer.OPENING_SQUARE_BRACKET:
 			expr, err = p.evaluateSubscript(ctx)
 		default:
-			expr, err = p.evaluateVarEvaluation(ctx)
+			expr, err = p.evaluateNamedValueEvaluation(ctx)
 		}
 
 	default:
@@ -2147,6 +2562,10 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 	tokenType := token.Type()
 
 	switch tokenType {
+	case lexer.TYPE_DECLARATION:
+		stmt, err = p.evaluateTypeDeclaration(ctx)
+	case lexer.CONST_DEFINITION:
+		stmt, err = p.evaluateConstDefinition(ctx)
 	case lexer.VAR_DEFINITION:
 		stmt, err = p.evaluateVarDefinition(ctx)
 	case lexer.FUNCTION_DEFINITION:
@@ -2185,7 +2604,7 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 					stmt, err = p.evaluateVarAssignment(ctx)
 				default:
 					// Handle slice assignment.
-					variable, exists := ctx.findVariable(token.Value(), p.prefix, ctx.global())
+					variable, exists := ctx.findNamedValue(token.Value(), p.prefix, ctx.global())
 
 					// If variable has been defined and is a slice, handles slice assignment.
 					if exists && variable.ValueType().IsSlice() {
@@ -2365,7 +2784,7 @@ func (p *Parser) evaluateArguments(typeName string, name string, params []Variab
 			lastArgType := expr.ValueType()
 
 			if !lastParamType.Equals(lastArgType) {
-				return nil, p.expectedError(fmt.Sprintf("parameter %s (%s) but got %s", lastParamType.String(), param.Name(), lastArgType.String()), argToken)
+				return nil, p.expectedError(fmt.Sprintf("parameter of type %s (%s) but got %s", lastParamType.String(), param.Name(), lastArgType.String()), argToken)
 			}
 		}
 		nextToken = p.peek()
@@ -2429,7 +2848,7 @@ func (p *Parser) evaluateFunctionCall(ctx context) (Call, error) {
 	definedFunction, exists := ctx.findFunction(name, prefix)
 
 	if !exists {
-		return nil, p.atError(fmt.Sprintf("function %s has not been defined", dotedName), nextToken)
+		return nil, p.notDefinedError("function", dotedName, nextToken)
 	}
 	args, err := p.evaluateArguments("function", dotedName, definedFunction.params, ctx)
 
@@ -2494,7 +2913,7 @@ func (p *Parser) evaluateAppCall(ctx context) (Call, error) {
 
 func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
 	nextToken := p.peek()
-	sliceValueType, err := p.evaluateValueType()
+	sliceValueType, err := p.evaluateValueType(ctx)
 
 	if err != nil {
 		return nil, err
@@ -2558,7 +2977,7 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 
 	switch valueToken.Type() {
 	case lexer.IDENTIFIER:
-		value, err = p.evaluateVarEvaluation(ctx)
+		value, err = p.evaluateNamedValueEvaluation(ctx)
 	case lexer.STRING_LITERAL:
 		value, err = p.evaluateExpression(ctx)
 	default:
@@ -2673,12 +3092,14 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 		return nil, p.expectedError("slice variable", nameToken)
 	}
 	name := nameToken.Value()
-	variable, exists := ctx.findVariable(name, p.prefix, ctx.global())
+	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
 
 	if !exists {
-		return nil, p.atError(fmt.Sprintf("variable %s has not been defined", name), nameToken)
+		return nil, p.variableNotDefinedError(name, nameToken)
+	} else if namedValue.IsConstant() {
+		return nil, p.constantError(name, nameToken)
 	}
-	variableValueType := variable.ValueType()
+	variableValueType := namedValue.ValueType()
 
 	if !variableValueType.IsSlice() {
 		return nil, p.expectedError(fmt.Sprintf("slice but variable is of type %s", variableValueType.String()), nameToken)
@@ -2722,7 +3143,7 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 		return nil, p.expectedError(fmt.Sprintf("%s value but got %s", variableDataType, assignedDataType), valueToken)
 	}
 	return SliceAssignment{
-		Variable: variable,
+		Variable: namedValue.(Variable),
 		index:    index,
 		value:    value,
 	}, nil
@@ -2735,12 +3156,15 @@ func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
 		return nil, p.expectedIdentifierError(identifierToken)
 	}
 	name := identifierToken.Value()
-	definedVariable, exists := ctx.findVariable(name, p.prefix, ctx.global())
+	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
 
 	if !exists {
-		return nil, p.atError(fmt.Sprintf("variable %s has not been defined", name), identifierToken)
+		return nil, p.variableNotDefinedError(name, identifierToken)
+	} else if namedValue.IsConstant() {
+		return nil, p.constantError(name, identifierToken)
 	}
-	valueType := definedVariable.ValueType()
+	variable := namedValue.(Variable)
+	valueType := variable.ValueType()
 
 	if !valueType.IsInt() {
 		return nil, p.expectedError(fmt.Sprintf("%s but got %s", NewValueType(DATA_TYPE_INTEGER, false).String(), valueType.String()), identifierToken)
@@ -2756,7 +3180,7 @@ func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
 	default:
 		return nil, p.expectedError(`"++" or "--"`, operationToken)
 	}
-	return incrementDecrementStatement(definedVariable, increment), nil
+	return incrementDecrementStatement(variable, increment), nil
 }
 
 func (p *Parser) evaluateLen(ctx context) (Expression, error) {

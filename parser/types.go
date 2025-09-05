@@ -1,9 +1,12 @@
 package parser
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type StatementType string
-type DataType string
+type AssignmentType string
+type DataType = string
 type CompareOperator = string
 type UnaryOperator = string
 type BinaryOperator = string
@@ -59,44 +62,56 @@ func (vt ValueType) isNonSliceType(dataType DataType) bool {
 }
 
 const (
-	STATEMENT_TYPE_PROGRAM                        StatementType = "program"
-	STATEMENT_TYPE_BOOL_LITERAL                   StatementType = "boolean"
-	STATEMENT_TYPE_INT_LITERAL                    StatementType = "integer"
-	STATEMENT_TYPE_STRING_LITERAL                 StatementType = "string"
-	STATEMENT_TYPE_STRING_SUBSCRIPT               StatementType = "string subscript"
-	STATEMENT_TYPE_NIL_LITERAL                    StatementType = "nil"
-	STATEMENT_TYPE_UNARY_OPERATION                StatementType = "unary operation"
-	STATEMENT_TYPE_BINARY_OPERATION               StatementType = "binary operation"
-	STATEMENT_TYPE_LOGICAL_OPERATION              StatementType = "logical operation"
-	STATEMENT_TYPE_COMPARISON                     StatementType = "comparison"
-	STATEMENT_TYPE_VAR_DEFINITION                 StatementType = "variable definition"
-	STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT StatementType = "variable definition func assignment"
-	STATEMENT_TYPE_VAR_ASSIGNMENT                 StatementType = "variable assignment"
-	STATEMENT_TYPE_VAR_ASSIGNMENT_CALL_ASSIGNMENT StatementType = "variable assignment func assignment"
-	STATEMENT_TYPE_VAR_EVALUATION                 StatementType = "variable evaluation"
-	STATEMENT_TYPE_GROUP                          StatementType = "group"
-	STATEMENT_TYPE_FUNCTION_DEFINITION            StatementType = "function definition"
-	STATEMENT_TYPE_FUNCTION_CALL                  StatementType = "function call"
-	STATEMENT_TYPE_APP_CALL                       StatementType = "app call"
-	STATEMENT_TYPE_RETURN                         StatementType = "return"
-	STATEMENT_TYPE_IF                             StatementType = "if"
-	STATEMENT_TYPE_FOR                            StatementType = "for"
-	STATEMENT_TYPE_FOR_RANGE                      StatementType = "for range"
-	STATEMENT_TYPE_BREAK                          StatementType = "break"
-	STATEMENT_TYPE_CONTINUE                       StatementType = "continue"
-	STATEMENT_TYPE_INSTANTIATION                  StatementType = "instantiation"
-	STATEMENT_TYPE_PRINT                          StatementType = "print"
-	STATEMENT_TYPE_ITOA                           StatementType = "itoa"
-	STATEMENT_TYPE_EXISTS                         StatementType = "exists"
-	STATEMENT_TYPE_PANIC                          StatementType = "panic"
-	STATEMENT_TYPE_LEN                            StatementType = "len"
-	STATEMENT_TYPE_INPUT                          StatementType = "input"
-	STATEMENT_TYPE_COPY                           StatementType = "copy"
-	STATEMENT_TYPE_READ                           StatementType = "read"
-	STATEMENT_TYPE_WRITE                          StatementType = "write"
-	STATEMENT_TYPE_SLICE_INSTANTIATION            StatementType = "slice instantiation"
-	STATEMENT_TYPE_SLICE_ASSIGNMENT               StatementType = "slice assignment"
-	STATEMENT_TYPE_SLICE_EVALUATION               StatementType = "slice evaluation"
+	STATEMENT_TYPE_PROGRAM                         StatementType = "program"
+	STATEMENT_TYPE_TYPE_DECLARATION                StatementType = "type declaration"
+	STATEMENT_TYPE_TYPE_DEFINITION                 StatementType = "type definition"
+	STATEMENT_TYPE_BOOL_LITERAL                    StatementType = "boolean"
+	STATEMENT_TYPE_INT_LITERAL                     StatementType = "integer"
+	STATEMENT_TYPE_STRING_LITERAL                  StatementType = "string"
+	STATEMENT_TYPE_STRING_SUBSCRIPT                StatementType = "string subscript"
+	STATEMENT_TYPE_NIL_LITERAL                     StatementType = "nil"
+	STATEMENT_TYPE_UNARY_OPERATION                 StatementType = "unary operation"
+	STATEMENT_TYPE_BINARY_OPERATION                StatementType = "binary operation"
+	STATEMENT_TYPE_LOGICAL_OPERATION               StatementType = "logical operation"
+	STATEMENT_TYPE_COMPARISON                      StatementType = "comparison"
+	STATEMENT_TYPE_CONST_DEFINITION                StatementType = "constant definition"
+	STATEMENT_TYPE_CONST_EVALUATION                StatementType = "constant evaluation"
+	STATEMENT_TYPE_NAMED_VALUES_DEFINITION         StatementType = "named values definition"
+	STATEMENT_TYPE_VAR_DEFINITION_VALUE_ASSIGNMENT StatementType = "variable definition value assignment"
+	STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT  StatementType = "variable definition call assignment"
+	STATEMENT_TYPE_VAR_ASSIGNMENT                  StatementType = "variable assignment"
+	STATEMENT_TYPE_VAR_ASSIGNMENT_VALUE_ASSIGNMENT StatementType = "variable assignment value assignment"
+	STATEMENT_TYPE_VAR_ASSIGNMENT_CALL_ASSIGNMENT  StatementType = "variable assignment call assignment"
+	STATEMENT_TYPE_VAR_EVALUATION                  StatementType = "variable evaluation"
+	STATEMENT_TYPE_GROUP                           StatementType = "group"
+	STATEMENT_TYPE_FUNCTION_DEFINITION             StatementType = "function definition"
+	STATEMENT_TYPE_FUNCTION_CALL                   StatementType = "function call"
+	STATEMENT_TYPE_APP_CALL                        StatementType = "app call"
+	STATEMENT_TYPE_RETURN                          StatementType = "return"
+	STATEMENT_TYPE_IF                              StatementType = "if"
+	STATEMENT_TYPE_FOR                             StatementType = "for"
+	STATEMENT_TYPE_FOR_RANGE                       StatementType = "for range"
+	STATEMENT_TYPE_BREAK                           StatementType = "break"
+	STATEMENT_TYPE_CONTINUE                        StatementType = "continue"
+	STATEMENT_TYPE_IOTA                            StatementType = "iota"
+	STATEMENT_TYPE_INSTANTIATION                   StatementType = "instantiation"
+	STATEMENT_TYPE_PRINT                           StatementType = "print"
+	STATEMENT_TYPE_ITOA                            StatementType = "itoa"
+	STATEMENT_TYPE_EXISTS                          StatementType = "exists"
+	STATEMENT_TYPE_PANIC                           StatementType = "panic"
+	STATEMENT_TYPE_LEN                             StatementType = "len"
+	STATEMENT_TYPE_INPUT                           StatementType = "input"
+	STATEMENT_TYPE_COPY                            StatementType = "copy"
+	STATEMENT_TYPE_READ                            StatementType = "read"
+	STATEMENT_TYPE_WRITE                           StatementType = "write"
+	STATEMENT_TYPE_SLICE_INSTANTIATION             StatementType = "slice instantiation"
+	STATEMENT_TYPE_SLICE_ASSIGNMENT                StatementType = "slice assignment"
+	STATEMENT_TYPE_SLICE_EVALUATION                StatementType = "slice evaluation"
+)
+
+const (
+	ASSIGNMENT_TYPE_VALUE AssignmentType = "value"
+	ASSIGNMENT_TYPE_CALL  AssignmentType = "call"
 )
 
 const (
@@ -105,7 +120,7 @@ const (
 	DATA_TYPE_BOOLEAN  DataType = "bool"
 	DATA_TYPE_INTEGER  DataType = "int"
 	DATA_TYPE_STRING   DataType = "string"
-	DATA_TYPE_ERROR    DataType = DATA_TYPE_STRING
+	DATA_TYPE_ERROR    DataType = "error"
 )
 
 const (
