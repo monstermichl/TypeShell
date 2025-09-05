@@ -88,12 +88,12 @@ jobs:
           echo "${PACKAGE}" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
-          EXECUTABLE="${NAME}${EXT}""
+          EXECUTABLE="${NAME}${EXT}"
 
           echo "Building for ${{ matrix.os }} ${{ matrix.arch }}"
           GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -o "${EXECUTABLE}" tsh.go
 
-          zip -r "${}" std/ "${EXECUTABLE}"
+          zip -r "${PACKAGE}" std/ "${EXECUTABLE}"
 
       - name: Release
         if: ${{ github.event_name == 'release' }}
