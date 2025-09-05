@@ -13,6 +13,10 @@ func (s SliceInstantiation) ValueType() ValueType {
 	return ValueType{dataType: s.dataType, isSlice: true}
 }
 
+func (s SliceInstantiation) IsConstant() bool {
+	return false
+}
+
 func (s SliceInstantiation) Values() []Expression {
 	return s.values
 }
@@ -37,6 +41,10 @@ func (s SliceEvaluation) Index() Expression {
 
 func (s SliceEvaluation) ValueType() ValueType {
 	return ValueType{dataType: s.dataType}
+}
+
+func (s SliceEvaluation) IsConstant() bool {
+	return false
 }
 
 type SliceAssignment struct {

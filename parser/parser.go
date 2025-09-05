@@ -237,17 +237,6 @@ func (ev evaluatedValues) isMultiReturnCall() (bool, Call) {
 	return multi, call
 }
 
-func (ev evaluatedValues) areConstants() bool {
-	areConst := len(ev.values) > 0
-
-	for _, value := range ev.values {
-		if !value.StatementType().IsConstant() {
-			return false
-		}
-	}
-	return areConst
-}
-
 type blockCallback func(statements []Statement, last bool) error
 
 type Parser struct {
@@ -1244,8 +1233,12 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 
 		if err != nil {
 			return nil, err
-		} else if evalConst && !evaluatedVals.areConstants() {
-			return nil, p.expectedError("constant values", nextToken)
+		} else if evalConst {
+			for i, evaluatedVal := range evaluatedVals.values {
+				if !evaluatedVal.IsConstant() {
+					return nil, p.expectedError("constant values", evaluatedVals.tokens[i])
+				}
+			}
 		}
 		values = evaluatedVals.values
 		valuesTypes := []ValueType{}

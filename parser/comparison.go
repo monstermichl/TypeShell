@@ -22,6 +22,10 @@ func (c Comparison) ValueType() ValueType {
 	return ValueType{dataType: DATA_TYPE_BOOLEAN}
 }
 
+func (c Comparison) IsConstant() bool {
+	return c.Left().IsConstant() && c.Right().IsConstant()
+}
+
 func (c Comparison) Left() Expression {
 	return c.left
 }

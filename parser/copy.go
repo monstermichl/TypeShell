@@ -13,6 +13,10 @@ func (c Copy) ValueType() ValueType {
 	return NewValueType(DATA_TYPE_INTEGER, false)
 }
 
+func (c Copy) IsConstant() bool {
+	return false
+}
+
 func (c Copy) Source() Expression {
 	return c.source
 }

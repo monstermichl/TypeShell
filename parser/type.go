@@ -25,6 +25,10 @@ func (t TypeDefinition) ValueType() ValueType {
 	return t.valueType
 }
 
+func (t TypeDefinition) IsConstant() bool {
+	return t.Value().IsConstant()
+}
+
 func (t TypeDefinition) Value() Expression {
 	return t.value
 }

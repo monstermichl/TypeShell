@@ -24,6 +24,10 @@ func (v Variable) ValueType() ValueType {
 	return v.valueType
 }
 
+func (v Variable) IsConstant() bool {
+	return false
+}
+
 func (v *Variable) SetValueType(valueType ValueType) {
 	v.valueType = valueType
 }
@@ -34,10 +38,6 @@ func (v Variable) Global() bool {
 
 func (v Variable) Public() bool {
 	return v.public
-}
-
-func (v Variable) IsConstant() bool {
-	return false
 }
 
 type VariableDefinition struct {

@@ -1,9 +1,9 @@
 package parser
 
 type BinaryOperation struct {
-	left      Expression
-	operator  BinaryOperator
-	right     Expression
+	left     Expression
+	operator BinaryOperator
+	right    Expression
 }
 
 func (b BinaryOperation) StatementType() StatementType {
@@ -12,6 +12,10 @@ func (b BinaryOperation) StatementType() StatementType {
 
 func (b BinaryOperation) ValueType() ValueType {
 	return b.left.ValueType()
+}
+
+func (b BinaryOperation) IsConstant() bool {
+	return b.Left().IsConstant() && b.Right().IsConstant()
 }
 
 func (b BinaryOperation) Left() Expression {

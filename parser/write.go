@@ -14,6 +14,10 @@ func (w Write) ValueType() ValueType {
 	return NewValueType(DATA_TYPE_ERROR, false)
 }
 
+func (w Write) IsConstant() bool {
+	return false
+}
+
 func (w Write) Path() Expression {
 	return w.path
 }
