@@ -23,6 +23,7 @@ const (
 	SCOPE_IF       scope = "if"
 	SCOPE_FOR      scope = "for"
 	SCOPE_SWITCH   scope = "switch"
+	SCOPE_CONST    scope = "const"
 )
 
 func scopesToString(scopes []scope) []string {
@@ -51,6 +52,7 @@ type context struct {
 	namedValues map[string]NamedValue         // Stores the variable/constant name to variable/constant relation.
 	functions   map[string]FunctionDefinition // Stores the function name to function relation.
 	scopeStack  []scope                       // Stores the current scopes.
+	iotaCounter int
 }
 
 func newContext() context {
@@ -59,6 +61,7 @@ func newContext() context {
 		types:       map[string]typeDefinition{},
 		namedValues: map[string]NamedValue{},
 		functions:   map[string]FunctionDefinition{},
+		iotaCounter: 0,
 	}
 
 	// Define elementary types.
@@ -70,6 +73,22 @@ func newContext() context {
 	c.addType(DATA_TYPE_ERROR, NewValueType(DATA_TYPE_STRING, false), true, false)
 
 	return c
+}
+
+func (c *context) pushScope(scope scope) error {
+	c.scopeStack = append(c.scopeStack, scope)
+
+	// If new const scope is pushed, reset iota counter.
+	if scope == SCOPE_CONST {
+		c.iotaCounter = 0
+	}
+	return nil
+}
+
+func (c *context) popScope() error {
+	i := len(c.scopeStack) - 1
+	c.scopeStack = slices.Delete(c.scopeStack, i, i+1)
+	return nil
 }
 
 func (c context) currentScope() scope {
@@ -87,6 +106,10 @@ func (c context) findScope(s scope) bool {
 		}
 	}
 	return false
+}
+
+func (c *context) incrementIota() {
+	c.iotaCounter++
 }
 
 func (c context) buildPrefixedName(name string, prefix string, global bool, checkExistence bool) (string, error) {
@@ -208,6 +231,7 @@ func (c context) clone() context {
 		namedValues: maps.Clone(c.namedValues),
 		functions:   maps.Clone(c.functions),
 		scopeStack:  slices.Clone(c.scopeStack),
+		iotaCounter: 0,
 	}
 }
 
@@ -917,7 +941,7 @@ func (p *Parser) evaluateBlockContent(terminationTokenTypes []lexer.TokenType, c
 	ctx = ctx.clone()
 
 	// Add scope to context.
-	ctx.scopeStack = append(ctx.scopeStack, scope)
+	ctx.pushScope(scope)
 
 	for loop {
 		token := p.peek()
@@ -1111,6 +1135,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 
 	if evalConst {
 		noun = "constant"
+		ctx.pushScope(SCOPE_CONST)
 	}
 
 	// Eat "var" token only, if the variable is not defined using the short init operator (:=).
@@ -1137,6 +1162,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 		}
 	}
 	namedValuesDefinition := NamedValuesDefinition{}
+	useIota := false
 
 	for {
 		nameTokens, err := p.evaluateNames()
@@ -1174,6 +1200,8 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 			}
 		}
 		specifiedType := NewValueType(DATA_TYPE_UNKNOWN, false)
+		namedValues := []NamedValue{}
+		reuseIota := false
 
 		if isShortVarInit {
 			nextToken := p.eat() // Eat short init operator.
@@ -1199,14 +1227,19 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 
 			// If no data type has been specified and no value is being assigned, return an error.
 			if dataType == DATA_TYPE_UNKNOWN && nextTokenType != lexer.ASSIGN_OPERATOR {
-				return nil, p.expectedError("data type or value assignment", nextToken)
+				// If iota has already been used in constant definition and only one value
+				// needs to be assigned, the iota value gets used automatically.
+				if evalConst && useIota && nameTokensLength == 1 {
+					reuseIota = true
+				} else {
+					return nil, p.expectedError("data type or value assignment", nextToken)
+				}
 			} else if nextTokenType == lexer.ASSIGN_OPERATOR {
 				p.eat()
 			}
 		}
 		nextToken := p.peek()
 		nextTokenType := nextToken.Type()
-		namedValues := []NamedValue{}
 
 		// Fill variables slice (might not contain the final type after this step).
 		for _, nameToken := range nameTokens {
@@ -1251,6 +1284,14 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 		if nextTokenType != lexer.NEWLINE && nextTokenType != lexer.EOF {
 			evaluatedVals, err := p.evaluateValues(ctx)
 
+			// Check if iota is used.
+			if slices.ContainsFunc(evaluatedVals.values, func(value Expression) bool {
+				return value.StatementType() == STATEMENT_TYPE_IOTA
+			}) {
+				useIota = true
+				reuseIota = true
+			}
+
 			if err != nil {
 				return nil, err
 			} else if evalConst {
@@ -1277,16 +1318,24 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 
 			// Check if the amount of values is equal to the amount of variable names.
 			if valuesTypesLen != variablesLen {
-				pluralInit := ""
-				pluralValues := ""
+				// If only one constant needs to be initialized and iota can be used, use it.
+				if evalConst && variablesLen == 1 && reuseIota {
+					iotaExpr := IntegerLiteral{ctx.iotaCounter}
 
-				if valuesTypesLen != 1 {
-					pluralInit = "s"
+					values = append(values, iotaExpr)
+					valuesTypes = append(valuesTypes, iotaExpr.ValueType())
+				} else {
+					pluralInit := ""
+					pluralValues := ""
+
+					if valuesTypesLen != 1 {
+						pluralInit = "s"
+					}
+					if variablesLen != 1 {
+						pluralValues = "s"
+					}
+					return nil, p.atError(fmt.Sprintf("got %d initialisation value%s but %d %s%s", valuesTypesLen, pluralInit, variablesLen, noun, pluralValues), nextToken)
 				}
-				if variablesLen != 1 {
-					pluralValues = "s"
-				}
-				return nil, p.atError(fmt.Sprintf("got %d initialisation value%s but %d %s%s", valuesTypesLen, pluralInit, variablesLen, noun, pluralValues), nextToken)
 			}
 
 			// If a type has been specified, make sure the returned types fit this type.
@@ -1333,10 +1382,23 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 		}
 
 		if assignment == nil {
+			// If only one value needs to be initialized and iota has been assigned previously, use iota.
+			if evalConst && useIota && nameTokensLength == 1 && len(values) < nameTokensLength {
+				values = append(values, Iota{})
+			}
 			lenValues := len(values)
 
 			if evalConst && lenValues != nameTokensLength {
 				return nil, p.atError("all constants must be initialized", firstValueToken)
+			}
+
+			// Increase iota counter.
+			for i, value := range values {
+				// Replace iota by actual values.
+				if value.StatementType() == STATEMENT_TYPE_IOTA {
+					values[i] = IntegerLiteral{ctx.iotaCounter}
+				}
+				ctx.incrementIota()
 			}
 
 			// If no value has been specified, define default value.
@@ -1390,6 +1452,11 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 			p.eat() // Eat closing round bracket and break.
 			break
 		}
+	}
+
+	// Pop SCOPE_CONST.
+	if evalConst {
+		ctx.popScope()
 	}
 	return namedValuesDefinition, nil
 }
@@ -1769,6 +1836,17 @@ func (p *Parser) evaluateBreak(ctx context) (Statement, error) {
 		return nil, p.expectedError(fmt.Sprintf("break statement within %s-scope", strings.Join(scopesToString(breakScopes), "- or ")), breakToken)
 	}
 	return Break{}, nil
+}
+
+func (p *Parser) evaluateIota(ctx context) (Expression, error) {
+	iotaToken := p.eat()
+
+	if iotaToken.Type() != lexer.IOTA {
+		return nil, p.expectedKeywordError("iota", iotaToken)
+	} else if ctx.currentScope() != SCOPE_CONST {
+		return nil, p.atError("cannot use iota outside constant declaration", iotaToken)
+	}
+	return Iota{}, nil
 }
 
 func (p *Parser) evaluateContinue(ctx context) (Statement, error) {
@@ -2351,6 +2429,10 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 	// Handle slice instantiation.
 	case lexer.OPENING_SQUARE_BRACKET:
 		expr, err = p.evaluateSliceInstantiation(ctx)
+
+	// Handle iota.
+	case lexer.IOTA:
+		expr, err = p.evaluateIota(ctx)
 
 	// Handle input.
 	case lexer.INPUT:

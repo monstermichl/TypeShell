@@ -69,6 +69,7 @@ const (
 	RANGE
 	BREAK
 	CONTINUE
+	IOTA
 
 	// Builtin functions.
 	LEN
@@ -186,6 +187,7 @@ var keywords = map[string]TokenType{
 	"range":    RANGE,
 	"break":    BREAK,
 	"continue": CONTINUE,
+	"iota":     IOTA,
 	"nil":      NIL_LITERAL,
 
 	// Builtin functions.
