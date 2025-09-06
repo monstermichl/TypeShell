@@ -220,6 +220,16 @@ import (
 print(strings.Contains("Hello World", "World")) // Prints 1.
 ```
 
+It's also possible to include files from a remote source. If the loaded code is a Go-file, the package statement is automatically removed to make it usable as a TypeShell file.
+```golang
+// Remote import.
+import (
+    gocode "https://exampleserver.com/somegofile.go"
+)
+
+gocode.SomeFunction()
+```
+
 ### Type declarations
 TypeShell supports the declaration of types. However, types which result in slices are not supported yet.
 

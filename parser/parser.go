@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -857,6 +858,9 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 						if err != nil {
 							return nil, err
 						}
+						regexp := regexp.MustCompile(`package \w+`)
+						bodyBytes =regexp.ReplaceAll(bodyBytes, []byte("")) // Remove package statemnt.
+
 						err = os.WriteFile(absPath, bodyBytes, 0400)
 
 						if err != nil {
