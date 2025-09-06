@@ -8,6 +8,10 @@ func TestDefineVariableSuccess(t *testing.T) {
 	testDefineVariablesSuccess(t, transpileBatch)
 }
 
+func TestOverwriteVariableSuccess(t *testing.T) {
+	testOverwriteVariableSuccess(t, transpileBatch)
+}
+
 func TestDefineSameVariableFail(t *testing.T) {
 	testDefineSameVariableFail(t, transpileBatch)
 }

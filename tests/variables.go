@@ -31,6 +31,22 @@ func testDefineVariablesSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	})
 }
 
+func testOverwriteVariableSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		var a = 1
+		
+		if true {
+			a := 2
+
+			print(a)
+		}
+		print(a)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "2\n1", output)
+	})
+}
+
 func testDefineSameVariableFail(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		var a int
