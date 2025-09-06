@@ -124,7 +124,7 @@ func testDeclareTypeTwiceFail(t *testing.T, transpilerFunc transpilerFunc) {
 		type myType int
 		type myType string
 	`, func(output string, err error) {
-		require.EqualError(t, shortenError(err), "myType has already been defined")
+		require.EqualError(t, shortenError(err), "type myType has already been defined")
 	})
 }
 
