@@ -65,6 +65,7 @@ const (
 	STATEMENT_TYPE_PROGRAM                         StatementType = "program"
 	STATEMENT_TYPE_TYPE_DECLARATION                StatementType = "type declaration"
 	STATEMENT_TYPE_TYPE_DEFINITION                 StatementType = "type definition"
+	STATEMENT_TYPE_STRUCT_DECLARATION              StatementType = "struct declaration"
 	STATEMENT_TYPE_BOOL_LITERAL                    StatementType = "boolean"
 	STATEMENT_TYPE_INT_LITERAL                     StatementType = "integer"
 	STATEMENT_TYPE_STRING_LITERAL                  StatementType = "string"
@@ -121,6 +122,7 @@ const (
 	DATA_TYPE_INTEGER  DataType = "int"
 	DATA_TYPE_STRING   DataType = "string"
 	DATA_TYPE_ERROR    DataType = "error"
+	DATA_TYPE_STRUCT   DataType = "struct"
 )
 
 const (

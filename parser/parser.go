@@ -51,7 +51,8 @@ type foundTypeDefinition struct {
 
 type context struct {
 	imports     map[string]string             // Maps import aliases to file hashes.
-	types       map[string]typeDefinition     // Stores the defined types.
+	types       map[string]typeDefinition     // Stores the declared types.
+	structs     map[string]StructDeclaration  // Stores the declared structs.
 	namedValues map[string][]NamedValue       // Stores the variable/constant name to variable/constant relation.
 	functions   map[string]FunctionDefinition // Stores the function name to function relation.
 	scopeStack  []scope                       // Stores the current scopes.
@@ -63,6 +64,7 @@ func newContext() context {
 	c := context{
 		imports:     map[string]string{},
 		types:       map[string]typeDefinition{},
+		structs:     map[string]StructDeclaration{},
 		namedValues: map[string][]NamedValue{},
 		functions:   map[string]FunctionDefinition{},
 		layer:       -1, // Init at -1 since program increases it right away.
@@ -145,7 +147,7 @@ func (c context) addType(typeName string, valueType ValueType, isAlias bool, isE
 	_, exists := c.findType(typeName, false)
 
 	if exists {
-		return fmt.Errorf("%s has already been defined", typeName)
+		return fmt.Errorf("type %s has already been defined", typeName)
 	}
 	if valueType.IsSlice() {
 		// TODO: Add support.
@@ -156,6 +158,16 @@ func (c context) addType(typeName string, valueType ValueType, isAlias bool, isE
 		isAlias,
 		isElementary,
 	}
+	return nil
+}
+
+func (c context) addStruct(structName string, structDeclaration StructDeclaration) error {
+	_, exists := c.findStruct(structName)
+
+	if exists {
+		return fmt.Errorf("struct %s has already been defined", structName)
+	}
+	c.structs[structName] = structDeclaration
 	return nil
 }
 
@@ -214,6 +226,11 @@ func (c context) findType(typeName string, searchUntilElementary bool) (foundTyp
 	return foundDefinition, exists
 }
 
+func (c context) findStruct(name string) (StructDeclaration, bool) {
+	structDeclaration, exists := c.structs[name]
+	return structDeclaration, exists
+}
+
 func (c context) findNamedValue(name string, prefix string, global bool) (NamedValue, bool) {
 	prefixedName, err := c.buildPrefixedName(name, prefix, global, true)
 
@@ -246,7 +263,8 @@ func (c context) clone() context {
 	return context{
 		imports:     maps.Clone(c.imports),
 		types:       maps.Clone(c.types),
-		namedValues: maps.Clone(c.namedValues),
+		structs:     maps.Clone(c.structs),
+		namedValues: maps.Clone(c.namedValues), // TODO: Make sure this is appropriate cloning because each entry contains a slice.
 		functions:   maps.Clone(c.functions),
 		scopeStack:  slices.Clone(c.scopeStack),
 		layer:       c.layer,
@@ -361,8 +379,8 @@ func allowedBinaryOperators(t ValueType) []BinaryOperator {
 		case DATA_TYPE_STRING:
 			operators = []BinaryOperator{BINARY_OPERATOR_ADDITION}
 		default:
-			// For other types no operations are permitted.
 		}
+		// For other types no operations are permitted.
 	}
 	return operators
 }
@@ -859,7 +877,7 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 							return nil, err
 						}
 						regexp := regexp.MustCompile(`package \w+`)
-						bodyBytes =regexp.ReplaceAll(bodyBytes, []byte("")) // Remove package statemnt.
+						bodyBytes = regexp.ReplaceAll(bodyBytes, []byte("")) // Remove package statemnt.
 
 						err = os.WriteFile(absPath, bodyBytes, 0400)
 
@@ -1209,6 +1227,66 @@ func (p *Parser) evaluateValueType(ctx context) (ValueType, error) {
 	return evaluatedType, nil
 }
 
+func (p *Parser) evaluateStructDeclaration(ctx context) (Statement, error) {
+	structToken := p.eat()
+
+	if structToken.Type() != lexer.STRUCT {
+		return nil, p.expectedKeywordError("struct", structToken)
+	}
+	nextToken := p.eat()
+
+	if nextToken.Type() != lexer.OPENING_CURLY_BRACKET {
+		return nil, p.expectedError(`"{"`, nextToken)
+	}
+	nextToken = p.eat()
+
+	if nextToken.Type() != lexer.NEWLINE {
+		return nil, p.expectedNewlineError(nextToken)
+	}
+	fields := []StructField{}
+
+	// Evaluate fields.
+	for {
+		nameTokens, err := p.evaluateNames()
+
+		if err != nil {
+			return nil, err
+		}
+		valueTypeToken := p.peek()
+		valueType, err := p.evaluateValueType(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+
+		// Don't allow nested structs for now.
+		if valueType.DataType() == DATA_TYPE_STRUCT {
+			return nil, p.atError("nested structs are not allowed", valueTypeToken)
+		}
+
+		for _, nameToken := range nameTokens {
+			fields = append(fields, StructField{
+				name:      nameToken.Value(),
+				valueType: valueType,
+			})
+		}
+		nextToken = p.eat()
+
+		if nextToken.Type() != lexer.NEWLINE {
+			return nil, p.expectedNewlineError(nextToken)
+		}
+		nextToken = p.peek()
+
+		if nextToken.Type() == lexer.CLOSING_CURLY_BRACKET {
+			p.eat() // Eat closing curly bracket and break.
+			break
+		}
+	}
+	return StructDeclaration{
+		fields,
+	}, nil
+}
+
 func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 	typeToken := p.eat()
 
@@ -1221,20 +1299,42 @@ func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 		return nil, p.expectedIdentifierError(nameToken)
 	}
 	isAlias := false
+	assignToken := p.peek()
 
 	// If a type is assigned to the new type with an assign-operator,
 	// then it's just an alias.
-	if p.peek().Type() == lexer.ASSIGN_OPERATOR {
+	if assignToken.Type() == lexer.ASSIGN_OPERATOR {
 		isAlias = true
 		p.eat()
 	}
-	valueTypeToken := p.peek()
-	valueType, err := p.evaluateValueType(ctx)
-
-	if err != nil {
-		return nil, err
-	}
 	name := nameToken.Value()
+	valueTypeToken := p.peek()
+
+	var valueType ValueType
+	var err error
+
+	if valueTypeToken.Type() == lexer.STRUCT {
+		if isAlias {
+			return nil, p.atError("struct alias is not supported", assignToken)
+		}
+		structDeclaration, err := p.evaluateStructDeclaration(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+		err = ctx.addStruct(name, structDeclaration.(StructDeclaration))
+
+		if err != nil {
+			return nil, p.atError(err.Error(), nameToken)
+		}
+		valueType = NewValueType(DATA_TYPE_STRUCT, false)
+	} else {
+		valueType, err = p.evaluateValueType(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+	}
 	err = ctx.addType(name, valueType, isAlias, false)
 
 	if err != nil {

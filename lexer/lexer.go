@@ -56,6 +56,7 @@ const (
 	// Keywords.
 	IMPORT
 	TYPE_DECLARATION
+	STRUCT
 	CONST_DEFINITION
 	VAR_DEFINITION
 	FUNCTION_DEFINITION
@@ -174,6 +175,7 @@ var keywords = map[string]TokenType{
 	// Common keywords.
 	"import":   IMPORT,
 	"type":     TYPE_DECLARATION,
+	"struct":   STRUCT,
 	"const":    CONST_DEFINITION,
 	"var":      VAR_DEFINITION,
 	"func":     FUNCTION_DEFINITION,
