@@ -1,5 +1,7 @@
 package parser
 
+import "fmt"
+
 type Variable struct {
 	name      string
 	valueType ValueType
@@ -26,6 +28,10 @@ func (v Variable) ValueType() ValueType {
 
 func (v Variable) Layer() int {
 	return v.layer
+}
+
+func (v Variable) LayerName() string {
+	return fmt.Sprintf("%s_%d", v.name, v.layer)
 }
 
 func (v Variable) IsConstant() bool {

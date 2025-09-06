@@ -385,7 +385,7 @@ func (t *transpiler) evaluateConstDefinition(definition parser.ConstDefinition) 
 
 	// Map const definition to var definition since constant check has already been performed by parser.
 	for _, constant := range definition.Constants() {
-		variables = append(variables, parser.NewVariable(constant.Name(), constant.ValueType(), constant.Layer(), constant.Public()))
+		variables = append(variables, parser.NewVariable(constant.LayerName(), constant.ValueType(), constant.Layer(), constant.Public()))
 	}
 	return t.evaluateVarDefinition(parser.NewVariableDefinition(variables, definition.Values()))
 }
@@ -397,7 +397,7 @@ func (t *transpiler) evaluateVarDefinition(definition parser.VariableDefinitionV
 		if err != nil {
 			return err
 		}
-		err = t.converter.VarDefinition(variable.Name(), result.firstValue(), variable.Global())
+		err = t.converter.VarDefinition(variable.LayerName(), result.firstValue(), variable.Global())
 
 		if err != nil {
 			return err
@@ -422,7 +422,7 @@ func (t *transpiler) evaluateVarDefinitionCallAssignment(definition parser.Varia
 	}
 
 	for i, variable := range variables {
-		err = t.converter.VarDefinition(variable.Name(), values[i], variable.Global())
+		err = t.converter.VarDefinition(variable.LayerName(), values[i], variable.Global())
 
 		if err != nil {
 			return err
@@ -438,7 +438,7 @@ func (t *transpiler) evaluateVarAssignment(assignment parser.VariableAssignmentV
 		if err != nil {
 			return err
 		}
-		err = t.converter.VarDefinition(variable.Name(), result.firstValue(), variable.Global())
+		err = t.converter.VarDefinition(variable.LayerName(), result.firstValue(), variable.Global())
 
 		if err != nil {
 			return err
@@ -463,7 +463,7 @@ func (t *transpiler) evaluateVarAssignmentCallAssignment(assignment parser.Varia
 	}
 
 	for i, variable := range variables {
-		err = t.converter.VarDefinition(variable.Name(), values[i], variable.Global())
+		err = t.converter.VarDefinition(variable.LayerName(), values[i], variable.Global())
 
 		if err != nil {
 			return err
@@ -490,18 +490,18 @@ func (t *transpiler) evaluateSliceAssignment(assignment parser.SliceAssignment) 
 	if err != nil {
 		return err
 	}
-	return t.converter.SliceAssignment(assignment.Name(), indexResult.firstValue(), valueResult.firstValue(), defaultValue, assignment.Global())
+	return t.converter.SliceAssignment(assignment.LayerName(), indexResult.firstValue(), valueResult.firstValue(), defaultValue, assignment.Global())
 }
 
 func (t *transpiler) evaluateConstEvaluation(evaluation parser.ConstEvaluation, valueUsed bool) (expressionResult, error) {
 	// Map const evaluation to var evaluation since constant evaluation works the same.
-	varEvaluation := parser.NewVariableEvaluation(evaluation.Name(), evaluation.ValueType(), evaluation.Layer(), evaluation.Public())
+	varEvaluation := parser.NewVariableEvaluation(evaluation.LayerName(), evaluation.ValueType(), evaluation.Layer(), evaluation.Public())
 
 	return t.evaluateVarEvaluation(varEvaluation, valueUsed)
 }
 
 func (t *transpiler) evaluateVarEvaluation(evaluation parser.VariableEvaluation, valueUsed bool) (expressionResult, error) {
-	s, err := t.converter.VarEvaluation(evaluation.Name(), valueUsed, evaluation.Global())
+	s, err := t.converter.VarEvaluation(evaluation.LayerName(), valueUsed, evaluation.Global())
 
 	if err != nil {
 		return expressionResult{}, err
@@ -601,7 +601,7 @@ func (t *transpiler) evaluateFunctionDefinition(functionDefinition parser.Functi
 	params := []string{}
 
 	for _, param := range functionDefinition.Params() {
-		params = append(params, param.Name())
+		params = append(params, param.LayerName())
 	}
 	conv := t.converter
 	err := conv.FuncStart(name, params, functionDefinition.ReturnTypes())
@@ -720,7 +720,7 @@ func (t *transpiler) evaluateCopy(copy parser.Copy, valueUsed bool) (expressionR
 		return expressionResult{}, err
 	}
 	destination := copy.Destination()
-	amount, err := t.converter.Copy(destination.Name(), expr.firstValue(), valueUsed, destination.Global())
+	amount, err := t.converter.Copy(destination.LayerName(), expr.firstValue(), valueUsed, destination.Global())
 
 	if err != nil {
 		return expressionResult{}, err

@@ -575,7 +575,7 @@ func (p *Parser) checkNewNamedValueNameToken(token lexer.Token, ctx context) err
 	name := token.Value()
 	foundNamedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
 
-	if exists {
+	if exists && foundNamedValue.Layer() == ctx.layer {
 		namedValueType := "variable"
 
 		if foundNamedValue.IsConstant() {
@@ -1711,7 +1711,7 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
 		if valueType != expectedValueType {
 			return nil, p.expectedError(fmt.Sprintf("%s but got %s", expectedValueType.String(), valueType.String()), valuesToken)
 		}
-		variables = append(variables, NewVariable(name, valueType, ctx.layer, isPublic(name)))
+		variables = append(variables, NewVariable(name, valueType, namedValue.Layer(), isPublic(name)))
 	}
 
 	if isMultiReturnFuncCall {

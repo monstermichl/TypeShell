@@ -4,6 +4,7 @@ type NamedValue interface {
 	Name() string
 	ValueType() ValueType
 	Layer() int
+	LayerName() string
 	Global() bool
 	Public() bool
 	IsConstant() bool

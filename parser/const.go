@@ -1,5 +1,7 @@
 package parser
 
+import "fmt"
+
 type Const struct {
 	name      string
 	valueType ValueType
@@ -26,6 +28,10 @@ func (c Const) ValueType() ValueType {
 
 func (c Const) Layer() int {
 	return c.layer
+}
+
+func (c Const) LayerName() string {
+	return fmt.Sprintf("%s_%d", c.name, c.layer)
 }
 
 func (c Const) IsConstant() bool {
