@@ -3,6 +3,7 @@ package parser
 type NamedValue interface {
 	Name() string
 	ValueType() ValueType
+	Layer() int
 	Global() bool
 	Public() bool
 	IsConstant() bool

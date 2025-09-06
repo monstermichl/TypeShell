@@ -3,15 +3,15 @@ package parser
 type Variable struct {
 	name      string
 	valueType ValueType
-	global    bool
+	layer     int
 	public    bool
 }
 
-func NewVariable(name string, valueType ValueType, global bool, public bool) Variable {
+func NewVariable(name string, valueType ValueType, layer int, public bool) Variable {
 	return Variable{
 		name,
 		valueType,
-		global,
+		layer,
 		public,
 	}
 }
@@ -24,6 +24,10 @@ func (v Variable) ValueType() ValueType {
 	return v.valueType
 }
 
+func (v Variable) Layer() int {
+	return v.layer
+}
+
 func (v Variable) IsConstant() bool {
 	return false
 }
@@ -33,7 +37,7 @@ func (v *Variable) SetValueType(valueType ValueType) {
 }
 
 func (v Variable) Global() bool {
-	return v.global
+	return v.layer == 0
 }
 
 func (v Variable) Public() bool {
@@ -151,12 +155,12 @@ type VariableEvaluation struct {
 	Variable
 }
 
-func NewVariableEvaluation(name string, valueType ValueType, global bool, public bool) VariableEvaluation {
+func NewVariableEvaluation(name string, valueType ValueType, layer int, public bool) VariableEvaluation {
 	return VariableEvaluation{
 		Variable{
 			name,
 			valueType,
-			global,
+			layer,
 			public,
 		},
 	}

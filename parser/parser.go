@@ -51,9 +51,10 @@ type foundTypeDefinition struct {
 type context struct {
 	imports     map[string]string             // Maps import aliases to file hashes.
 	types       map[string]typeDefinition     // Stores the defined types.
-	namedValues map[string]NamedValue         // Stores the variable/constant name to variable/constant relation.
+	namedValues map[string][]NamedValue       // Stores the variable/constant name to variable/constant relation.
 	functions   map[string]FunctionDefinition // Stores the function name to function relation.
 	scopeStack  []scope                       // Stores the current scopes.
+	layer       int
 	iotaCounter int
 }
 
@@ -61,8 +62,9 @@ func newContext() context {
 	c := context{
 		imports:     map[string]string{},
 		types:       map[string]typeDefinition{},
-		namedValues: map[string]NamedValue{},
+		namedValues: map[string][]NamedValue{},
 		functions:   map[string]FunctionDefinition{},
+		layer:       -1, // Init at -1 since program increases it right away.
 		iotaCounter: 0,
 	}
 
@@ -163,7 +165,12 @@ func (c context) addNamedValues(prefix string, global bool, namedValues ...Named
 		if err != nil {
 			return err
 		}
-		c.namedValues[prefixedName] = namedValue
+		_, exists := c.namedValues[prefixedName]
+
+		if !exists {
+			c.namedValues[prefixedName] = []NamedValue{}
+		}
+		c.namedValues[prefixedName] = append(c.namedValues[prefixedName], namedValue)
 	}
 	return nil
 }
@@ -210,10 +217,18 @@ func (c context) findNamedValue(name string, prefix string, global bool) (NamedV
 	prefixedName, err := c.buildPrefixedName(name, prefix, global, true)
 
 	if err != nil {
-		return Variable{}, false
+		return nil, false
 	}
-	namedValue, exists := c.namedValues[prefixedName]
-	return namedValue, exists
+	stack, exists := c.namedValues[prefixedName]
+
+	if exists {
+		lastIndex := len(stack) - 1
+
+		if lastIndex >= 0 {
+			return stack[lastIndex], true
+		}
+	}
+	return nil, false
 }
 
 func (c context) findFunction(name string, prefix string) (FunctionDefinition, bool) {
@@ -233,7 +248,8 @@ func (c context) clone() context {
 		namedValues: maps.Clone(c.namedValues),
 		functions:   maps.Clone(c.functions),
 		scopeStack:  slices.Clone(c.scopeStack),
-		iotaCounter: 0,
+		layer:       c.layer,
+		iotaCounter: c.iotaCounter,
 	}
 }
 
@@ -940,15 +956,15 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 						name := variable.Name()
 
 						if _, exists = ctx.namedValues[name]; !exists && variable.Public() {
-							ctx.namedValues[name] = variable
+							ctx.namedValues[name] = []NamedValue{variable}
 						}
 					}
 				case ConstDefinition:
-					for _, variable := range t.Constants() {
-						name := variable.Name()
+					for _, constant := range t.Constants() {
+						name := constant.Name()
 
-						if _, exists = ctx.namedValues[name]; !exists && variable.Public() {
-							ctx.namedValues[name] = variable
+						if _, exists = ctx.namedValues[name]; !exists && constant.Public() {
+							ctx.namedValues[name] = []NamedValue{constant}
 						}
 					}
 				case VariableDefinitionCallAssignment:
@@ -956,7 +972,7 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 						name := variable.Name()
 
 						if _, exists = ctx.namedValues[name]; !exists && variable.Public() {
-							ctx.namedValues[name] = variable
+							ctx.namedValues[name] = []NamedValue{variable}
 						}
 					}
 				}
@@ -1033,8 +1049,9 @@ func (p *Parser) evaluateBlockContent(terminationTokenTypes []lexer.TokenType, c
 	// Clone context to avoid modification of the original.
 	ctx = ctx.clone()
 
-	// Add scope to context.
+	// Add scope to context and increase layer.
 	ctx.pushScope(scope)
+	ctx.layer++
 
 	for loop {
 		token := p.peek()
@@ -1361,11 +1378,12 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 			}
 			var newNamedValue NamedValue
 			isPublicValue := isPublic(name)
+			layer := ctx.layer
 
 			if evalConst {
-				newNamedValue = NewConst(storedName, specifiedType, global, isPublicValue)
+				newNamedValue = NewConst(storedName, specifiedType, layer, isPublicValue)
 			} else {
-				newNamedValue = NewVariable(storedName, specifiedType, global, isPublicValue)
+				newNamedValue = NewVariable(storedName, specifiedType, layer, isPublicValue)
 			}
 			namedValues = append(namedValues, newNamedValue)
 		}
@@ -1447,12 +1465,12 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 
 				if variableValueType.DataType() == DATA_TYPE_UNKNOWN {
 					var updatedNamedValue NamedValue
-					name, global, public := namedValue.Name(), namedValue.Global(), namedValue.Public()
+					name, layer, public := namedValue.Name(), namedValue.Layer(), namedValue.Public()
 
 					if evalConst {
-						updatedNamedValue = NewConst(name, valueValueType, global, public)
+						updatedNamedValue = NewConst(name, valueValueType, layer, public)
 					} else {
-						updatedNamedValue = NewVariable(name, valueValueType, global, public)
+						updatedNamedValue = NewVariable(name, valueValueType, layer, public)
 					}
 					namedValues[i] = updatedNamedValue
 				} else if !variableValueType.Equals(valueValueType) {
@@ -1693,7 +1711,7 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
 		if valueType != expectedValueType {
 			return nil, p.expectedError(fmt.Sprintf("%s but got %s", expectedValueType.String(), valueType.String()), valuesToken)
 		}
-		variables = append(variables, NewVariable(name, valueType, ctx.global(), isPublic(name)))
+		variables = append(variables, NewVariable(name, valueType, ctx.layer, isPublic(name)))
 	}
 
 	if isMultiReturnFuncCall {
@@ -1743,7 +1761,7 @@ func (p *Parser) evaluateParams(ctx context) ([]Variable, error) {
 		} else if nextTokenType == lexer.COMMA {
 			p.eat()
 		}
-		params = append(params, NewVariable(name, valueType, false, false))
+		params = append(params, NewVariable(name, valueType, ctx.layer+1, false))
 	}
 	return params, nil
 }
@@ -1776,10 +1794,12 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 	// Clone context to avoid modification of the original.
 	ctx = ctx.clone()
 
-	// Remove all variables which are not global.
-	maps.DeleteFunc(ctx.namedValues, func(_ string, v NamedValue) bool {
-		return !v.Global()
-	})
+	// Remove all named values that are not global.
+	for key := range ctx.namedValues {
+		slices.DeleteFunc(ctx.namedValues[key], func(v NamedValue) bool {
+			return !v.Global()
+		})
+	}
 
 	// If no parameters are given, the brackets are optional.
 	if openingBrace.Type() == lexer.OPENING_ROUND_BRACKET {
@@ -2203,7 +2223,8 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 			return nil, err
 		}
 		iterableValueType := iterableExpression.ValueType()
-		indexVar := NewVariable(indexVarName, NewValueType(DATA_TYPE_INTEGER, false), false, false)
+		layer := ctx.layer + 1
+		indexVar := NewVariable(indexVarName, NewValueType(DATA_TYPE_INTEGER, false), layer, false)
 		var iterableEvaluation Expression
 
 		if iterableValueType.IsSlice() {
@@ -2228,7 +2249,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 
 		// If no value variable has been provided, there's no need to add it.
 		if hasNamedVar {
-			valueVar := NewVariable(valueVarName, iterableValueType, false, false)
+			valueVar := NewVariable(valueVarName, iterableValueType, layer, false)
 
 			// Add value variable.
 			ctx.addNamedValues(p.prefix, false, valueVar)

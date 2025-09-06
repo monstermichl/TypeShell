@@ -3,15 +3,15 @@ package parser
 type Const struct {
 	name      string
 	valueType ValueType
-	global    bool
+	layer     int
 	public    bool
 }
 
-func NewConst(name string, valueType ValueType, global bool, public bool) Const {
+func NewConst(name string, valueType ValueType, layer int, public bool) Const {
 	return Const{
 		name,
 		valueType,
-		global,
+		layer,
 		public,
 	}
 }
@@ -24,6 +24,10 @@ func (c Const) ValueType() ValueType {
 	return c.valueType
 }
 
+func (c Const) Layer() int {
+	return c.layer
+}
+
 func (c Const) IsConstant() bool {
 	return true
 }
@@ -33,7 +37,7 @@ func (c *Const) SetValueType(valueType ValueType) {
 }
 
 func (c Const) Global() bool {
-	return c.global
+	return c.layer == 0
 }
 
 func (c Const) Public() bool {

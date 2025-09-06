@@ -385,7 +385,7 @@ func (t *transpiler) evaluateConstDefinition(definition parser.ConstDefinition) 
 
 	// Map const definition to var definition since constant check has already been performed by parser.
 	for _, constant := range definition.Constants() {
-		variables = append(variables, parser.NewVariable(constant.Name(), constant.ValueType(), constant.Global(), constant.Public()))
+		variables = append(variables, parser.NewVariable(constant.Name(), constant.ValueType(), constant.Layer(), constant.Public()))
 	}
 	return t.evaluateVarDefinition(parser.NewVariableDefinition(variables, definition.Values()))
 }
@@ -495,7 +495,7 @@ func (t *transpiler) evaluateSliceAssignment(assignment parser.SliceAssignment) 
 
 func (t *transpiler) evaluateConstEvaluation(evaluation parser.ConstEvaluation, valueUsed bool) (expressionResult, error) {
 	// Map const evaluation to var evaluation since constant evaluation works the same.
-	varEvaluation := parser.NewVariableEvaluation(evaluation.Name(), evaluation.ValueType(), evaluation.Global(), evaluation.Public())
+	varEvaluation := parser.NewVariableEvaluation(evaluation.Name(), evaluation.ValueType(), evaluation.Layer(), evaluation.Public())
 
 	return t.evaluateVarEvaluation(varEvaluation, valueUsed)
 }
