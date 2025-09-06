@@ -231,6 +231,11 @@ func (c context) findStruct(name string) (StructDeclaration, bool) {
 	return structDeclaration, exists
 }
 
+func (c context) isStruct(dataType DataType) bool {
+	_, exists := c.findStruct(dataType)
+	return exists
+}
+
 func (c context) findNamedValue(name string, prefix string, global bool) (NamedValue, bool) {
 	prefixedName, err := c.buildPrefixedName(name, prefix, global, true)
 
@@ -404,22 +409,32 @@ func allowedCompareOperators(t ValueType) []CompareOperator {
 }
 
 func defaultVarValue(valueType ValueType, ctx context) (Expression, error) {
-	foundType, exists := ctx.findType(valueType.DataType(), true)
+	dataType := valueType.DataType()
+	elementaryType, exists := ctx.findType(dataType, true)
 
 	if exists {
-		dataType := foundType.valueType.dataType
+		elementaryDataType := elementaryType.valueType.DataType()
 
 		if !valueType.IsSlice() {
-			switch dataType {
+			switch elementaryDataType {
 			case DATA_TYPE_BOOLEAN:
 				return BooleanLiteral{}, nil
 			case DATA_TYPE_INTEGER:
 				return IntegerLiteral{}, nil
 			case DATA_TYPE_STRING:
 				return StringLiteral{}, nil
+			case DATA_TYPE_STRUCT:
+				structDeclaration, exists := ctx.findStruct(dataType)
+
+				if exists {
+					return StructDefinition{
+						valueType: valueType,
+						fields:    slices.Clone(structDeclaration.Fields()),
+					}, nil
+				}
 			}
 		} else {
-			return SliceInstantiation{dataType: dataType}, nil
+			return SliceInstantiation{dataType: elementaryDataType}, nil
 		}
 	}
 	return nil, fmt.Errorf("no default value found for type %s", valueType.String())
@@ -1309,6 +1324,7 @@ func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 	}
 	name := nameToken.Value()
 	valueTypeToken := p.peek()
+	isElementary := false
 
 	var valueType ValueType
 	var err error
@@ -1328,6 +1344,7 @@ func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 			return nil, p.atError(err.Error(), nameToken)
 		}
 		valueType = NewValueType(DATA_TYPE_STRUCT, false)
+		isElementary = true
 	} else {
 		valueType, err = p.evaluateValueType(ctx)
 
@@ -1335,7 +1352,7 @@ func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 			return nil, err
 		}
 	}
-	err = ctx.addType(name, valueType, isAlias, false)
+	err = ctx.addType(name, valueType, isAlias, isElementary)
 
 	if err != nil {
 		return nil, p.atError(err.Error(), valueTypeToken)

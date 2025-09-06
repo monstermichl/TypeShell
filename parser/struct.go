@@ -24,3 +24,20 @@ func (d StructDeclaration) StatementType() StatementType {
 func (d StructDeclaration) Fields() []StructField {
 	return d.fields
 }
+
+type StructDefinition struct {
+	valueType ValueType
+	fields    []StructField
+}
+
+func (d StructDefinition) StatementType() StatementType {
+	return STATEMENT_TYPE_STRUCT_DEFINITION
+}
+
+func (d StructDefinition) ValueType() ValueType {
+	return d.valueType
+}
+
+func (d StructDefinition) IsConstant() bool {
+	return false
+}
