@@ -212,10 +212,11 @@ func TrimLeft(s string, cutset string) string {
 
 			for i := 0; i < lenCS; i++ {
 				lenS := len(s)
-				s, cut := CutPrefix(s, cutset[i])
+				sTemp, cut := CutPrefix(s, cutset[i])
 
 				if cut {
 					trimmed = true
+					s = sTemp
 				}
 			}
 
@@ -236,10 +237,11 @@ func TrimRight(s string, cutset string) string {
 
 			for i := 0; i < lenCS; i++ {
 				lenS := len(s)
-				s, cut := CutSuffix(s, cutset[i])
+				sTemp, cut := CutSuffix(s, cutset[i])
 
 				if cut {
 					trimmed = true
+					s = sTemp
 				}
 			}
 
