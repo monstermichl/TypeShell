@@ -436,7 +436,10 @@ func defaultVarValue(valueType ValueType, ctx context) (Expression, error) {
 							return nil, err
 						}
 						structValues = append(structValues, StructValue{
-							name:  field.Name(),
+							StructField: StructField{
+								name:      field.Name(),
+								valueType: field.ValueType(),
+							},
 							value: defaultValue,
 						})
 					}
@@ -2843,7 +2846,7 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 		} else {
 			// If token is identifier it could be a slice assignment, an increment or a decrement.
 			if token.Type() == lexer.IDENTIFIER {
-				switch p.peekAt(1).Type() {
+				switch nextTokenType := p.peekAt(1).Type(); nextTokenType {
 				case lexer.INCREMENT_OPERATOR, lexer.DECREMENT_OPERATOR:
 					stmt, err = p.evaluateIncrementDecrement(ctx)
 				case lexer.COMPOUND_ASSIGN_OPERATOR:
@@ -2851,12 +2854,18 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 				case lexer.ASSIGN_OPERATOR, lexer.COMMA:
 					stmt, err = p.evaluateVarAssignment(ctx)
 				default:
-					// Handle slice assignment.
 					variable, exists := ctx.findNamedValue(token.Value(), p.prefix, ctx.global())
 
-					// If variable has been defined and is a slice, handles slice assignment.
-					if exists && variable.ValueType().IsSlice() {
-						stmt, err = p.evaluateSliceAssignment(ctx)
+					switch nextTokenType {
+					case lexer.DOT:
+						// Could be a library variable or a struct assignment.
+						// TODO: Handle library stuff as well, but for now handle struct assignment.
+						stmt, err = p.evaluateStructAssignment(ctx)
+					default:
+						// If variable has been defined and is a slice, handles slice assignment.
+						if exists && variable.ValueType().IsSlice() {
+							stmt, err = p.evaluateSliceAssignment(ctx)
+						}
 					}
 				}
 			}
@@ -3394,6 +3403,79 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 		Variable: namedValue.(Variable),
 		index:    index,
 		value:    value,
+	}, nil
+}
+
+func (p *Parser) evaluateStructAssignment(ctx context) (Statement, error) {
+	nameToken := p.eat()
+
+	if nameToken.Type() != lexer.IDENTIFIER {
+		return nil, p.expectedError("struct variable", nameToken)
+	}
+	name := nameToken.Value()
+	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
+
+	if !exists {
+		return nil, p.variableNotDefinedError(name, nameToken)
+	} else if namedValue.IsConstant() {
+		return nil, p.constantError(name, nameToken)
+	}
+	namedValueValueType := namedValue.ValueType()
+	baseTypeDefinition, exists := ctx.findType(namedValueValueType.DataType(), false)
+
+	if !exists {
+		return nil, p.atError(fmt.Sprintf(`type of %s could not be found`, name), nameToken)
+	}
+	baseValueType := baseTypeDefinition.valueType
+
+	if baseValueType.IsSlice() {
+		return nil, p.expectedError("struct but got slice", nameToken)
+	} else if baseValueType.DataType() != DATA_TYPE_STRUCT {
+		return nil, p.expectedError(fmt.Sprintf("struct but variable is of type %s", baseValueType.String()), nameToken)
+	}
+	structDeclaration, exists := ctx.findStruct(baseTypeDefinition.name)
+
+	if !exists {
+		return nil, p.atError(fmt.Sprintf(`declaration of struct %s could not be found`, name), nameToken)
+	}
+	nextToken := p.eat()
+
+	if nextToken.Type() != lexer.DOT {
+		return nil, p.expectedError(`"."`, nextToken)
+	}
+	nextToken = p.eat()
+
+	if nextToken.Type() != lexer.IDENTIFIER {
+		return nil, p.expectedError(`struct field`, nextToken)
+	}
+	structField, err := structDeclaration.FindField(nextToken.Value())
+
+	if err != nil {
+		return nil, p.atError(err.Error(), nextToken)
+	}
+	nextToken = p.eat()
+
+	if nextToken.Type() != lexer.ASSIGN_OPERATOR {
+		return nil, p.expectedError(`"="`, nameToken)
+	}
+	valueToken := p.peek()
+	value, err := p.evaluateExpression(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	variableValueType := structField.ValueType()
+	assignedValueType := value.ValueType()
+
+	if !variableValueType.Equals(assignedValueType) {
+		return nil, p.expectedError(fmt.Sprintf("%s value but got %s", variableValueType.String(), assignedValueType.String()), valueToken)
+	}
+	return StructAssignment{
+		Variable: namedValue.(Variable),
+		value: StructValue{
+			StructField: structField,
+			value:       value,
+		},
 	}, nil
 }
 

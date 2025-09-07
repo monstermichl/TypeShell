@@ -9,21 +9,31 @@ import (
 	"github.com/monstermichl/typeshell/transpiler"
 )
 
+type helperName = string
+
+const (
+	sliceAssignmentHelper  helperName = "_sah"  // Slice assignment
+	sliceCopyHelper        helperName = "_sch"  // Slice copy
+	structAssignmentHelper helperName = "_stah" // Struct assignment
+	stringSubscriptHelper  helperName = "_stsh" // String subscript
+)
+
 type funcInfo struct {
 	name string
 }
 
 type converter struct {
-	interpreter                   string
-	startCode                     []string
-	code                          []string
-	varCounter                    int
-	forCounter                    int
-	funcs                         []funcInfo
-	funcCounter                   int
-	sliceAssignmentHelperRequired bool
-	sliceCopyHelperRequired       bool
-	stringSubscriptHelperRequired bool
+	interpreter                    string
+	startCode                      []string
+	code                           []string
+	varCounter                     int
+	forCounter                     int
+	funcs                          []funcInfo
+	funcCounter                    int
+	sliceAssignmentHelperRequired  bool
+	structAssignmentHelperRequired bool
+	sliceCopyHelperRequired        bool
+	stringSubscriptHelperRequired  bool
 }
 
 func New() *converter {
@@ -62,7 +72,7 @@ func (c *converter) ProgramEnd() error {
 		// $2: Assignment index
 		// $3: Assignment value
 		// $4: Default value
-		c.addHelper("slice assignment", "_sah",
+		c.addHelper("slice assignment", sliceAssignmentHelper,
 			"local _i=${2}",
 			fmt.Sprintf(`local _l=%s`, c.sliceLenString("${1}")),
 			`for ((_c=${_l};_c<${_i};_c++)); do`,
@@ -73,7 +83,7 @@ func (c *converter) ProgramEnd() error {
 	}
 
 	if c.sliceCopyHelperRequired {
-		c.addHelper("slice copy", "_sch",
+		c.addHelper("slice copy", sliceCopyHelper,
 			"local _i=0",
 			fmt.Sprintf(`local _l=%s`, c.sliceLenString("${2}")),
 			"local _n=$(eval \"echo \\${${1}}\")",
@@ -85,8 +95,17 @@ func (c *converter) ProgramEnd() error {
 		)
 	}
 
+	if c.structAssignmentHelperRequired {
+		// $1: Slice name
+		// $2: Assignment field
+		// $3: Assignment value
+		c.addHelper("struct assignment", structAssignmentHelper,
+			c.sliceAssignmentString("${1}", "${2}", "${3}", false),
+		)
+	}
+
 	if c.stringSubscriptHelperRequired {
-		c.addHelper("substring", "_ssh",
+		c.addHelper("substring", stringSubscriptHelper,
 			`_ls=$((${2}))`,
 			`_ll=$(((${3}-${2})+1))`,
 			`_ret="${1:${_ls}:${_ll}}"`,
@@ -106,7 +125,13 @@ func (c *converter) VarAssignment(name string, value string, global bool) error 
 
 func (c *converter) SliceAssignment(name string, index string, value string, defaultValue string, global bool) error {
 	c.sliceAssignmentHelperRequired = true
-	c.addLine(fmt.Sprintf(`_sah %s %s "%s" "%s"`, c.varEvaluationString(name, global), index, value, defaultValue))
+	c.callFunc(sliceAssignmentHelper, c.varEvaluationString(name, global), index, value, defaultValue)
+	return nil
+}
+
+func (c *converter) StructAssignment(name string, field string, value string, global bool) error {
+	c.structAssignmentHelperRequired = true
+	c.callFunc(structAssignmentHelper, c.varEvaluationString(name, global), field, value)
 	return nil
 }
 
@@ -418,7 +443,7 @@ func (c *converter) StructDefinition(values []transpiler.StructValue, valueUsed 
 func (c *converter) StringSubscript(value string, startIndex string, endIndex string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
-	c.addLine(fmt.Sprintf(`_ssh "%s" %s %s`, value, startIndex, endIndex))
+	c.callFunc(stringSubscriptHelper, value, startIndex, endIndex)
 	c.VarAssignment(helper, c.varEvaluationString("_ret", true), false) // https://www.baeldung.com/linux/bash-substring#1-using-thecut-command
 	c.stringSubscriptHelperRequired = true
 
@@ -518,7 +543,7 @@ func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 func (c *converter) Copy(destination string, source string, valueUsed bool, global bool) (string, error) {
 	destination = c.varName(destination, global)
 
-	c.addLine(fmt.Sprintf("_sch %s %s", destination, source))
+	c.callFunc(sliceCopyHelper, destination, source)
 	c.sliceAssignmentHelperRequired = true
 	c.sliceCopyHelperRequired = true
 
@@ -546,6 +571,10 @@ func (c *converter) ReadFile(path string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	c.VarAssignment(helper, fmt.Sprintf("$(cat \"%s\")", path), false)
 	return c.VarEvaluation(helper, valueUsed, false)
+}
+
+func (c *converter) callFunc(name string, args ...string) {
+	c.addLine(fmt.Sprintf(`%s "%s"`, name, strings.Join(args, `" "`)))
 }
 
 func (c *converter) mustCurrentForVar() string {

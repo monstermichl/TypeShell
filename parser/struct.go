@@ -1,5 +1,7 @@
 package parser
 
+import "fmt"
+
 type StructField struct {
 	name      string
 	valueType ValueType
@@ -25,17 +27,18 @@ func (d StructDeclaration) Fields() []StructField {
 	return d.fields
 }
 
+func (d StructDeclaration) FindField(name string) (StructField, error) {
+	for _, field := range d.Fields() {
+		if field.Name() == name {
+			return field, nil
+		}
+	}
+	return StructField{}, fmt.Errorf(`struct field %s could not be found`, name)
+}
+
 type StructValue struct {
-	name  string
+	StructField
 	value Expression
-}
-
-func (v StructValue) Name() string {
-	return v.name
-}
-
-func (v StructValue) ValueType() ValueType {
-	return v.Value().ValueType()
 }
 
 func (v StructValue) Value() Expression {
@@ -61,4 +64,17 @@ func (d StructDefinition) IsConstant() bool {
 
 func (d StructDefinition) Values() []StructValue {
 	return d.values
+}
+
+type StructAssignment struct {
+	Variable
+	value StructValue
+}
+
+func (a StructAssignment) StatementType() StatementType {
+	return STATEMENT_TYPE_STRUCT_ASSIGNMENT
+}
+
+func (a StructAssignment) Value() StructValue {
+	return a.value
 }

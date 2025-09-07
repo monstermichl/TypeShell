@@ -13,17 +13,18 @@ import (
 type helperName = string
 
 const (
-	appCallHelper         helperName = "_ach"  // App call
-	fileReadHelper        helperName = "_frh"  // File write
-	fileWriteHelper       helperName = "_fwh"  // File read
-	sliceLenSetHelper     helperName = "_sls"  // Slice length set
-	sliceLenGetHelper     helperName = "_slg"  // Slice length get
-	sliceAssignmentHelper helperName = "_sah"  // Slice assignment
-	sliceCopyHelper       helperName = "_sch"  // Slice copy
-	stringSubscriptHelper helperName = "_stsh" // String subscript
-	stringLengthHelper    helperName = "_stlh" // String length
-	stringEscapeHelper    helperName = "_seh"  // String escape
-	echoHelper            helperName = "_ech"  // Echo
+	appCallHelper          helperName = "_ach"  // App call
+	fileReadHelper         helperName = "_frh"  // File write
+	fileWriteHelper        helperName = "_fwh"  // File read
+	sliceLenSetHelper      helperName = "_sls"  // Slice length set
+	sliceLenGetHelper      helperName = "_slg"  // Slice length get
+	sliceAssignmentHelper  helperName = "_sah"  // Slice assignment
+	sliceCopyHelper        helperName = "_sch"  // Slice copy
+	structAssignmentHelper helperName = "_stah" // Struct assignment
+	stringSubscriptHelper  helperName = "_stsh" // String subscript
+	stringLengthHelper     helperName = "_stlh" // String length
+	stringEscapeHelper     helperName = "_seh"  // String escape
+	echoHelper             helperName = "_ech"  // Echo
 )
 
 type funcInfo struct {
@@ -39,31 +40,32 @@ type ifInfo struct {
 }
 
 type converter struct {
-	startCode                     []string
-	helperCode                    []string
-	globalCode                    []string
-	previousFunctionName          string
-	functionsCode                 [][]string
-	endCode                       []string
-	varCounter                    int
-	ifCounter                     int
-	forCounter                    int
-	endLabels                     []string
-	funcs                         []funcInfo
-	funcCounter                   int
-	fors                          []forInfo
-	ifs                           []ifInfo
-	lfSet                         bool
-	appCallHelperRequired         bool
-	readHelperRequired            bool
-	sliceAssignmentHelperRequired bool
-	sliceCopyHelperRequired       bool
-	sliceLenSetHelperRequired     bool
-	sliceLenGetHelperRequired     bool
-	stringSubscriptHelperRequired bool
-	stringLenHelperRequired       bool
-	fileWriteHelperRequired       bool
-	echoHelperRequired            bool
+	startCode                      []string
+	helperCode                     []string
+	globalCode                     []string
+	previousFunctionName           string
+	functionsCode                  [][]string
+	endCode                        []string
+	varCounter                     int
+	ifCounter                      int
+	forCounter                     int
+	endLabels                      []string
+	funcs                          []funcInfo
+	funcCounter                    int
+	fors                           []forInfo
+	ifs                            []ifInfo
+	lfSet                          bool
+	appCallHelperRequired          bool
+	readHelperRequired             bool
+	sliceAssignmentHelperRequired  bool
+	structAssignmentHelperRequired bool
+	sliceCopyHelperRequired        bool
+	sliceLenSetHelperRequired      bool
+	sliceLenGetHelperRequired      bool
+	stringSubscriptHelperRequired  bool
+	stringLenHelperRequired        bool
+	fileWriteHelperRequired        bool
+	echoHelperRequired             bool
 }
 
 func New() *converter {
@@ -184,7 +186,6 @@ func (c *converter) ProgramEnd() error {
 	if c.sliceAssignmentHelperRequired {
 		c.sliceLenGetHelperRequired = true
 		c.sliceLenSetHelperRequired = true
-		c.sliceAssignmentHelperRequired = true
 
 		// %1: Slice name
 		// %2: Assigned index
@@ -215,6 +216,15 @@ func (c *converter) ProgramEnd() error {
 	if c.sliceLenGetHelperRequired {
 		c.addHelper("slice length get", sliceLenGetHelper,
 			`set "_len=!%1_len!"`,
+		)
+	}
+
+	if c.structAssignmentHelperRequired {
+		// %1: Slice name
+		// %2: Assigned field
+		// arg0: Assigned value
+		c.addHelper("struct assignment", structAssignmentHelper,
+			c.sliceAssignmentString("!%1!", "%2", fmt.Sprintf("!%s!", funcArgVar(0)), false),
 		)
 	}
 
@@ -260,6 +270,12 @@ func (c *converter) VarAssignment(name string, value string, global bool) error 
 func (c *converter) SliceAssignment(name string, index string, value string, defaultValue string, global bool) error {
 	c.sliceAssignmentHelperRequired = true
 	c.callFunc(sliceAssignmentHelper, []string{value}, c.varName(name, global), index, defaultValue)
+	return nil
+}
+
+func (c *converter) StructAssignment(name string, field string, value string, global bool) error {
+	c.structAssignmentHelperRequired = true
+	c.callFunc(structAssignmentHelper, []string{value}, c.varName(name, global), field)
 	return nil
 }
 

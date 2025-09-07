@@ -67,6 +67,7 @@ const (
 	STATEMENT_TYPE_TYPE_DEFINITION                 StatementType = "type definition"
 	STATEMENT_TYPE_STRUCT_DECLARATION              StatementType = "struct declaration"
 	STATEMENT_TYPE_STRUCT_DEFINITION               StatementType = "struct definition"
+	STATEMENT_TYPE_STRUCT_ASSIGNMENT               StatementType = "struct assignment"
 	STATEMENT_TYPE_BOOL_LITERAL                    StatementType = "boolean"
 	STATEMENT_TYPE_INT_LITERAL                     StatementType = "integer"
 	STATEMENT_TYPE_STRING_LITERAL                  StatementType = "string"

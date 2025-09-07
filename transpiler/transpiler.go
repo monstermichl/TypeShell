@@ -493,6 +493,20 @@ func (t *transpiler) evaluateSliceAssignment(assignment parser.SliceAssignment) 
 	return t.converter.SliceAssignment(assignment.LayerName(), indexResult.firstValue(), valueResult.firstValue(), defaultValue, assignment.Global())
 }
 
+func (t *transpiler) evaluateStructAssignment(assignment parser.StructAssignment) error {
+	value := assignment.Value()
+	valueResult, err := t.evaluateExpression(value.Value(), true)
+
+	if err != nil {
+		return err
+	}
+
+	if err != nil {
+		return err
+	}
+	return t.converter.StructAssignment(assignment.LayerName(), value.Name(), valueResult.firstValue(), assignment.Global())
+}
+
 func (t *transpiler) evaluateConstEvaluation(evaluation parser.ConstEvaluation, valueUsed bool) (expressionResult, error) {
 	// Map const evaluation to var evaluation since constant evaluation works the same.
 	varEvaluation := parser.NewVariableEvaluation(evaluation.LayerName(), evaluation.ValueType(), evaluation.Layer(), evaluation.Public())
@@ -843,6 +857,8 @@ func (t *transpiler) evaluate(statement parser.Statement) error {
 		return t.evaluateVarAssignmentCallAssignment(statement.(parser.VariableAssignmentCallAssignment))
 	case parser.STATEMENT_TYPE_SLICE_ASSIGNMENT:
 		return t.evaluateSliceAssignment(statement.(parser.SliceAssignment))
+	case parser.STATEMENT_TYPE_STRUCT_ASSIGNMENT:
+		return t.evaluateStructAssignment(statement.(parser.StructAssignment))
 	case parser.STATEMENT_TYPE_FUNCTION_DEFINITION:
 		return t.evaluateFunctionDefinition(statement.(parser.FunctionDefinition))
 	case parser.STATEMENT_TYPE_RETURN:
