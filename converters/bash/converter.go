@@ -376,9 +376,7 @@ func (c *converter) VarEvaluation(name string, valueUsed bool, global bool) (str
 }
 
 func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
-	c.addLine(fmt.Sprintf(`_dvc=$((%s+1))`, c.varEvaluationString("_dvc", true))) // Dynamic variable counter.
-	helper := c.nextHelperVar()
-	c.VarAssignment(helper, fmt.Sprintf(`_dv%s`, c.varEvaluationString("_dvc", true)), false)
+	helper := c.nextDynamicHelperVar()
 
 	if len(values) > 0 {
 		vals := ""
@@ -406,6 +404,15 @@ func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 	c.VarAssignment(helper, c.sliceLenString(name), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
+}
+
+func (c *converter) StructDefinition(values []transpiler.StructValue, valueUsed bool) (string, error) {
+	helper := c.nextDynamicHelperVar()
+
+	for _, value := range values {
+		c.addLine(c.structAssignmentString(c.varEvaluationString(helper, false), value.Name(), value.Value(), false))
+	}
+	return c.varEvaluationString(helper, false), nil
 }
 
 func (c *converter) StringSubscript(value string, startIndex string, endIndex string, valueUsed bool) (string, error) {
@@ -575,6 +582,10 @@ func (c *converter) sliceAssignmentString(name string, index string, value strin
 	return fmt.Sprintf(`eval "%s[%s]=\"%s\""`, name, index, value)
 }
 
+func (c *converter) structAssignmentString(name string, field string, value string, global bool) string {
+	return fmt.Sprintf(`eval "%s_%s=\"%s\""`, name, field, value)
+}
+
 func (c *converter) sliceEvaluationString(name string, index string) string {
 	return fmt.Sprintf(`$(eval "echo \${%s[%s]}")`, name, index)
 }
@@ -615,4 +626,12 @@ func (c *converter) nextHelperVar() string {
 	c.varCounter++
 
 	return helperVar
+}
+
+func (c *converter) nextDynamicHelperVar() string {
+	c.addLine(fmt.Sprintf(`_dvc=$((%s+1))`, c.varEvaluationString("_dvc", true))) // Dynamic variable counter.
+	helper := c.nextHelperVar()
+	c.VarAssignment(helper, fmt.Sprintf(`_dv%s`, c.varEvaluationString("_dvc", true)), false)
+
+	return helper
 }

@@ -427,9 +427,22 @@ func defaultVarValue(valueType ValueType, ctx context) (Expression, error) {
 				structDeclaration, exists := ctx.findStruct(dataType)
 
 				if exists {
+					structValues := []StructValue{}
+
+					for _, field := range structDeclaration.Fields() {
+						defaultValue, err := defaultVarValue(field.ValueType(), ctx)
+
+						if err != nil {
+							return nil, err
+						}
+						structValues = append(structValues, StructValue{
+							name:  field.Name(),
+							value: defaultValue,
+						})
+					}
 					return StructDefinition{
 						valueType: valueType,
-						fields:    slices.Clone(structDeclaration.Fields()),
+						values:    structValues,
 					}, nil
 				}
 			}

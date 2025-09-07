@@ -579,9 +579,7 @@ func (c *converter) VarEvaluation(name string, valueUsed bool, global bool) (str
 }
 
 func (c *converter) SliceInstantiation(values []string, valueUsed bool) (string, error) {
-	c.addLine(`set /A "_dvc=!_dvc!+1"`) // Dynamic variable counter.
-	helper := c.nextHelperVar()
-	c.VarAssignment(helper, "_dv!_dvc!", false)
+	helper := c.nextDynamicHelperVar()
 
 	c.sliceAssignmentHelperRequired = true
 	c.callFunc(sliceLenSetHelper, []string{}, c.varEvaluationString(helper, false), strconv.Itoa(len(values)))
@@ -627,6 +625,15 @@ func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 	c.VarAssignment(helper, c.varEvaluationString("_len", true), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
+}
+
+func (c *converter) StructDefinition(values []transpiler.StructValue, valueUsed bool) (string, error) {
+	helper := c.nextDynamicHelperVar()
+
+	for _, value := range values {
+		c.addLine(c.structAssignmentString(c.varEvaluationString(helper, false), value.Name(), value.Value(), false))
+	}
+	return c.varEvaluationString(helper, false), nil
 }
 
 func (c *converter) StringSubscript(value string, startIndex string, endIndex string, valueUsed bool) (string, error) {
@@ -891,9 +898,20 @@ func (c *converter) nextHelperVar() string {
 	return helperVar
 }
 
+func (c *converter) nextDynamicHelperVar() string {
+	c.addLine(`set /A "_dvc=!_dvc!+1"`) // Dynamic variable counter.
+	helper := c.nextHelperVar()
+	c.VarAssignment(helper, "_dv!_dvc!", false)
+
+	return helper
+}
+
 func (c *converter) sliceAssignmentString(name string, index string, value string, global bool) string {
-	// TODO: Is global flag even required here? Because value is already passed to function.
 	return fmt.Sprintf(`set "%s_%s=%s"`, name, index, value)
+}
+
+func (c *converter) structAssignmentString(name string, field string, value string, global bool) string {
+	return fmt.Sprintf(`set "%s_%s=%s"`, name, field, value)
 }
 
 func (c *converter) addLf() {

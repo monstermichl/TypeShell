@@ -693,6 +693,28 @@ func (t *transpiler) evaluateSliceInstantiation(instantiation parser.SliceInstan
 	return newExpressionResult(s), nil
 }
 
+func (t *transpiler) evaluateStructDefinition(definition parser.StructDefinition, valueUsed bool) (expressionResult, error) {
+	values := []StructValue{}
+
+	for _, value := range definition.Values() {
+		result, err := t.evaluateExpression(value.Value(), true)
+
+		if err != nil {
+			return expressionResult{}, err
+		}
+		values = append(values, StructValue{
+			name:  value.Name(),
+			value: result.firstValue(),
+		})
+	}
+	s, err := t.converter.StructDefinition(values, valueUsed)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	return newExpressionResult(s), nil
+}
+
 func (t *transpiler) evaluateInput(input parser.Input, valueUsed bool) (expressionResult, error) {
 	promptString := ""
 	prompt := input.Prompt()
@@ -886,6 +908,8 @@ func (t *transpiler) evaluateExpression(expression parser.Expression, valueUsed 
 		return t.evaluateAppCall(expression.(parser.AppCall), valueUsed)
 	case parser.STATEMENT_TYPE_SLICE_INSTANTIATION:
 		return t.evaluateSliceInstantiation(expression.(parser.SliceInstantiation), valueUsed)
+	case parser.STATEMENT_TYPE_STRUCT_DEFINITION:
+		return t.evaluateStructDefinition(expression.(parser.StructDefinition), valueUsed)
 	case parser.STATEMENT_TYPE_INPUT:
 		return t.evaluateInput(expression.(parser.Input), valueUsed)
 	case parser.STATEMENT_TYPE_COPY:

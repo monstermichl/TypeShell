@@ -25,9 +25,26 @@ func (d StructDeclaration) Fields() []StructField {
 	return d.fields
 }
 
+type StructValue struct {
+	name  string
+	value Expression
+}
+
+func (v StructValue) Name() string {
+	return v.name
+}
+
+func (v StructValue) ValueType() ValueType {
+	return v.Value().ValueType()
+}
+
+func (v StructValue) Value() Expression {
+	return v.value
+}
+
 type StructDefinition struct {
 	valueType ValueType
-	fields    []StructField
+	values    []StructValue
 }
 
 func (d StructDefinition) StatementType() StatementType {
@@ -40,4 +57,8 @@ func (d StructDefinition) ValueType() ValueType {
 
 func (d StructDefinition) IsConstant() bool {
 	return false
+}
+
+func (d StructDefinition) Values() []StructValue {
+	return d.values
 }

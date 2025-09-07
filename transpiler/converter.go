@@ -46,6 +46,19 @@ func (rv ReturnValue) ValueType() parser.ValueType {
 	return rv.valueType
 }
 
+type StructValue struct {
+	name  string
+	value string
+}
+
+func (sv StructValue) Name() string {
+	return sv.name
+}
+
+func (sv StructValue) Value() string {
+	return sv.value
+}
+
 type Converter interface {
 	// Common methods
 	StringToString(value string) string
@@ -88,6 +101,7 @@ type Converter interface {
 	SliceInstantiation(values []string, valueUsed bool) (string, error)
 	SliceEvaluation(name string, index string, valueUsed bool) (string, error)
 	SliceLen(name string, valueUsed bool) (string, error)
+	StructDefinition(values []StructValue, valueUsed bool) (string, error)
 	StringSubscript(value string, startIndex string, endIndex string, valueUsed bool) (string, error)
 	StringLen(value string, valueUsed bool) (string, error)
 	Group(value string, valueUsed bool) (string, error)
