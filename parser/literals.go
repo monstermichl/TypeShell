@@ -12,10 +12,6 @@ func (l BooleanLiteral) ValueType() ValueType {
 	return ValueType{dataType: DATA_TYPE_BOOLEAN}
 }
 
-func (l BooleanLiteral) IsConstant() bool {
-	return true
-}
-
 func (l BooleanLiteral) Value() bool {
 	return l.value
 }
@@ -32,10 +28,6 @@ func (l IntegerLiteral) ValueType() ValueType {
 	return ValueType{dataType: DATA_TYPE_INTEGER}
 }
 
-func (l IntegerLiteral) IsConstant() bool {
-	return true
-}
-
 func (l IntegerLiteral) Value() int {
 	return l.value
 }
@@ -50,10 +42,6 @@ func (l StringLiteral) StatementType() StatementType {
 
 func (l StringLiteral) ValueType() ValueType {
 	return ValueType{dataType: DATA_TYPE_STRING}
-}
-
-func (l StringLiteral) IsConstant() bool {
-	return true
 }
 
 func (l StringLiteral) Value() string {

@@ -12,10 +12,6 @@ func (l Len) ValueType() ValueType {
 	return NewValueType(DATA_TYPE_INTEGER, false)
 }
 
-func (l Len) IsConstant() bool {
-	return false
-}
-
 func (l Len) Expression() Expression {
 	return l.expression
 }

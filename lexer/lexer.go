@@ -42,6 +42,9 @@ const (
 	STRING_LITERAL
 	NIL_LITERAL
 
+	// Types.
+	DATA_TYPE
+
 	// Separators.
 	COMMA
 	COLON
@@ -55,8 +58,6 @@ const (
 
 	// Keywords.
 	IMPORT
-	TYPE_DECLARATION
-	CONST_DEFINITION
 	VAR_DEFINITION
 	FUNCTION_DEFINITION
 	RETURN
@@ -69,7 +70,6 @@ const (
 	RANGE
 	BREAK
 	CONTINUE
-	IOTA
 
 	// Builtin functions.
 	LEN
@@ -88,6 +88,13 @@ const (
 
 	// End of file.
 	EOF
+)
+
+const (
+	DATA_TYPE_BOOLEAN VarType = "bool"
+	DATA_TYPE_INTEGER VarType = "int"
+	DATA_TYPE_STRING  VarType = "string"
+	DATA_TYPE_ERROR   VarType = "error"
 )
 
 type Token struct {
@@ -173,8 +180,6 @@ var nonAlphabeticTokens = []tokenMapping{
 var keywords = map[string]TokenType{
 	// Common keywords.
 	"import":   IMPORT,
-	"type":     TYPE_DECLARATION,
-	"const":    CONST_DEFINITION,
 	"var":      VAR_DEFINITION,
 	"func":     FUNCTION_DEFINITION,
 	"return":   RETURN,
@@ -187,7 +192,6 @@ var keywords = map[string]TokenType{
 	"range":    RANGE,
 	"break":    BREAK,
 	"continue": CONTINUE,
-	"iota":     IOTA,
 	"nil":      NIL_LITERAL,
 
 	// Builtin functions.
@@ -200,6 +204,12 @@ var keywords = map[string]TokenType{
 	"read":   READ,
 	"write":  WRITE,
 	"panic":  PANIC,
+
+	// Types.
+	DATA_TYPE_BOOLEAN: DATA_TYPE,
+	DATA_TYPE_INTEGER: DATA_TYPE,
+	DATA_TYPE_STRING:  DATA_TYPE,
+	DATA_TYPE_ERROR:   DATA_TYPE,
 }
 
 func newToken(value string, tokenType TokenType, row int, column int) Token {

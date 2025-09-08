@@ -12,10 +12,6 @@ func (e Group) ValueType() ValueType {
 	return e.Child().ValueType()
 }
 
-func (e Group) IsConstant() bool {
-	return e.Child().IsConstant()
-}
-
 func (e Group) Child() Expression {
 	return e.child
 }

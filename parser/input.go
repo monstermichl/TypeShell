@@ -12,10 +12,6 @@ func (i Input) ValueType() ValueType {
 	return ValueType{dataType: DATA_TYPE_STRING}
 }
 
-func (i Input) IsConstant() bool {
-	return false
-}
-
 func (i Input) Prompt() Expression {
 	return i.prompt
 }

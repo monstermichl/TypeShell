@@ -14,10 +14,6 @@ func (s StringSubscript) ValueType() ValueType {
 	return NewValueType(DATA_TYPE_STRING, false)
 }
 
-func (s StringSubscript) IsConstant() bool {
-	return false
-}
-
 func (s StringSubscript) Value() Expression {
 	return s.value
 }

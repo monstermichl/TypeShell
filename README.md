@@ -30,44 +30,20 @@ Supported variable types are *bool*, *int*, *string* and *error*.
 ```golang
 // Variable definition with default value.
 var a int
-var b, c int
+var a, b int
 ```
 
 ```golang
 // Variable definition with assigned value.
 var a int = 5
-var b, c int = divisionWithRemainder(5, 2)
-```
-
-```golang
-// Variable definition via grouping.
-var (
-    a = 5
-    b, c int = divisionWithRemainder(5, 2)
-)
+var a, b int = divisionWithRemainder(5, 2)
 ```
 
 ```golang
 // Variable definition short form.
 a := 5
-b, c := 5, 6
-d, e := divisionWithRemainder(5, 2)
-```
-
-### Constants
-```golang
-// Constant definition.
-const a = 0
-const b, c = 1, 2
-```
-
-```golang
-// Constant definition via grouping.
-const (
-    a = -1
-    b = iota
-    c
-)
+a, b := 5, 6
+a, b := divisionWithRemainder(5, 2)
 ```
 
 ### Control flow
@@ -218,25 +194,6 @@ import (
 )
 
 print(strings.Contains("Hello World", "World")) // Prints 1.
-```
-
-### Type declarations
-TypeShell supports the declaration of types. However, types which result in slices are not supported yet.
-
-```golang
-// Define a type.
-type myType int
-
-var a myType
-a = myType(24)
-```
-
-```golang
-// Define an alias.
-type myType = int
-
-var a myType
-a = 24
 ```
 
 ### Builtin

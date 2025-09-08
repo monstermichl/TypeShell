@@ -12,10 +12,6 @@ func (e Exists) ValueType() ValueType {
 	return NewValueType(DATA_TYPE_BOOLEAN, false)
 }
 
-func (e Exists) IsConstant() bool {
-	return false
-}
-
 func (e Exists) Path() Expression {
 	return e.path
 }
