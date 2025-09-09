@@ -2596,6 +2596,48 @@ func (p *Parser) evaluateTypeDefinition(ctx context) (Expression, error) {
 	}, nil
 }
 
+func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expression, error) {
+	identifierToken := p.eat() // Eat identifier token.
+
+	if identifierToken.Type() != lexer.IDENTIFIER {
+		return nil, p.expectedIdentifierError(identifierToken)
+	}
+	name := identifierToken.Value()
+	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
+
+	if !exists {
+		return nil, p.variableNotDefinedError(name, identifierToken)
+	}
+	dotToken := p.eat()
+
+	if dotToken.Type() != lexer.DOT {
+		return nil, p.expectedError(`"."`, dotToken)
+	}
+	fieldToken := p.eat()
+
+	if fieldToken.Type() != lexer.IDENTIFIER {
+		return nil, p.expectedError("field name", fieldToken)
+	}
+	structType := namedValue.ValueType().DataType()
+	structDeclararion, exists := ctx.findStruct(structType)
+
+	if !exists {
+		return nil, p.atError(fmt.Sprintf("no struct declaration found for %s", structType), identifierToken)
+	}
+
+	// Check field.
+	fieldName := fieldToken.Value()
+	foundField, err := structDeclararion.FindField(fieldName)
+
+	if err != nil {
+		return nil, p.atError(err.Error(), fieldToken)
+	}
+	return StructEvaluation{
+		Variable: namedValue.(Variable),
+		field: foundField,
+	}, nil
+}
+
 func (p *Parser) evaluateNamedValueEvaluation(ctx context) (Expression, error) {
 	identifierToken := p.eat() // Eat identifier token.
 
@@ -2617,6 +2659,27 @@ func (p *Parser) evaluateNamedValueEvaluation(ctx context) (Expression, error) {
 	return VariableEvaluation{
 		Variable: namedValue.(Variable),
 	}, nil
+}
+
+func (p *Parser) evaluateImportAlias(ctx context) (string, lexer.Token, error) {
+	nextToken := p.peek()
+
+	// If next token is an identifier, try to find an import for it.
+	if nextToken.Type() == lexer.IDENTIFIER {
+		alias := nextToken.Value()
+		_, exists := ctx.findImport(alias)
+
+		if exists {
+			p.eat()
+			nextToken = p.eat() // Eat dot token.
+
+			if nextToken.Type() != lexer.DOT {
+				return "", nextToken, p.expectedError(`"."`, nextToken)
+			}
+			return alias, p.peek(), nil
+		}
+	}
+	return "", nextToken, nil
 }
 
 func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
@@ -2715,24 +2778,28 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 
 	// Handle identifiers.
 	case lexer.IDENTIFIER:
+		importAlias, _, errTemp := p.evaluateImportAlias(ctx)
+		err = errTemp
+
+		if err != nil {
+			return nil, err
+		}
 		nextToken := p.peekAt(1)
 
-		// If the current token is an identifier and the next is an opening
-		// round bracket or a dot, it's a function call if the next is an
-		// opening square bracket, it's a slice evaluation, otherwise it's
-		// a variable evaluation.
 		switch nextToken.Type() {
-		case lexer.OPENING_ROUND_BRACKET, lexer.DOT:
+		case lexer.OPENING_ROUND_BRACKET:
 			// If a type exists with the provided name, it's a type-cast/-instantiation.
 			_, exists := ctx.findType(value, false)
 
 			if exists {
 				expr, err = p.evaluateTypeDefinition(ctx)
 			} else {
-				expr, err = p.evaluateFunctionCall(ctx)
+				expr, err = p.evaluateFunctionCall(importAlias, ctx)
 			}
 		case lexer.OPENING_SQUARE_BRACKET:
 			expr, err = p.evaluateSubscript(ctx)
+		case lexer.DOT:
+			expr, err = p.evaluateStructEvaluation(importAlias, ctx)
 		default:
 			expr, err = p.evaluateNamedValueEvaluation(ctx)
 		}
@@ -3076,17 +3143,8 @@ func (p *Parser) evaluateArguments(typeName string, name string, params []Variab
 	return args, nil
 }
 
-func (p *Parser) evaluateFunctionCall(ctx context) (Call, error) {
+func (p *Parser) evaluateFunctionCall(importAlias string, ctx context) (Call, error) {
 	nextToken := p.eat()
-	dotToken := p.peek()
-	alias := ""
-
-	// If next token is a dot, it's an include-function call.
-	if dotToken.Type() == lexer.DOT {
-		p.eat()
-		alias = nextToken.Value()
-		nextToken = p.eat()
-	}
 
 	if nextToken.Type() != lexer.IDENTIFIER {
 		return nil, p.expectedError("function identifier", nextToken)
@@ -3096,9 +3154,9 @@ func (p *Parser) evaluateFunctionCall(ctx context) (Call, error) {
 	dotedName := name
 
 	// If it's an include-function call, use provided alias.
-	if len(alias) > 0 {
-		prefix = alias
-		dotedName = fmt.Sprintf("%s.%s", alias, name)
+	if len(importAlias) > 0 {
+		prefix = importAlias
+		dotedName = fmt.Sprintf("%s.%s", importAlias, name)
 	}
 
 	// Make sure function has been defined.

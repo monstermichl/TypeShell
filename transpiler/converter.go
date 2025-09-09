@@ -103,6 +103,7 @@ type Converter interface {
 	SliceEvaluation(name string, index string, valueUsed bool) (string, error)
 	SliceLen(name string, valueUsed bool) (string, error)
 	StructDefinition(values []StructValue, valueUsed bool) (string, error)
+	StructEvaluation(name string, field string, valueUsed bool) (string, error)
 	StringSubscript(value string, startIndex string, endIndex string, valueUsed bool) (string, error)
 	StringLen(value string, valueUsed bool) (string, error)
 	Group(value string, valueUsed bool) (string, error)

@@ -440,6 +440,16 @@ func (c *converter) StructDefinition(values []transpiler.StructValue, valueUsed 
 	return c.varEvaluationString(helper, false), nil
 }
 
+func (c *converter) StructEvaluation(name string, field string, valueUsed bool) (string, error) {
+	helper := c.nextHelperVar()
+	c.VarAssignment(
+		helper,
+		c.structEvaluationString(name, field),
+		false,
+	)
+	return c.VarEvaluation(helper, valueUsed, false)
+}
+
 func (c *converter) StringSubscript(value string, startIndex string, endIndex string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
@@ -621,6 +631,10 @@ func (c *converter) sliceEvaluationString(name string, index string) string {
 
 func (c *converter) sliceLenString(name string) string {
 	return fmt.Sprintf(`$(eval "echo \${#%s[@]}")`, name)
+}
+
+func (c *converter) structEvaluationString(name string, field string) string {
+	return fmt.Sprintf(`$(eval "echo \${%s_%s}")`, c.varEvaluationString(name, false), field)
 }
 
 func (c *converter) ifStart(condition string, startWord string) error {

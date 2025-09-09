@@ -78,3 +78,16 @@ func (a StructAssignment) StatementType() StatementType {
 func (a StructAssignment) Value() StructValue {
 	return a.value
 }
+
+type StructEvaluation struct {
+	Variable
+	field StructField
+}
+
+func (e StructEvaluation) StatementType() StatementType {
+	return STATEMENT_TYPE_STRUCT_EVALUATION
+}
+
+func (e StructEvaluation) Field() StructField {
+	return e.field
+}

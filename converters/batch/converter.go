@@ -652,6 +652,19 @@ func (c *converter) StructDefinition(values []transpiler.StructValue, valueUsed 
 	return c.varEvaluationString(helper, false), nil
 }
 
+func (c *converter) StructEvaluation(name string, field string, valueUsed bool) (string, error) {
+	helper := c.nextHelperVar()
+
+	c.addLine(
+		fmt.Sprintf(`for /f "delims=" %%%%i in ("%s_%s") do set "%s=!%%%%i!"`,
+			c.varEvaluationString(name, false),
+			field,
+			c.varName(helper, false),
+		),
+	)
+	return c.VarEvaluation(helper, valueUsed, false)
+}
+
 func (c *converter) StringSubscript(value string, startIndex string, endIndex string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	c.stringSubscriptHelperRequired = true
