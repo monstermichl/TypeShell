@@ -96,11 +96,11 @@ func (c *converter) ProgramEnd() error {
 	}
 
 	if c.structAssignmentHelperRequired {
-		// $1: Slice name
+		// $1: Struct name
 		// $2: Assignment field
 		// $3: Assignment value
 		c.addHelper("struct assignment", structAssignmentHelper,
-			c.sliceAssignmentString("${1}", "${2}", "${3}", false),
+			c.structAssignmentString("${1}", "${2}", "${3}", false),
 		)
 	}
 
@@ -442,6 +442,7 @@ func (c *converter) StructDefinition(values []transpiler.StructValue, valueUsed 
 
 func (c *converter) StructEvaluation(name string, field string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
+
 	c.VarAssignment(
 		helper,
 		c.structEvaluationString(name, field),
