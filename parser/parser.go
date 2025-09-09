@@ -1291,7 +1291,7 @@ func (p *Parser) evaluateStructDeclaration(ctx context) (Statement, error) {
 		}
 
 		// Don't allow nested structs for now.
-		if valueType.DataType() == DATA_TYPE_STRUCT {
+		if ctx.isStruct(valueType.DataType()) {
 			return nil, p.atError("nested structs are not allowed", valueTypeToken)
 		}
 
