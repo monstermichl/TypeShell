@@ -2634,7 +2634,7 @@ func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expr
 	}
 	return StructEvaluation{
 		Variable: namedValue.(Variable),
-		field: foundField,
+		field:    foundField,
 	}, nil
 }
 
@@ -3108,7 +3108,7 @@ func (p *Parser) evaluateArguments(typeName string, name string, params []Variab
 			lastArgType := expr.ValueType()
 
 			if !lastParamType.Equals(lastArgType) {
-				return nil, p.expectedError(fmt.Sprintf("parameter of type %s (%s) but got %s", lastParamType.String(), param.Name(), lastArgType.String()), argToken)
+				return nil, p.expectedError(fmt.Sprintf("type of parameter %s is %s but got %s", param.Name(), lastParamType.String(), lastArgType.String()), argToken)
 			}
 		}
 		nextToken = p.peek()

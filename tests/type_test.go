@@ -151,7 +151,7 @@ func testPassBaseTypeToFunctionFail(t *testing.T, transpilerFunc transpilerFunc)
 		}
 		test("test")
 	`, func(output string, err error) {
-		require.EqualError(t, shortenError(err), "expected parameter of type myType (param) but got string")
+		require.EqualError(t, shortenError(err), "expected type of parameter param is myType but got string")
 	})
 }
 
