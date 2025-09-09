@@ -33,7 +33,7 @@ func (d StructDeclaration) FindField(name string) (StructField, error) {
 			return field, nil
 		}
 	}
-	return StructField{}, fmt.Errorf(`struct field %s could not be found`, name)
+	return StructField{}, fmt.Errorf(`struct field %s doesn't exist`, name)
 }
 
 type StructValue struct {

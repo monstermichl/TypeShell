@@ -3482,7 +3482,7 @@ func (p *Parser) evaluateStructAssignment(ctx context) (Statement, error) {
 	baseTypeDefinition, exists := ctx.findType(namedValueValueType.DataType(), false)
 
 	if !exists {
-		return nil, p.atError(fmt.Sprintf(`type of %s could not be found`, name), nameToken)
+		return nil, p.atError(fmt.Sprintf(`type of %s not be found`, name), nameToken)
 	}
 	baseValueType := baseTypeDefinition.valueType
 
@@ -3494,7 +3494,7 @@ func (p *Parser) evaluateStructAssignment(ctx context) (Statement, error) {
 	structDeclaration, exists := ctx.findStruct(baseTypeDefinition.name)
 
 	if !exists {
-		return nil, p.atError(fmt.Sprintf(`declaration of struct %s could not be found`, name), nameToken)
+		return nil, p.atError(fmt.Sprintf(`declaration of struct %s not be found`, name), nameToken)
 	}
 	nextToken := p.eat()
 
