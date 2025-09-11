@@ -464,8 +464,8 @@ func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator,
 		return notAllowedError()
 	}
 
-	switch valueType.DataType() {
-	case parser.DATA_TYPE_INTEGER:
+	switch valueType.Type().ElementaryType().Kind() {
+	case parser.TypeKindInt:
 		switch operator {
 		case parser.BINARY_OPERATOR_MULTIPLICATION,
 			parser.BINARY_OPERATOR_DIVISION,
@@ -478,7 +478,7 @@ func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator,
 			return notAllowedError()
 		}
 		c.addLine(fmt.Sprintf(`set /A "%s=%s%s%s"`, c.varName(helper, false), left, operator, right))
-	case parser.DATA_TYPE_STRING:
+	case parser.TypeKindString:
 		switch operator {
 		case parser.BINARY_OPERATOR_ADDITION:
 			c.VarAssignment(helper, fmt.Sprintf("%s%s", left, right), false)
@@ -499,15 +499,15 @@ func (c *converter) Comparison(left string, operator parser.CompareOperator, rig
 	quote := ""
 
 	if !valueType.IsSlice() {
-		switch valueType.DataType() {
-		case parser.DATA_TYPE_BOOLEAN:
+		switch valueType.Type().ElementaryType().Kind() {
+		case parser.TypeKindBool:
 			switch operator {
 			case parser.COMPARE_OPERATOR_EQUAL:
 				operatorString = EQUAL_OPERATOR
 			case parser.COMPARE_OPERATOR_NOT_EQUAL:
 				operatorString = NOT_EQUAL_OPERATOR
 			}
-		case parser.DATA_TYPE_INTEGER:
+		case parser.TypeKindInt:
 			switch operator {
 			case parser.COMPARE_OPERATOR_EQUAL:
 				operatorString = EQUAL_OPERATOR
@@ -522,7 +522,7 @@ func (c *converter) Comparison(left string, operator parser.CompareOperator, rig
 			case parser.COMPARE_OPERATOR_LESS_OR_EQUAL:
 				operatorString = "leq"
 			}
-		case parser.DATA_TYPE_STRING:
+		case parser.TypeKindString:
 			switch operator {
 			case parser.COMPARE_OPERATOR_EQUAL:
 				operatorString = EQUAL_OPERATOR

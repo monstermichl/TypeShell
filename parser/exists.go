@@ -9,7 +9,7 @@ func (e Exists) StatementType() StatementType {
 }
 
 func (e Exists) ValueType() ValueType {
-	return NewValueType(DATA_TYPE_BOOLEAN, false)
+	return NewValueType(TypeBool{}, false)
 }
 
 func (e Exists) IsConstant() bool {

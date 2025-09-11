@@ -11,7 +11,7 @@ func (s StringSubscript) StatementType() StatementType {
 }
 
 func (s StringSubscript) ValueType() ValueType {
-	return NewValueType(DATA_TYPE_STRING, false)
+	return NewValueType(TypeString{}, false)
 }
 
 func (s StringSubscript) IsConstant() bool {

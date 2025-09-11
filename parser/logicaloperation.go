@@ -11,7 +11,7 @@ func (l LogicalOperation) StatementType() StatementType {
 }
 
 func (l LogicalOperation) ValueType() ValueType {
-	return ValueType{dataType: DATA_TYPE_BOOLEAN}
+	return NewValueType(TypeBool{}, false)
 }
 
 func (l LogicalOperation) IsConstant() bool {

@@ -1,8 +1,8 @@
 package parser
 
 type SliceInstantiation struct {
-	dataType DataType
-	values   []Expression
+	t      Type
+	values []Expression
 }
 
 func (s SliceInstantiation) StatementType() StatementType {
@@ -10,7 +10,7 @@ func (s SliceInstantiation) StatementType() StatementType {
 }
 
 func (s SliceInstantiation) ValueType() ValueType {
-	return ValueType{dataType: s.dataType, isSlice: true}
+	return ValueType{t: s.t, isSlice: true}
 }
 
 func (s SliceInstantiation) IsConstant() bool {
@@ -22,9 +22,9 @@ func (s SliceInstantiation) Values() []Expression {
 }
 
 type SliceEvaluation struct {
-	value    Expression
-	index    Expression
-	dataType DataType
+	value Expression
+	index Expression
+	t     Type
 }
 
 func (s SliceEvaluation) StatementType() StatementType {
@@ -40,7 +40,7 @@ func (s SliceEvaluation) Index() Expression {
 }
 
 func (s SliceEvaluation) ValueType() ValueType {
-	return ValueType{dataType: s.dataType}
+	return ValueType{t: s.t}
 }
 
 func (s SliceEvaluation) IsConstant() bool {

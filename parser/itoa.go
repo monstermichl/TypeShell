@@ -9,7 +9,7 @@ func (e Itoa) StatementType() StatementType {
 }
 
 func (e Itoa) ValueType() ValueType {
-	return NewValueType(DATA_TYPE_STRING, false)
+	return NewValueType(TypeString{}, false)
 }
 
 func (o Itoa) IsConstant() bool {

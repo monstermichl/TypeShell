@@ -9,7 +9,7 @@ func (i Input) StatementType() StatementType {
 }
 
 func (i Input) ValueType() ValueType {
-	return ValueType{dataType: DATA_TYPE_STRING}
+	return NewValueType(TypeString{}, false)
 }
 
 func (i Input) IsConstant() bool {

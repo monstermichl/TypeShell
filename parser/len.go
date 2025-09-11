@@ -9,7 +9,7 @@ func (l Len) StatementType() StatementType {
 }
 
 func (l Len) ValueType() ValueType {
-	return NewValueType(DATA_TYPE_INTEGER, false)
+	return NewValueType(TypeInt{}, false)
 }
 
 func (l Len) IsConstant() bool {

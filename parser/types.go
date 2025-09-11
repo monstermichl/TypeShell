@@ -6,26 +6,178 @@ import (
 
 type StatementType string
 type AssignmentType string
-type DataType = string
+type TypeKind string
 type CompareOperator = string
 type UnaryOperator = string
 type BinaryOperator = string
 type LogicalOperator = string
 
-type ValueType struct {
-	dataType DataType
-	isSlice  bool
+const (
+	TypeKindUnknown  TypeKind = "unknown"
+	TypeKindBool     TypeKind = "bool"
+	TypeKindInt      TypeKind = "int"
+	TypeKindString   TypeKind = "string"
+	TypeKindError    TypeKind = "error"
+	TypeKindCustom   TypeKind = "custom"
+	TypeKindStruct   TypeKind = "struct"
+	TypeKindMultiple TypeKind = "multiple"
+)
+
+type Type interface {
+	Name() string
+	IsAlias() bool
+	Kind() TypeKind
+	Base() Type
+	Equals(compareType Type) bool
+	ElementaryType() Type
+	AliasedType() Type
 }
 
-func NewValueType(dataType DataType, isSlice bool) ValueType {
+func equals(t1 Type, t2 Type) bool {
+	base1 := t1.AliasedType()
+	base2 := t2.AliasedType()
+
+	return base1.Name() == base2.Name() && base1.Kind() == base2.Kind()
+}
+
+func elementaryType(t Type) Type {
+	base := t.Base()
+
+	if base != nil {
+		return base.ElementaryType()
+	}
+	return t
+}
+
+func aliasedType(t Type) Type {
+	base := t.Base()
+
+	if t.IsAlias() && base != nil {
+		return base.AliasedType()
+	}
+	return t
+}
+
+type TypeUnknown struct{}
+
+func (t TypeUnknown) Name() string                 { return "unknown" }
+func (t TypeUnknown) IsAlias() bool                { return false }
+func (t TypeUnknown) Kind() TypeKind               { return TypeKindUnknown }
+func (t TypeUnknown) Base() Type                   { return nil }
+func (t TypeUnknown) Equals(compareType Type) bool { return equals(t, compareType) }
+func (t TypeUnknown) ElementaryType() Type         { return elementaryType(t) }
+func (t TypeUnknown) AliasedType() Type            { return aliasedType(t) }
+
+type TypeCustom struct {
+	name    string
+	isAlias bool
+	base    Type
+}
+
+func NewTypeCustom(name string, isAlias bool, base Type) TypeCustom {
+	return TypeCustom{
+		name,
+		isAlias,
+		base,
+	}
+}
+
+func (t TypeCustom) Name() string                 { return t.name }
+func (t TypeCustom) IsAlias() bool                { return t.isAlias }
+func (t TypeCustom) Kind() TypeKind               { return TypeKindCustom }
+func (t TypeCustom) Base() Type                   { return t.base }
+func (t TypeCustom) Equals(compareType Type) bool { return equals(t, compareType) }
+func (t TypeCustom) ElementaryType() Type         { return elementaryType(t) }
+func (t TypeCustom) AliasedType() Type            { return aliasedType(t) }
+
+type TypeBool struct{}
+
+func (t TypeBool) Name() string                 { return "bool" }
+func (t TypeBool) IsAlias() bool                { return false }
+func (t TypeBool) Kind() TypeKind               { return TypeKindBool }
+func (t TypeBool) Base() Type                   { return nil }
+func (t TypeBool) Equals(compareType Type) bool { return equals(t, compareType) }
+func (t TypeBool) ElementaryType() Type         { return elementaryType(t) }
+func (t TypeBool) AliasedType() Type            { return aliasedType(t) }
+
+type TypeInt struct{}
+
+func (t TypeInt) Name() string                 { return "int" }
+func (t TypeInt) IsAlias() bool                { return false }
+func (t TypeInt) Kind() TypeKind               { return TypeKindInt }
+func (t TypeInt) Base() Type                   { return nil }
+func (t TypeInt) Equals(compareType Type) bool { return equals(t, compareType) }
+func (t TypeInt) ElementaryType() Type         { return elementaryType(t) }
+func (t TypeInt) AliasedType() Type            { return aliasedType(t) }
+
+type TypeString struct{}
+
+func (t TypeString) Name() string                 { return "string" }
+func (t TypeString) IsAlias() bool                { return false }
+func (t TypeString) Kind() TypeKind               { return TypeKindString }
+func (t TypeString) Base() Type                   { return nil }
+func (t TypeString) Equals(compareType Type) bool { return equals(t, compareType) }
+func (t TypeString) ElementaryType() Type         { return elementaryType(t) }
+func (t TypeString) AliasedType() Type            { return aliasedType(t) }
+
+type TypeError struct{}
+
+func (t TypeError) Name() string                 { return "error" }
+func (t TypeError) IsAlias() bool                { return true }
+func (t TypeError) Kind() TypeKind               { return TypeKindError }
+func (t TypeError) Base() Type                   { return TypeString{} }
+func (t TypeError) Equals(compareType Type) bool { return equals(t, compareType) }
+func (t TypeError) ElementaryType() Type         { return elementaryType(t) }
+func (t TypeError) AliasedType() Type            { return aliasedType(t) }
+
+type TypeMultiple struct {
+	types []Type
+}
+
+func (t TypeMultiple) Name() string   { return "multiple" }
+func (t TypeMultiple) IsAlias() bool  { return false }
+func (t TypeMultiple) Kind() TypeKind { return TypeKindMultiple }
+func (t TypeMultiple) Base() Type     { return nil }
+func (t TypeMultiple) Equals(c Type) bool {
+	ct, isType := c.(TypeMultiple)
+
+	if isType {
+		typesT1 := t.Types()
+		typesT2 := ct.Types()
+
+		if len(typesT1) != len(typesT2) {
+			return false
+		}
+
+		for i, t1 := range typesT1 {
+			if !t1.Equals(typesT2[i]) {
+				return false
+			}
+		}
+	}
+	return false
+}
+func (t TypeMultiple) ElementaryType() Type { return elementaryType(t) }
+func (t TypeMultiple) AliasedType() Type    { return aliasedType(t) }
+
+func (t TypeMultiple) Types() []Type {
+	return t.types
+}
+
+type ValueType struct {
+	t       Type
+	isSlice bool
+}
+
+func NewValueType(t Type, isSlice bool) ValueType {
 	return ValueType{
-		dataType,
+		t,
 		isSlice,
 	}
 }
 
-func (vt ValueType) DataType() DataType {
-	return vt.dataType
+func (vt ValueType) Type() Type {
+	return vt.t
 }
 
 func (vt ValueType) IsSlice() bool {
@@ -33,7 +185,7 @@ func (vt ValueType) IsSlice() bool {
 }
 
 func (vt ValueType) String() string {
-	s := string(vt.dataType)
+	s := string(vt.Type().Name())
 
 	if vt.isSlice {
 		s = fmt.Sprintf("[]%s", s)
@@ -42,26 +194,27 @@ func (vt ValueType) String() string {
 }
 
 func (vt ValueType) Equals(valueType ValueType) bool {
-	return vt.DataType() == valueType.DataType() && vt.IsSlice() == valueType.IsSlice()
+	return vt.Type().Equals(valueType.Type()) && vt.IsSlice() == valueType.IsSlice()
 }
 
 func (vt ValueType) IsBool() bool {
-	return vt.isNonSliceType(DATA_TYPE_BOOLEAN)
+	return vt.isNonSliceType(TypeBool{})
 }
 
 func (vt ValueType) IsInt() bool {
-	return vt.isNonSliceType(DATA_TYPE_INTEGER)
+	return vt.isNonSliceType(TypeInt{})
 }
 
 func (vt ValueType) IsString() bool {
-	return vt.isNonSliceType(DATA_TYPE_STRING)
+	return vt.isNonSliceType(TypeString{})
 }
 
-func (vt ValueType) isNonSliceType(dataType DataType) bool {
-	return vt.DataType() == dataType && !vt.IsSlice()
+func (vt ValueType) isNonSliceType(t Type) bool {
+	return vt.Type().Equals(t) && !vt.IsSlice()
 }
 
 const (
+	STATEMENT_TYPE_NOP                             StatementType = "nop"
 	STATEMENT_TYPE_PROGRAM                         StatementType = "program"
 	STATEMENT_TYPE_TYPE_DECLARATION                StatementType = "type declaration"
 	STATEMENT_TYPE_TYPE_DEFINITION                 StatementType = "type definition"
@@ -116,16 +269,6 @@ const (
 const (
 	ASSIGNMENT_TYPE_VALUE AssignmentType = "value"
 	ASSIGNMENT_TYPE_CALL  AssignmentType = "call"
-)
-
-const (
-	DATA_TYPE_UNKNOWN  DataType = "unknown"
-	DATA_TYPE_MULTIPLE DataType = "multiple"
-	DATA_TYPE_BOOLEAN  DataType = "bool"
-	DATA_TYPE_INTEGER  DataType = "int"
-	DATA_TYPE_STRING   DataType = "string"
-	DATA_TYPE_ERROR    DataType = "error"
-	DATA_TYPE_STRUCT   DataType = "struct"
 )
 
 const (

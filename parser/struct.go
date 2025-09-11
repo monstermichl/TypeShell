@@ -16,16 +16,62 @@ func (f StructField) ValueType() ValueType {
 }
 
 type StructDeclaration struct {
+	name   string
 	fields []StructField
 }
 
-func (d StructDeclaration) StatementType() StatementType {
-	return STATEMENT_TYPE_STRUCT_DECLARATION
+func NewStructDeclaration(name string, fields []StructField) StructDeclaration {
+	return StructDeclaration{
+		name:   name,
+		fields: fields,
+	}
 }
 
 func (d StructDeclaration) Fields() []StructField {
 	return d.fields
 }
+
+func (d StructDeclaration) Name() string {
+	return d.name
+}
+
+func (d StructDeclaration) IsAlias() bool {
+	return false
+}
+
+func (d StructDeclaration) Kind() TypeKind {
+	return TypeKindStruct
+}
+
+func (d StructDeclaration) Base() Type {
+	return nil
+}
+
+func (d StructDeclaration) Equals(c Type) bool {
+	compareType, isDeclaration := c.(StructDeclaration)
+
+	if !isDeclaration {
+		return false
+	}
+	fieldsD1 := d.Fields()
+	fieldsD2 := compareType.Fields()
+
+	if len(fieldsD1) != len(fieldsD2) {
+		return false
+	}
+
+	for i, fieldD1 := range fieldsD1 {
+		fieldD2 := fieldsD2[i]
+
+		if fieldD1.Name() != fieldD2.Name() || !fieldD1.ValueType().Equals(fieldD2.ValueType()) {
+			return false
+		}
+	}
+	return true
+}
+
+func (t StructDeclaration) ElementaryType() Type { return elementaryType(t) }
+func (t StructDeclaration) AliasedType() Type    { return aliasedType(t) }
 
 func (d StructDeclaration) FindField(name string) (StructField, error) {
 	for _, field := range d.Fields() {

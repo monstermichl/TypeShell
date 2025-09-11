@@ -19,7 +19,7 @@ func (c Comparison) StatementType() StatementType {
 }
 
 func (c Comparison) ValueType() ValueType {
-	return ValueType{dataType: DATA_TYPE_BOOLEAN}
+	return NewValueType(TypeBool{}, false)
 }
 
 func (c Comparison) IsConstant() bool {

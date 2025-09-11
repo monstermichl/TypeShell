@@ -51,8 +51,7 @@ type foundTypeDefinition struct {
 
 type context struct {
 	imports     map[string]string             // Maps import aliases to file hashes.
-	types       map[string]typeDefinition     // Stores the declared types.
-	structs     map[string]StructDeclaration  // Stores the declared structs.
+	types       map[string]Type               // Stores the declared types.
 	namedValues map[string][]NamedValue       // Stores the variable/constant name to variable/constant relation.
 	functions   map[string]FunctionDefinition // Stores the function name to function relation.
 	scopeStack  []scope                       // Stores the current scopes.
@@ -63,21 +62,18 @@ type context struct {
 func newContext() context {
 	c := context{
 		imports:     map[string]string{},
-		types:       map[string]typeDefinition{},
-		structs:     map[string]StructDeclaration{},
+		types:       map[string]Type{},
 		namedValues: map[string][]NamedValue{},
 		functions:   map[string]FunctionDefinition{},
 		layer:       -1, // Init at -1 since program increases it right away.
 		iotaCounter: 0,
 	}
 
-	// Define elementary types.
-	c.addType(DATA_TYPE_BOOLEAN, NewValueType(DATA_TYPE_BOOLEAN, false), false, true)
-	c.addType(DATA_TYPE_INTEGER, NewValueType(DATA_TYPE_INTEGER, false), false, true)
-	c.addType(DATA_TYPE_STRING, NewValueType(DATA_TYPE_STRING, false), false, true)
-
-	// Define error alias.
-	c.addType(DATA_TYPE_ERROR, NewValueType(DATA_TYPE_STRING, false), true, false)
+	// Add elementary types.
+	c.addType(NewValueType(TypeBool{}, false))
+	c.addType(NewValueType(TypeInt{}, false))
+	c.addType(NewValueType(TypeString{}, false))
+	c.addType(NewValueType(TypeError{}, false))
 
 	return c
 }
@@ -143,31 +139,19 @@ func (c context) addImport(alias string, hash string) error {
 	return nil
 }
 
-func (c context) addType(typeName string, valueType ValueType, isAlias bool, isElementary bool) error {
-	_, exists := c.findType(typeName, false)
+func (c context) addType(valueType ValueType) error {
+	t := valueType.Type()
+	name := t.Name()
+	_, exists := c.findType(name)
 
 	if exists {
-		return fmt.Errorf("type %s has already been defined", typeName)
+		return fmt.Errorf("type %s has already been defined", name)
 	}
 	if valueType.IsSlice() {
 		// TODO: Add support.
-		return errors.New("slices are not allowed yet in type definitions")
+		return errors.New("slices are not allowed yet in type declarations")
 	}
-	c.types[typeName] = typeDefinition{
-		valueType,
-		isAlias,
-		isElementary,
-	}
-	return nil
-}
-
-func (c context) addStruct(structName string, structDeclaration StructDeclaration) error {
-	_, exists := c.findStruct(structName)
-
-	if exists {
-		return fmt.Errorf("struct %s has already been defined", structName)
-	}
-	c.structs[structName] = structDeclaration
+	c.types[name] = t
 	return nil
 }
 
@@ -205,35 +189,9 @@ func (c context) findImport(alias string) (string, bool) {
 	return hash, exists
 }
 
-func (c context) findType(typeName string, searchUntilElementary bool) (foundTypeDefinition, bool) {
-	var foundDefinition foundTypeDefinition
-	typeDefinition, exists := c.types[typeName]
-
-	if exists {
-		foundDefinitionTemp := foundTypeDefinition{
-			typeDefinition: typeDefinition,
-			name:           typeName,
-		}
-
-		// If the defined type is an alias, trace it down to the root.
-		if typeDefinition.isAlias || (searchUntilElementary && !typeDefinition.isElementary) {
-			foundDefinitionTemp, exists = c.findType(typeDefinition.valueType.DataType(), searchUntilElementary)
-		}
-		if exists {
-			foundDefinition = foundDefinitionTemp
-		}
-	}
-	return foundDefinition, exists
-}
-
-func (c context) findStruct(name string) (StructDeclaration, bool) {
-	structDeclaration, exists := c.structs[name]
-	return structDeclaration, exists
-}
-
-func (c context) isStruct(dataType DataType) bool {
-	_, exists := c.findStruct(dataType)
-	return exists
+func (c context) findType(typeName string) (Type, bool) {
+	t, exists := c.types[typeName]
+	return t, exists
 }
 
 func (c context) findNamedValue(name string, prefix string, global bool) (NamedValue, bool) {
@@ -268,7 +226,6 @@ func (c context) clone() context {
 	return context{
 		imports:     maps.Clone(c.imports),
 		types:       maps.Clone(c.types),
-		structs:     maps.Clone(c.structs),
 		namedValues: maps.Clone(c.namedValues), // TODO: Make sure this is appropriate cloning because each entry contains a slice.
 		functions:   maps.Clone(c.functions),
 		scopeStack:  slices.Clone(c.scopeStack),
@@ -378,10 +335,10 @@ func allowedBinaryOperators(t ValueType) []BinaryOperator {
 	operators := []BinaryOperator{}
 
 	if !t.IsSlice() {
-		switch t.DataType() {
-		case DATA_TYPE_INTEGER:
+		switch t.Type().ElementaryType().Kind() {
+		case TypeKindInt:
 			operators = []BinaryOperator{BINARY_OPERATOR_MULTIPLICATION, BINARY_OPERATOR_DIVISION, BINARY_OPERATOR_MODULO, BINARY_OPERATOR_ADDITION, BINARY_OPERATOR_SUBTRACTION}
-		case DATA_TYPE_STRING:
+		case TypeKindString:
 			operators = []BinaryOperator{BINARY_OPERATOR_ADDITION}
 		default:
 		}
@@ -394,12 +351,12 @@ func allowedCompareOperators(t ValueType) []CompareOperator {
 	operators := []CompareOperator{}
 
 	if !t.IsSlice() {
-		switch t.DataType() {
-		case DATA_TYPE_BOOLEAN:
+		switch t.Type().ElementaryType().Kind() {
+		case TypeKindBool:
 			operators = []CompareOperator{COMPARE_OPERATOR_EQUAL, COMPARE_OPERATOR_NOT_EQUAL}
-		case DATA_TYPE_INTEGER:
+		case TypeKindInt:
 			operators = []CompareOperator{COMPARE_OPERATOR_EQUAL, COMPARE_OPERATOR_NOT_EQUAL, COMPARE_OPERATOR_LESS, COMPARE_OPERATOR_LESS_OR_EQUAL, COMPARE_OPERATOR_GREATER, COMPARE_OPERATOR_GREATER_OR_EQUAL}
-		case DATA_TYPE_STRING:
+		case TypeKindString:
 			operators = []CompareOperator{COMPARE_OPERATOR_EQUAL, COMPARE_OPERATOR_NOT_EQUAL, COMPARE_OPERATOR_LESS, COMPARE_OPERATOR_LESS_OR_EQUAL, COMPARE_OPERATOR_GREATER, COMPARE_OPERATOR_GREATER_OR_EQUAL}
 		default:
 			// For other types no operations are permitted.
@@ -409,22 +366,21 @@ func allowedCompareOperators(t ValueType) []CompareOperator {
 }
 
 func defaultVarValue(valueType ValueType, ctx context) (Expression, error) {
-	dataType := valueType.DataType()
-	elementaryType, exists := ctx.findType(dataType, true)
+	foundType, exists := ctx.findType(valueType.Type().Name())
 
 	if exists {
-		elementaryDataType := elementaryType.valueType.DataType()
+		elementaryDataType := foundType.ElementaryType()
 
 		if !valueType.IsSlice() {
-			switch elementaryDataType {
-			case DATA_TYPE_BOOLEAN:
+			switch elementaryDataType.Kind() {
+			case TypeKindBool:
 				return BooleanLiteral{}, nil
-			case DATA_TYPE_INTEGER:
+			case TypeKindInt:
 				return IntegerLiteral{}, nil
-			case DATA_TYPE_STRING:
+			case TypeKindString:
 				return StringLiteral{}, nil
-			case DATA_TYPE_STRUCT:
-				structDeclaration, exists := ctx.findStruct(dataType)
+			case TypeKindStruct:
+				structDeclaration, exists := elementaryDataType.(StructDeclaration)
 
 				if exists {
 					structValues := []StructValue{}
@@ -450,7 +406,7 @@ func defaultVarValue(valueType ValueType, ctx context) (Expression, error) {
 				}
 			}
 		} else {
-			return SliceInstantiation{dataType: elementaryDataType}, nil
+			return SliceInstantiation{t: elementaryDataType}, nil
 		}
 	}
 	return nil, fmt.Errorf("no default value found for type %s", valueType.String())
@@ -552,6 +508,10 @@ func (p *Parser) notDefinedError(what string, name string, token lexer.Token) er
 
 func (p *Parser) variableNotDefinedError(variable string, token lexer.Token) error {
 	return p.notDefinedError("variable", variable, token)
+}
+
+func (p *Parser) typeNotDefinedError(t string, token lexer.Token) error {
+	return p.notDefinedError("type", t, token)
 }
 
 func (p Parser) peek() lexer.Token {
@@ -1230,7 +1190,7 @@ func (p *Parser) evaluateBlock(callback blockCallback, ctx context, scope scope)
 
 func (p *Parser) evaluateValueType(ctx context) (ValueType, error) {
 	nextToken := p.peek()
-	evaluatedType := NewValueType(DATA_TYPE_UNKNOWN, false)
+	evaluatedType := NewValueType(TypeUnknown{}, false)
 
 	// Evaluate if value type is a slice type.
 	if nextToken.Type() == lexer.OPENING_SQUARE_BRACKET {
@@ -1249,30 +1209,30 @@ func (p *Parser) evaluateValueType(ctx context) (ValueType, error) {
 		return evaluatedType, p.expectedError("data type", nextToken)
 	}
 	p.eat() // Eat data type token.
-	foundDefinition, exists := ctx.findType(nextToken.Value(), false)
+	foundDefinition, exists := ctx.findType(nextToken.Value())
 
 	if !exists {
 		return evaluatedType, p.expectedError("valid data type", nextToken)
 	}
-	evaluatedType.dataType = foundDefinition.name
+	evaluatedType.t = foundDefinition
 	return evaluatedType, nil
 }
 
-func (p *Parser) evaluateStructDeclaration(ctx context) (Statement, error) {
+func (p *Parser) evaluateStructDeclaration(name string, ctx context) (StructDeclaration, error) {
 	structToken := p.eat()
 
 	if structToken.Type() != lexer.STRUCT {
-		return nil, p.expectedKeywordError("struct", structToken)
+		return StructDeclaration{}, p.expectedKeywordError("struct", structToken)
 	}
 	nextToken := p.eat()
 
 	if nextToken.Type() != lexer.OPENING_CURLY_BRACKET {
-		return nil, p.expectedError(`"{"`, nextToken)
+		return StructDeclaration{}, p.expectedError(`"{"`, nextToken)
 	}
 	nextToken = p.eat()
 
 	if nextToken.Type() != lexer.NEWLINE {
-		return nil, p.expectedNewlineError(nextToken)
+		return StructDeclaration{}, p.expectedNewlineError(nextToken)
 	}
 	fields := []StructField{}
 
@@ -1281,18 +1241,18 @@ func (p *Parser) evaluateStructDeclaration(ctx context) (Statement, error) {
 		nameTokens, err := p.evaluateNames()
 
 		if err != nil {
-			return nil, err
+			return StructDeclaration{}, err
 		}
 		valueTypeToken := p.peek()
 		valueType, err := p.evaluateValueType(ctx)
 
 		if err != nil {
-			return nil, err
+			return StructDeclaration{}, err
 		}
 
 		// Don't allow nested structs for now.
-		if ctx.isStruct(valueType.DataType()) {
-			return nil, p.atError("nested structs are not allowed", valueTypeToken)
+		if valueType.Type().Kind() == TypeKindStruct {
+			return StructDeclaration{}, p.atError("nested structs are not allowed", valueTypeToken)
 		}
 
 		for _, nameToken := range nameTokens {
@@ -1304,7 +1264,7 @@ func (p *Parser) evaluateStructDeclaration(ctx context) (Statement, error) {
 		nextToken = p.eat()
 
 		if nextToken.Type() != lexer.NEWLINE {
-			return nil, p.expectedNewlineError(nextToken)
+			return StructDeclaration{}, p.expectedNewlineError(nextToken)
 		}
 		nextToken = p.peek()
 
@@ -1313,9 +1273,7 @@ func (p *Parser) evaluateStructDeclaration(ctx context) (Statement, error) {
 			break
 		}
 	}
-	return StructDeclaration{
-		fields,
-	}, nil
+	return NewStructDeclaration(name, fields), nil
 }
 
 func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
@@ -1340,7 +1298,6 @@ func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 	}
 	name := nameToken.Value()
 	valueTypeToken := p.peek()
-	isElementary := false
 
 	var valueType ValueType
 	var err error
@@ -1349,18 +1306,12 @@ func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 		if isAlias {
 			return nil, p.atError("struct alias is not supported", assignToken)
 		}
-		structDeclaration, err := p.evaluateStructDeclaration(ctx)
+		structDeclaration, err := p.evaluateStructDeclaration(name, ctx)
 
 		if err != nil {
 			return nil, err
 		}
-		err = ctx.addStruct(name, structDeclaration.(StructDeclaration))
-
-		if err != nil {
-			return nil, p.atError(err.Error(), nameToken)
-		}
-		valueType = NewValueType(DATA_TYPE_STRUCT, false)
-		isElementary = true
+		valueType = NewValueType(structDeclaration, false)
 	} else {
 		valueType, err = p.evaluateValueType(ctx)
 
@@ -1368,10 +1319,11 @@ func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 			return nil, err
 		}
 	}
-	err = ctx.addType(name, valueType, isAlias, isElementary)
+	customType := NewValueType(NewTypeCustom(name, isAlias, valueType.Type()), valueType.IsSlice())
+	err = ctx.addType(customType)
 
 	if err != nil {
-		return nil, p.atError(err.Error(), valueTypeToken)
+		return nil, p.atError(err.Error(), nameToken)
 	}
 	return TypeDeclaration{name}, nil
 }
@@ -1446,7 +1398,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 				return nil, err
 			}
 		}
-		specifiedType := NewValueType(DATA_TYPE_UNKNOWN, false)
+		specifiedType := NewValueType(TypeUnknown{}, false)
 		namedValues := []NamedValue{}
 		reuseIota := false
 
@@ -1470,10 +1422,10 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 				nextToken = p.peek()
 			}
 			nextTokenType := nextToken.Type()
-			dataType := specifiedType.DataType()
+			dataType := specifiedType.Type()
 
 			// If no data type has been specified and no value is being assigned, return an error.
-			if dataType == DATA_TYPE_UNKNOWN && nextTokenType != lexer.ASSIGN_OPERATOR {
+			if dataType.Kind() == TypeKindUnknown && nextTokenType != lexer.ASSIGN_OPERATOR {
 				// If iota has already been used in constant definition and only one value
 				// needs to be assigned, the iota value gets used automatically.
 				if evalConst && useIota && nameTokensLength == 1 {
@@ -1505,7 +1457,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 			variableValueType := namedValue.ValueType()
 
 			// If the variable already exists, make sure it has the same type as the specified type.
-			if exists && specifiedType.DataType() != DATA_TYPE_UNKNOWN && !specifiedType.Equals(variableValueType) {
+			if exists && specifiedType.Type().Kind() != TypeKindUnknown && !specifiedType.Equals(variableValueType) {
 				return nil, p.atError(fmt.Sprintf(`%s %s already exists but has type %s`, noun, name, variableValueType.String()), nextToken)
 			}
 			storedName := name
@@ -1587,7 +1539,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 			}
 
 			// If a type has been specified, make sure the returned types fit this type.
-			if specifiedType.DataType() != DATA_TYPE_UNKNOWN {
+			if specifiedType.Type().Kind() != TypeKindUnknown {
 				for _, valueType := range valuesTypes {
 					if !valueType.Equals(specifiedType) {
 						return nil, p.expectedError(fmt.Sprintf("%s but got %s", specifiedType.String(), valueType.String()), nextToken)
@@ -1600,7 +1552,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 				valueValueType := valuesTypes[i]
 				variableValueType := namedValue.ValueType()
 
-				if variableValueType.DataType() == DATA_TYPE_UNKNOWN {
+				if variableValueType.Type().Kind() == TypeKindUnknown {
 					var updatedNamedValue NamedValue
 					name, layer, public := namedValue.Name(), namedValue.Layer(), namedValue.Public()
 
@@ -1845,7 +1797,7 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
 		valueType := valuesTypes[i]
 		expectedValueType := namedValue.ValueType()
 
-		if valueType != expectedValueType {
+		if !valueType.Equals(expectedValueType) {
 			return nil, p.expectedError(fmt.Sprintf("%s but got %s", expectedValueType.String(), valueType.String()), valuesToken)
 		}
 		variables = append(variables, NewVariable(name, valueType, namedValue.Layer(), isPublic(name)))
@@ -2361,14 +2313,14 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		}
 		iterableValueType := iterableExpression.ValueType()
 		layer := ctx.layer + 1
-		indexVar := NewVariable(indexVarName, NewValueType(DATA_TYPE_INTEGER, false), layer, false)
+		indexVar := NewVariable(indexVarName, NewValueType(TypeInt{}, false), layer, false)
 		var iterableEvaluation Expression
 
 		if iterableValueType.IsSlice() {
 			iterableEvaluation = SliceEvaluation{
-				value:    iterableExpression,
-				index:    VariableEvaluation{indexVar},
-				dataType: iterableValueType.DataType(),
+				value: iterableExpression,
+				index: VariableEvaluation{indexVar},
+				t:     iterableValueType.Type(),
 			}
 		} else if iterableValueType.IsString() {
 			iterableEvaluation = StringSubscript{
@@ -2558,10 +2510,10 @@ func (p *Parser) evaluateTypeDefinition(ctx context) (Expression, error) {
 		return nil, p.expectedIdentifierError(identifierToken)
 	}
 	typeName := identifierToken.Value()
-	foundElementaryDefinition, exists := ctx.findType(typeName, true)
+	definitionTypeDeclaration, exists := ctx.findType(typeName)
 
 	if !exists {
-		return nil, p.notDefinedError("type", typeName, identifierToken)
+		return nil, p.typeNotDefinedError(typeName, identifierToken)
 	}
 	nextToken := p.eat()
 
@@ -2575,14 +2527,15 @@ func (p *Parser) evaluateTypeDefinition(ctx context) (Expression, error) {
 		return nil, err
 	}
 	exprValueType := expr.ValueType()
-	exprBaseTypeDefinition, _ := ctx.findType(exprValueType.DataType(), true)
-	exprBaseValueType := exprBaseTypeDefinition.valueType
-	foundElementaryDefinitionValueType := foundElementaryDefinition.valueType
-	baseDefinition, _ := ctx.findType(typeName, false)
-	baseTypeName := baseDefinition.name
 
-	if !foundElementaryDefinitionValueType.Equals(exprBaseValueType) {
-		return nil, p.atError(fmt.Sprintf(`%s cannot be converted into %s`, exprValueType.String(), baseTypeName), nextToken)
+	if !exists {
+		return nil, p.typeNotDefinedError(typeName, identifierToken)
+	}
+	definitionAliasType := definitionTypeDeclaration.ElementaryType()
+	exprAliasType := exprValueType.Type().ElementaryType()
+
+	if !definitionAliasType.Equals(exprAliasType) {
+		return nil, p.atError(fmt.Sprintf(`%s cannot be converted into %s`, exprValueType.String(), definitionTypeDeclaration.Name()), nextToken)
 	}
 	nextToken = p.eat()
 
@@ -2592,7 +2545,7 @@ func (p *Parser) evaluateTypeDefinition(ctx context) (Expression, error) {
 
 	return TypeDefinition{
 		value:     expr,
-		valueType: NewValueType(baseTypeName, exprValueType.IsSlice()),
+		valueType: NewValueType(definitionTypeDeclaration, exprValueType.IsSlice()),
 	}, nil
 }
 
@@ -2618,16 +2571,17 @@ func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expr
 	if fieldToken.Type() != lexer.IDENTIFIER {
 		return nil, p.expectedError("field name", fieldToken)
 	}
-	structType := namedValue.ValueType().DataType()
-	structDeclararion, exists := ctx.findStruct(structType)
+	typeDeclaration := namedValue.ValueType().Type()
+	typeDeclarationKind := typeDeclaration.Kind()
 
-	if !exists {
-		return nil, p.atError(fmt.Sprintf("no struct declaration found for %s", structType), identifierToken)
+	if typeDeclarationKind != TypeKindStruct {
+		return nil, p.expectedError(fmt.Sprintf("%s but got %s", TypeKindStruct, typeDeclarationKind), identifierToken)
 	}
+	structDeclaration := typeDeclaration.(StructDeclaration)
 
 	// Check field.
 	fieldName := fieldToken.Value()
-	foundField, err := structDeclararion.FindField(fieldName)
+	foundField, err := structDeclaration.FindField(fieldName)
 
 	if err != nil {
 		return nil, p.atError(err.Error(), fieldToken)
@@ -2789,7 +2743,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 		switch nextToken.Type() {
 		case lexer.OPENING_ROUND_BRACKET:
 			// If a type exists with the provided name, it's a type-cast/-instantiation.
-			_, exists := ctx.findType(value, false)
+			_, exists := ctx.findType(value)
 
 			if exists {
 				expr, err = p.evaluateTypeDefinition(ctx)
@@ -3017,7 +2971,7 @@ func (p *Parser) evaluateComparison(ctx context) (Expression, error) {
 		rightType := rightExpression.ValueType()
 
 		if !leftType.Equals(rightType) {
-			return nil, p.expectedError(fmt.Sprintf("same comparison types but got %s and %s", leftType.DataType(), rightType.String()), operatorToken)
+			return nil, p.expectedError(fmt.Sprintf("same comparison types but got %s and %s", leftType.String(), rightType.String()), operatorToken)
 		}
 		allowedOperators := allowedCompareOperators(leftType)
 
@@ -3279,8 +3233,8 @@ func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
 		return nil, p.expectedError(`"}"`, nextToken)
 	}
 	return SliceInstantiation{
-		dataType: sliceValueType.DataType(),
-		values:   values,
+		t:      sliceValueType.Type(),
+		values: values,
 	}, nil
 }
 
@@ -3305,7 +3259,7 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 	valueType := value.ValueType()
 	isSlice := valueType.IsSlice()
 
-	if !isSlice && valueType.DataType() != DATA_TYPE_STRING {
+	if !isSlice && valueType.Type().Kind() != TypeKindString {
 		return nil, p.expectedError("slice or string", valueToken)
 	}
 	nextToken := p.eat()
@@ -3332,7 +3286,7 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 	startIndexValueType := startIndex.ValueType()
 
 	if !startIndexValueType.IsInt() {
-		return nil, p.expectedError(fmt.Sprintf("%s as start-index but got %s", DATA_TYPE_INTEGER, startIndexValueType.String()), startToken)
+		return nil, p.expectedError(fmt.Sprintf("%s as start-index but got %s", TypeKindInt, startIndexValueType.String()), startToken)
 	}
 	nextToken = p.peek()
 
@@ -3383,7 +3337,7 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 	endIndexValueType := endIndex.ValueType()
 
 	if !endIndexValueType.IsInt() {
-		return nil, p.expectedError(fmt.Sprintf("%s as stop-index but got %s", DATA_TYPE_INTEGER, endIndexValueType.String()), endToken)
+		return nil, p.expectedError(fmt.Sprintf("%s as stop-index but got %s", TypeKindInt, endIndexValueType.String()), endToken)
 	}
 
 	if !isSlice {
@@ -3394,9 +3348,9 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 		}, nil
 	}
 	return SliceEvaluation{
-		value:    value,
-		index:    startIndex,
-		dataType: valueType.DataType(),
+		value: value,
+		index: startIndex,
+		t:     valueType.Type(),
 	}, nil
 }
 
@@ -3433,7 +3387,7 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 	indexValueType := index.ValueType()
 
 	if !indexValueType.IsInt() {
-		return nil, p.expectedError(fmt.Sprintf("%s as index but got %s", DATA_TYPE_INTEGER, indexValueType.String()), nextToken)
+		return nil, p.expectedError(fmt.Sprintf("%s as index but got %s", TypeKindInt, indexValueType.String()), nextToken)
 	}
 	nextToken = p.eat()
 
@@ -3451,11 +3405,11 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 	if err != nil {
 		return nil, err
 	}
-	variableDataType := variableValueType.DataType()
-	assignedDataType := value.ValueType().DataType()
+	variableType := variableValueType.Type()
+	assignedType := value.ValueType().Type()
 
-	if variableDataType != assignedDataType {
-		return nil, p.expectedError(fmt.Sprintf("%s value but got %s", variableDataType, assignedDataType), valueToken)
+	if !variableType.Equals(assignedType) {
+		return nil, p.expectedError(fmt.Sprintf("%s value but got %s", variableType.Name(), assignedType.Name()), valueToken)
 	}
 	return SliceAssignment{
 		Variable: namedValue.(Variable),
@@ -3479,23 +3433,13 @@ func (p *Parser) evaluateStructAssignment(ctx context) (Statement, error) {
 		return nil, p.constantError(name, nameToken)
 	}
 	namedValueValueType := namedValue.ValueType()
-	baseTypeDefinition, exists := ctx.findType(namedValueValueType.DataType(), false)
 
-	if !exists {
-		return nil, p.atError(fmt.Sprintf(`type of %s not be found`, name), nameToken)
-	}
-	baseValueType := baseTypeDefinition.valueType
-
-	if baseValueType.IsSlice() {
+	if namedValueValueType.IsSlice() {
 		return nil, p.expectedError("struct but got slice", nameToken)
-	} else if baseValueType.DataType() != DATA_TYPE_STRUCT {
-		return nil, p.expectedError(fmt.Sprintf("struct but variable is of type %s", baseValueType.String()), nameToken)
+	} else if namedValueValueType.Type().Kind() != TypeKindStruct {
+		return nil, p.expectedError(fmt.Sprintf("struct but variable is of type %s", namedValueValueType.String()), nameToken)
 	}
-	structDeclaration, exists := ctx.findStruct(baseTypeDefinition.name)
-
-	if !exists {
-		return nil, p.atError(fmt.Sprintf(`declaration of struct %s not be found`, name), nameToken)
-	}
+	structDeclaration := namedValueValueType.Type().(StructDeclaration)
 	nextToken := p.eat()
 
 	if nextToken.Type() != lexer.DOT {
@@ -3555,7 +3499,7 @@ func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
 	valueType := variable.ValueType()
 
 	if !valueType.IsInt() {
-		return nil, p.expectedError(fmt.Sprintf("%s but got %s", NewValueType(DATA_TYPE_INTEGER, false).String(), valueType.String()), identifierToken)
+		return nil, p.expectedError(fmt.Sprintf("%s but got %s", NewValueType(TypeInt{}, false).String(), valueType.String()), identifierToken)
 	}
 	operationToken := p.eat()
 	increment := true

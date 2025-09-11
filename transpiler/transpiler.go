@@ -71,12 +71,12 @@ func (t *transpiler) evaluateValueTypeDefaultValue(valueType parser.ValueType) (
 	var defaultValue string
 	conv := t.converter
 
-	switch valueType.DataType() {
-	case parser.DATA_TYPE_BOOLEAN:
+	switch valueType.Type().Kind() {
+	case parser.TypeKindBool:
 		defaultValue = BoolToString(false)
-	case parser.DATA_TYPE_INTEGER:
+	case parser.TypeKindInt:
 		defaultValue = IntToString(0)
-	case parser.DATA_TYPE_STRING:
+	case parser.TypeKindString:
 		defaultValue = conv.StringToString("")
 	default:
 		return "", fmt.Errorf(`no default value defined for %s`, valueType.String())

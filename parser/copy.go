@@ -10,7 +10,7 @@ func (c Copy) StatementType() StatementType {
 }
 
 func (c Copy) ValueType() ValueType {
-	return NewValueType(DATA_TYPE_INTEGER, false)
+	return NewValueType(TypeInt{}, false)
 }
 
 func (c Copy) IsConstant() bool {

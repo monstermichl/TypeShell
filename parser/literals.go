@@ -9,7 +9,7 @@ func (l BooleanLiteral) StatementType() StatementType {
 }
 
 func (l BooleanLiteral) ValueType() ValueType {
-	return ValueType{dataType: DATA_TYPE_BOOLEAN}
+	return NewValueType(TypeBool{}, false)
 }
 
 func (l BooleanLiteral) IsConstant() bool {
@@ -29,7 +29,7 @@ func (l IntegerLiteral) StatementType() StatementType {
 }
 
 func (l IntegerLiteral) ValueType() ValueType {
-	return ValueType{dataType: DATA_TYPE_INTEGER}
+	return NewValueType(TypeInt{}, false)
 }
 
 func (l IntegerLiteral) IsConstant() bool {
@@ -49,7 +49,7 @@ func (l StringLiteral) StatementType() StatementType {
 }
 
 func (l StringLiteral) ValueType() ValueType {
-	return ValueType{dataType: DATA_TYPE_STRING}
+	return NewValueType(TypeString{}, false)
 }
 
 func (l StringLiteral) IsConstant() bool {

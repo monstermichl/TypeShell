@@ -11,7 +11,7 @@ func (w Write) StatementType() StatementType {
 }
 
 func (w Write) ValueType() ValueType {
-	return NewValueType(DATA_TYPE_ERROR, false)
+	return NewValueType(TypeError{}, false)
 }
 
 func (w Write) IsConstant() bool {
