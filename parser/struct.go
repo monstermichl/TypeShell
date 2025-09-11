@@ -22,8 +22,8 @@ type StructDeclaration struct {
 
 func NewStructDeclaration(name string, fields []StructField) StructDeclaration {
 	return StructDeclaration{
-		name:   name,
-		fields: fields,
+		name,
+		fields,
 	}
 }
 

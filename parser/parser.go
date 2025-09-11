@@ -1318,9 +1318,12 @@ func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 		if err != nil {
 			return nil, err
 		}
+		t := valueType.Type()
+
+		// Create a wrapper with the same type but different name.
+		valueType = NewValueType(NewTypeCustom(name, isAlias, t.Kind(), t), valueType.IsSlice())
 	}
-	customType := NewValueType(NewTypeCustom(name, isAlias, valueType.Type()), valueType.IsSlice())
-	err = ctx.addType(customType)
+	err = ctx.addType(valueType)
 
 	if err != nil {
 		return nil, p.atError(err.Error(), nameToken)
@@ -3433,13 +3436,14 @@ func (p *Parser) evaluateStructAssignment(ctx context) (Statement, error) {
 		return nil, p.constantError(name, nameToken)
 	}
 	namedValueValueType := namedValue.ValueType()
+	namedValueBaseType := namedValueValueType.Type()
 
 	if namedValueValueType.IsSlice() {
 		return nil, p.expectedError("struct but got slice", nameToken)
-	} else if namedValueValueType.Type().Kind() != TypeKindStruct {
-		return nil, p.expectedError(fmt.Sprintf("struct but variable is of type %s", namedValueValueType.String()), nameToken)
+	} else if namedValueBaseType.Kind() != TypeKindStruct {
+		return nil, p.expectedError(fmt.Sprintf("struct but variable is of type %s", namedValueBaseType.Kind()), nameToken)
 	}
-	structDeclaration := namedValueValueType.Type().(StructDeclaration)
+	structDeclaration := namedValueBaseType.(StructDeclaration)
 	nextToken := p.eat()
 
 	if nextToken.Type() != lexer.DOT {

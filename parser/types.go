@@ -18,7 +18,6 @@ const (
 	TypeKindInt      TypeKind = "int"
 	TypeKindString   TypeKind = "string"
 	TypeKindError    TypeKind = "error"
-	TypeKindCustom   TypeKind = "custom"
 	TypeKindStruct   TypeKind = "struct"
 	TypeKindMultiple TypeKind = "multiple"
 )
@@ -71,20 +70,22 @@ func (t TypeUnknown) AliasedType() Type            { return aliasedType(t) }
 type TypeCustom struct {
 	name    string
 	isAlias bool
+	kind    TypeKind
 	base    Type
 }
 
-func NewTypeCustom(name string, isAlias bool, base Type) TypeCustom {
+func NewTypeCustom(name string, isAlias bool, kind TypeKind, base Type) TypeCustom {
 	return TypeCustom{
 		name,
 		isAlias,
+		kind,
 		base,
 	}
 }
 
 func (t TypeCustom) Name() string                 { return t.name }
 func (t TypeCustom) IsAlias() bool                { return t.isAlias }
-func (t TypeCustom) Kind() TypeKind               { return TypeKindCustom }
+func (t TypeCustom) Kind() TypeKind               { return t.kind }
 func (t TypeCustom) Base() Type                   { return t.base }
 func (t TypeCustom) Equals(compareType Type) bool { return equals(t, compareType) }
 func (t TypeCustom) ElementaryType() Type         { return elementaryType(t) }
