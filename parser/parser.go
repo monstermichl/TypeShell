@@ -399,10 +399,7 @@ func defaultVarValue(valueType ValueType, ctx context) (Expression, error) {
 							value: defaultValue,
 						})
 					}
-					return StructDefinition{
-						valueType: valueType,
-						values:    structValues,
-					}, nil
+					return NewStructDefinition(valueType.Type(), structValues...), nil
 				}
 			}
 		} else {

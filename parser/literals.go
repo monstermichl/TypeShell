@@ -44,6 +44,10 @@ type StringLiteral struct {
 	value string
 }
 
+func NewStringLiteral(value string) StringLiteral {
+	return StringLiteral{value}
+}
+
 func (l StringLiteral) StatementType() StatementType {
 	return STATEMENT_TYPE_STRING_LITERAL
 }

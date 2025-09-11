@@ -87,13 +87,30 @@ type StructValue struct {
 	value Expression
 }
 
+func NewStructValue(name string, valueType ValueType, value Expression) StructValue {
+	return StructValue{
+		StructField: StructField{
+			name,
+			valueType,
+		},
+		value: value,
+	}
+}
+
 func (v StructValue) Value() Expression {
 	return v.value
 }
 
 type StructDefinition struct {
-	valueType ValueType
-	values    []StructValue
+	t      Type
+	values []StructValue
+}
+
+func NewStructDefinition(t Type, values ...StructValue) StructDefinition {
+	return StructDefinition{
+		t,
+		values,
+	}
 }
 
 func (d StructDefinition) StatementType() StatementType {
@@ -101,7 +118,7 @@ func (d StructDefinition) StatementType() StatementType {
 }
 
 func (d StructDefinition) ValueType() ValueType {
-	return d.valueType
+	return NewValueType(d.t, false)
 }
 
 func (d StructDefinition) IsConstant() bool {

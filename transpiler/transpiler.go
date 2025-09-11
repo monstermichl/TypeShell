@@ -1,6 +1,7 @@
 package transpiler
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -78,6 +79,32 @@ func (t *transpiler) evaluateValueTypeDefaultValue(valueType parser.ValueType) (
 		defaultValue = IntToString(0)
 	case parser.TypeKindString:
 		defaultValue = conv.StringToString("")
+	case parser.TypeKindStruct:
+		structDeclaration, valid := valueType.Type().(parser.StructDeclaration)
+
+		if !valid {
+			return "", errors.New("struct declaration could not be evaluated")
+		}
+		values := []parser.StructValue{}
+
+		for _, field := range structDeclaration.Fields() {
+			fieldValueType := field.ValueType()
+			defaultValueTemp, err := t.evaluateValueTypeDefaultValue(fieldValueType)
+
+			if err != nil {
+				return "", err
+			}
+			values = append(values, parser.NewStructValue(field.Name(), fieldValueType, parser.NewStringLiteral(defaultValueTemp)))
+		}
+
+		// Create helper struct definition.
+		structDefinition := parser.NewStructDefinition(structDeclaration, values...)
+		result, err := t.evaluateExpression(structDefinition, true)
+
+		if err != nil {
+			return "", err
+		}
+		defaultValue = result.firstValue()
 	default:
 		return "", fmt.Errorf(`no default value defined for %s`, valueType.String())
 	}
