@@ -43,6 +43,7 @@ func (e FunctionDefinition) Public() bool {
 type FunctionCall struct {
 	name        string
 	returnTypes []ValueType
+	params      []Variable
 	arguments   []Expression
 }
 
@@ -64,6 +65,10 @@ func (e FunctionCall) IsConstant() bool {
 
 func (e FunctionCall) ReturnTypes() []ValueType {
 	return e.returnTypes
+}
+
+func (e FunctionCall) Params() []Variable {
+	return e.params
 }
 
 func (e FunctionCall) Args() []Expression {

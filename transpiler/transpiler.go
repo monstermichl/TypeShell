@@ -669,15 +669,43 @@ func (t *transpiler) evaluateFunctionDefinition(functionDefinition parser.Functi
 
 func (t *transpiler) evaluateFunctionCall(functionCall parser.FunctionCall, valueUsed bool) (expressionResult, error) {
 	name := functionCall.Name()
+	params := functionCall.Params()
 	args := []string{}
 
-	for _, arg := range functionCall.Args() {
+	for i, arg := range functionCall.Args() {
 		result, err := t.evaluateExpression(arg, true)
+		value := result.firstValue()
 
 		if err != nil {
 			return expressionResult{}, err
 		}
-		args = append(args, result.firstValue())
+		param := params[i]
+
+		switch evaluationType := arg.ValueType().Type().(type) {
+		case parser.StructDeclaration:
+			// If passed argument is a struct, the values need to be copied to avoid manipulation of the original.
+			for _, field := range evaluationType.Fields() {
+				fieldName := field.Name()
+				fieldValue, err := t.converter.StructEvaluation(value, fieldName, true)
+				paramName := param.LayerName()
+
+				if err != nil {
+					return expressionResult{}, nil
+				}
+				err = t.converter.StructAssignment(paramName, fieldName, fieldValue, false)
+
+				if err != nil {
+					return expressionResult{}, err
+				}
+				evaluatedValue, err := t.converter.VarEvaluation(paramName, true, false)
+
+				if err != nil {
+					return expressionResult{}, err
+				}
+				value = evaluatedValue
+			}
+		}
+		args = append(args, value)
 	}
 	returnTypes := functionCall.ReturnTypes()
 	values, err := t.converter.FuncCall(name, args, returnTypes, valueUsed)

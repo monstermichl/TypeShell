@@ -3154,6 +3154,7 @@ func (p *Parser) evaluateFunctionCall(importAlias string, ctx context) (Call, er
 	return FunctionCall{
 		name:        name,
 		arguments:   args,
+		params:      definedFunction.Params(),
 		returnTypes: definedFunction.ReturnTypes(),
 	}, nil
 }
