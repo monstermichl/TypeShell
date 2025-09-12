@@ -5,37 +5,37 @@ import (
 )
 
 func TestDeclareAndDefineStructSuccess(t *testing.T) {
-	testDeclareAndDefineStructSuccess(t, transpileBatch)
+	testDeclareAndDefineStructSuccess(t, transpileBash)
 }
 
 func TestDeclareAndDefineStructWithValuesSuccess(t *testing.T) {
-	testDeclareAndDefineStructWithValuesSuccess(t, transpileBatch)
+	testDeclareAndDefineStructWithValuesSuccess(t, transpileBash)
 }
 
 func TestDeclareAndDefineStructWithValuesOneLineSuccess(t *testing.T) {
-	testDeclareAndDefineStructWithValuesOneLineSuccess(t, transpileBatch)
+	testDeclareAndDefineStructWithValuesOneLineSuccess(t, transpileBash)
 }
 
 func TestDeclareAndDefineStructSliceSuccess(t *testing.T) {
-	testDeclareAndDefineStructSliceSuccess(t, transpileBatch)
+	testDeclareAndDefineStructSliceSuccess(t, transpileBash)
 }
 
 func TestStructFieldAssignedTwiceInInitializationFail(t *testing.T) {
-	testStructFieldAssignedTwiceInInitializationFail(t, transpileBatch)
+	testStructFieldAssignedTwiceInInitializationFail(t, transpileBash)
 }
 
 func TestStructUnknownFieldInInitializationFail(t *testing.T) {
-	testStructUnknownFieldInInitializationFail(t, transpileBatch)
+	testStructUnknownFieldInInitializationFail(t, transpileBash)
 }
 
 func TestStructFieldWrongTypeAssignmentInInitializationFail(t *testing.T) {
-	testStructFieldWrongTypeAssignmentInInitializationFail(t, transpileBatch)
+	testStructFieldWrongTypeAssignmentInInitializationFail(t, transpileBash)
 }
 
 func TestStructUnknownFieldInAssignmentFail(t *testing.T) {
-	testStructUnknownFieldInAssignmentFail(t, transpileBatch)
+	testStructUnknownFieldInAssignmentFail(t, transpileBash)
 }
 
 func TestStructFieldWrongTypeAssignmentInAssignmentFail(t *testing.T) {
-	testStructFieldWrongTypeAssignmentInAssignmentFail(t, transpileBatch)
+	testStructFieldWrongTypeAssignmentInAssignmentFail(t, transpileBash)
 }

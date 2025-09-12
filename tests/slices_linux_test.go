@@ -8,6 +8,10 @@ func TestDefineSliceSuccess(t *testing.T) {
 	testDefineSliceSuccess(t, transpileBash)
 }
 
+func TestDefineSliceRowValuesSuccess(t *testing.T) {
+	testDefineSliceRowValuesSuccess(t, transpileBash)
+}
+
 func TestSliceAssignValuesSuccess(t *testing.T) {
 	testSliceAssignValuesSuccess(t, transpileBash)
 }

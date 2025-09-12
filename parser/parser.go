@@ -3343,7 +3343,7 @@ func (p *Parser) evaluateStructInitialization(ctx context) (Expression, error) {
 		structFieldValueType := structField.ValueType()
 
 		if !valueDataType.Equals(structFieldValueType) {
-			return p.atError(fmt.Sprintf("%s cannot not be assigned to %s", valueDataType.String(), structFieldValueType.String()), initValue.valueToken)
+			return p.expectedError(fmt.Sprintf("%s value but got %s", structFieldValueType.String(), valueDataType.String()), initValue.valueToken)
 		}
 		structInitialization.values = append(structInitialization.values, NewStructValue(fieldName, structFieldValueType, value))
 		return nil
