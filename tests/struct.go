@@ -85,6 +85,62 @@ func testDeclareAndDefineStructSliceSuccess(t *testing.T, transpilerFunc transpi
 	})
 }
 
+func testPassStructToFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		type myStruct struct {
+			a, b string
+		}
+
+		func test(x myStruct) {
+			print(x.a, x.b)
+
+			x.a = "Bye"
+			x.b = "Mars"
+
+			print(x.a, x.b)
+		}
+		var s myStruct
+
+		s.a = "Hello"
+		s.b = "World"
+
+		print(s.a, s.b)
+		test(s)
+		print(s.a, s.b)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "Hello World\nHello World\nBye Mars\nHello World", output)
+	})
+}
+
+func testReturnDifferentStructsSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		type myStruct struct {
+			a, b string
+			c    bool
+			d    int
+		}
+		count := 0
+
+		func test() myStruct {
+			s := myStruct{}
+			s.a = itoa(count)
+
+			return s
+		}
+
+		s1 := test()
+		print(s1.a)
+		count++
+		s2 := test()
+		print(s1.a)
+		print(s2.a)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "0\n0\n1", output)
+	})
+}
+
 func testStructFieldAssignedTwiceInInitializationFail(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		type myStruct struct {

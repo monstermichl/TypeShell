@@ -20,6 +20,14 @@ func TestDeclareAndDefineStructSliceSuccess(t *testing.T) {
 	testDeclareAndDefineStructSliceSuccess(t, transpileBatch)
 }
 
+func TestPassStructToFunctionSuccess(t *testing.T) {
+	testPassStructToFunctionSuccess(t, transpileBatch)
+}
+
+func TestReturnDifferentStructsSuccess(t *testing.T) {
+	testReturnDifferentStructsSuccess(t, transpileBatch)
+}
+
 func TestStructFieldAssignedTwiceInInitializationFail(t *testing.T) {
 	testStructFieldAssignedTwiceInInitializationFail(t, transpileBatch)
 }
