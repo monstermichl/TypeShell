@@ -49,6 +49,13 @@ type foundTypeDefinition struct {
 	name string
 }
 
+type initValue struct {
+	nameToken  lexer.Token
+	name       string
+	valueToken lexer.Token
+	value      Expression
+}
+
 type context struct {
 	imports     map[string]string             // Maps import aliases to file hashes.
 	types       map[string]Type               // Stores the declared types.
@@ -526,6 +533,12 @@ func (p Parser) peekAt(add uint) lexer.Token {
 	return token
 }
 
+func (p *Parser) skipNewlines() {
+	for p.peek().Type() == lexer.NEWLINE {
+		p.eat()
+	}
+}
+
 func (p Parser) findAllowed(searchTokenType lexer.TokenType, allowed ...lexer.TokenType) (lexer.Token, error) {
 	tokens := p.tokens
 
@@ -787,16 +800,10 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 	statementsTemp := []Statement{}
 
 	for {
-		var nextToken lexer.Token
+		// Skip newlines.
+		p.skipNewlines()
 
-		// Skip empty characters.
-		for {
-			nextToken = p.peek()
-			if !slices.Contains([]lexer.TokenType{lexer.NEWLINE}, nextToken.Type()) {
-				break
-			}
-			p.eat()
-		}
+		nextToken := p.peek()
 
 		if nextToken.Type() == lexer.IMPORT {
 			p.eat()
@@ -2696,7 +2703,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 
 	// Handle slice instantiation.
 	case lexer.OPENING_SQUARE_BRACKET:
-		expr, err = p.evaluateSliceInstantiation(ctx)
+		expr, err = p.evaluateSliceInitialization(ctx)
 
 	// Handle iota.
 	case lexer.IOTA:
@@ -2752,9 +2759,18 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 			}
 		case lexer.OPENING_SQUARE_BRACKET:
 			expr, err = p.evaluateSubscript(ctx)
+		case lexer.OPENING_CURLY_BRACKET:
+			_, valid := ctx.findType(value)
+
+			if valid {
+				expr, err = p.evaluateStructInitialization(ctx)
+			}
 		case lexer.DOT:
 			expr, err = p.evaluateStructEvaluation(importAlias, ctx)
-		default:
+		}
+
+		// If nothing has been set yet, try to evaluate named value.
+		if expr == nil && err == nil {
 			expr, err = p.evaluateNamedValueEvaluation(ctx)
 		}
 
@@ -3180,50 +3196,67 @@ func (p *Parser) evaluateAppCall(ctx context) (Call, error) {
 	return call, nil
 }
 
-func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
-	nextToken := p.peek()
-	sliceValueType, err := p.evaluateValueType(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	if !sliceValueType.IsSlice() {
-		return nil, p.expectedError(fmt.Sprintf("slice type but got %s", sliceValueType.String()), nextToken)
-	}
-	nextToken = p.eat()
+func (p *Parser) evaluateInitializationValues(checkCallout func(initValue initValue) error, ctx context) ([]initValue, error) {
+	nextToken := p.eat()
 
 	if nextToken.Type() != lexer.OPENING_CURLY_BRACKET {
 		return nil, p.expectedError(`"{"`, nextToken)
 	}
 	nextToken = p.peek()
-	values := []Expression{}
+	names := []string{}
+	initValues := []initValue{}
+	rowInit := p.peek().Type() == lexer.NEWLINE // If there's a newline after the bracket, it's a row initialization.
 
-	// Evaluate slice initialization values.
+	// Evaluate initialization values.
 	if nextToken.Type() != lexer.CLOSING_CURLY_BRACKET {
 		for {
+			// Get rid of consecutive newlines.
+			p.skipNewlines()
+
+			nameToken := p.peek()
+			initValue := initValue{nameToken: nameToken}
+
+			// Check if a name is defined.
+			if nameToken.Type() == lexer.IDENTIFIER && p.peekAt(1).Type() == lexer.COLON {
+				p.eat() // Eat name token.
+				p.eat() // Eat colon token.
+
+				name := nameToken.Value()
+
+				if slices.Contains(names, name) {
+					return nil, p.atError(fmt.Sprintf("a value has already been assigned to %s", name), nameToken)
+				}
+				initValue.name = name
+			}
 			valueToken := p.peek()
 			expr, err := p.evaluateExpression(ctx)
 
 			if err != nil {
 				return nil, err
 			}
-			valueDataType := expr.ValueType()
-			sliceElementValueType := sliceValueType
-			sliceElementValueType.isSlice = false
+			initValue.valueToken = valueToken
+			initValue.value = expr
 
-			if !valueDataType.Equals(sliceElementValueType) {
-				return nil, p.atError(fmt.Sprintf("%s cannot not be added to %s", valueDataType.String(), sliceElementValueType.String()), valueToken)
+			err = checkCallout(initValue)
+
+			if err != nil {
+				return nil, err
 			}
-			values = append(values, expr)
+			initValues = append(initValues, initValue)
 			nextToken = p.peek()
 			nextTokenType := nextToken.Type()
 
+			if rowInit && nextTokenType != lexer.COMMA {
+				return nil, p.expectedError(`","`, nextToken)
+			}
+
 			if nextTokenType == lexer.COMMA {
 				p.eat()
-			} else if nextTokenType == lexer.CLOSING_CURLY_BRACKET {
+			}
+			p.skipNewlines()
+
+			if p.peek().Type() == lexer.CLOSING_CURLY_BRACKET {
 				break
-			} else {
-				return nil, p.expectedError(`"," or "}"`, nextToken)
 			}
 		}
 	}
@@ -3232,10 +3265,93 @@ func (p *Parser) evaluateSliceInstantiation(ctx context) (Expression, error) {
 	if nextToken.Type() != lexer.CLOSING_CURLY_BRACKET {
 		return nil, p.expectedError(`"}"`, nextToken)
 	}
-	return SliceInstantiation{
+	return initValues, nil
+}
+
+func (p *Parser) evaluateSliceInitialization(ctx context) (Expression, error) {
+	nextToken := p.peek()
+	sliceValueType, err := p.evaluateValueType(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !sliceValueType.IsSlice() {
+		return nil, p.expectedError(fmt.Sprintf("slice type but got %s", sliceValueType.String()), nextToken)
+	}
+	initValues, err := p.evaluateInitializationValues(func(initValue initValue) error {
+		if len(initValue.name) > 0 {
+			return p.atError("unexpected name", initValue.nameToken)
+		}
+		valueDataType := initValue.value.ValueType()
+		sliceElementValueType := sliceValueType
+		sliceElementValueType.isSlice = false
+
+		if !valueDataType.Equals(sliceElementValueType) {
+			return p.atError(fmt.Sprintf("%s cannot not be added to %s", valueDataType.String(), sliceElementValueType.String()), initValue.valueToken)
+		}
+		return nil
+	}, ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	values := []Expression{}
+
+	for _, initValue := range initValues {
+		values = append(values, initValue.value)
+	}
+	initialization := SliceInstantiation{
 		t:      sliceValueType.Type(),
 		values: values,
-	}, nil
+	}
+	return initialization, nil
+}
+
+func (p *Parser) evaluateStructInitialization(ctx context) (Expression, error) {
+	nextToken := p.peek()
+	structValueType, err := p.evaluateValueType(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	intialization, err := defaultVarValue(structValueType, ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	structInitialization := intialization.(StructDefinition)
+	structDeclaration, valid := structValueType.Type().(StructDeclaration)
+
+	if !valid || structValueType.IsSlice() {
+		return nil, p.expectedError(fmt.Sprintf("struct type but got %s", structValueType.String()), nextToken)
+	}
+	_, err = p.evaluateInitializationValues(func(initValue initValue) error {
+		fieldName := initValue.name
+
+		if len(fieldName) == 0 {
+			return p.expectedError("field name", initValue.nameToken)
+		}
+		structField, err := structDeclaration.FindField(fieldName)
+
+		if err != nil {
+			return err
+		}
+		value := initValue.value
+		valueDataType := value.ValueType()
+		structFieldValueType := structField.ValueType()
+
+		if !valueDataType.Equals(structFieldValueType) {
+			return p.atError(fmt.Sprintf("%s cannot not be assigned to %s", valueDataType.String(), structFieldValueType.String()), initValue.valueToken)
+		}
+		structInitialization.values = append(structInitialization.values, NewStructValue(fieldName, structFieldValueType, value))
+		return nil
+	}, ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	return structInitialization, nil
 }
 
 func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
