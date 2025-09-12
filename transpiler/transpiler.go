@@ -684,10 +684,11 @@ func (t *transpiler) evaluateFunctionCall(functionCall parser.FunctionCall, valu
 		switch evaluationType := arg.ValueType().Type().(type) {
 		case parser.StructDeclaration:
 			// If passed argument is a struct, the values need to be copied to avoid manipulation of the original.
+			paramName := param.LayerName()
+
 			for _, field := range evaluationType.Fields() {
 				fieldName := field.Name()
 				fieldValue, err := t.converter.StructEvaluation(value, fieldName, true)
-				paramName := param.LayerName()
 
 				if err != nil {
 					return expressionResult{}, nil
@@ -697,13 +698,13 @@ func (t *transpiler) evaluateFunctionCall(functionCall parser.FunctionCall, valu
 				if err != nil {
 					return expressionResult{}, err
 				}
-				evaluatedValue, err := t.converter.VarEvaluation(paramName, true, false)
-
-				if err != nil {
-					return expressionResult{}, err
-				}
-				value = evaluatedValue
 			}
+			evaluatedValue, err := t.converter.VarEvaluation(paramName, true, false)
+
+			if err != nil {
+				return expressionResult{}, err
+			}
+			value = evaluatedValue
 		}
 		args = append(args, value)
 	}
