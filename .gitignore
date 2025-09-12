@@ -1,3 +1,4 @@
 examples/*
 !examples/*.tsh
 ext
+tests/std
