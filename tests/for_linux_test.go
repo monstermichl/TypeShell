@@ -52,6 +52,10 @@ func TestForRangeStringSuccess(t *testing.T) {
 	testForRangeStringSuccess(t, transpileBash)
 }
 
+func TestForRangeNumberSuccess(t *testing.T) {
+	testForRangeNumberSuccess(t, transpileBash)
+}
+
 func TestForRangeNonIterableFail(t *testing.T) {
 	testForRangeNonIterableFail(t, transpileBash)
 }

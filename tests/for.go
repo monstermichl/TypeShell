@@ -173,15 +173,26 @@ func testForRangeStringSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	})
 }
 
+func testForRangeNumberSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		for i := range 5 {
+			print(i)
+		}
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "0\n1\n2\n3\n4", output)
+	})
+}
+
 func testForRangeNonIterableFail(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
-		s := 2
+		s := true
 
 		for i, v := range s {
 			print(i, v)
 		}
 	`, func(output string, err error) {
-		require.EqualError(t, shortenError(err), "expected slice or string")
+		require.EqualError(t, shortenError(err), "expected slice, string or integer")
 	})
 }
 

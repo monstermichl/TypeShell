@@ -2285,6 +2285,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		}
 		indexVarName := nextToken.Value()
 		nextToken = p.peek()
+		namedValueToken := nextToken
 		valueVarName := ""
 
 		if nextToken.Type() == lexer.COMMA {
@@ -2321,6 +2322,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		iterableValueType := iterableExpression.ValueType()
 		layer := ctx.layer + 1
 		indexVar := NewVariable(indexVarName, NewValueType(TypeInt{}, false), layer, false)
+		numberIteration := false
 		var iterableEvaluation Expression
 
 		if iterableValueType.IsSlice() {
@@ -2334,8 +2336,11 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 				value:      iterableExpression,
 				startIndex: VariableEvaluation{indexVar},
 			}
+		} else if iterableValueType.IsInt() {
+			iterableEvaluation = iterableExpression
+			numberIteration = true
 		} else {
-			return nil, p.expectedError("slice or string", nextToken)
+			return nil, p.expectedError("slice, string or integer", nextToken)
 		}
 		iterableValueType.isSlice = false // Make sure the value var is not a slice.
 		forRangeStatements := []Statement{}
@@ -2345,6 +2350,9 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 
 		// If no value variable has been provided, there's no need to add it.
 		if hasNamedVar {
+			if numberIteration {
+				return nil, p.atError("only one iteration variable is allowed", namedValueToken)
+			}
 			valueVar := NewVariable(valueVarName, iterableValueType, layer, false)
 
 			// Add value variable.
@@ -2357,6 +2365,11 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 				},
 			}
 		}
+		length := iterableExpression
+
+		if !numberIteration {
+			length = Len{iterableExpression}
+		}
 
 		init := VariableAssignmentValueAssignment{
 			variables: []Variable{indexVar},
@@ -2365,7 +2378,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		condition := Comparison{
 			left:     VariableEvaluation{indexVar},
 			operator: COMPARE_OPERATOR_LESS,
-			right:    Len{iterableExpression},
+			right:    length,
 		}
 		increment := incrementDecrementStatement(indexVar, true)
 		statements, err := p.evaluateBlock(nil, ctx, SCOPE_FOR)
