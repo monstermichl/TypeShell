@@ -71,7 +71,7 @@ type Converter interface {
 	VarDefinition(name string, value string, global bool) error
 	VarAssignment(name string, value string, global bool) error
 	SliceAssignment(name string, index string, value string, defaultValue string, global bool) error
-	StructAssignment(name string, field string, value string, dglobal bool) error
+	StructAssignment(name string, field string, value string, global bool) error
 	FuncStart(name string, params []string, returnTypes []parser.ValueType) error
 	FuncEnd() error
 	Return(values []ReturnValue) error
@@ -102,7 +102,7 @@ type Converter interface {
 	SliceInstantiation(values []string, valueUsed bool) (string, error)
 	SliceEvaluation(name string, index string, valueUsed bool) (string, error)
 	SliceLen(name string, valueUsed bool) (string, error)
-	StructDefinition(values []StructValue, valueUsed bool) (string, error)
+	StructInitialization(values []StructValue, valueUsed bool) (string, error)
 	StructEvaluation(name string, field string, valueUsed bool) (string, error)
 	StringSubscript(value string, startIndex string, endIndex string, valueUsed bool) (string, error)
 	StringLen(value string, valueUsed bool) (string, error)

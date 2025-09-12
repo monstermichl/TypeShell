@@ -15,40 +15,40 @@ func (f StructField) ValueType() ValueType {
 	return f.valueType
 }
 
-type StructDeclaration struct {
+type StructDefinition struct {
 	name   string
 	fields []StructField
 }
 
-func NewStructDeclaration(name string, fields []StructField) StructDeclaration {
-	return StructDeclaration{
+func NewStructDefinition(name string, fields []StructField) StructDefinition {
+	return StructDefinition{
 		name,
 		fields,
 	}
 }
 
-func (d StructDeclaration) Fields() []StructField {
+func (d StructDefinition) Fields() []StructField {
 	return d.fields
 }
 
-func (d StructDeclaration) Name() string {
+func (d StructDefinition) Name() string {
 	return d.name
 }
 
-func (d StructDeclaration) IsAlias() bool {
+func (d StructDefinition) IsAlias() bool {
 	return false
 }
 
-func (d StructDeclaration) Kind() TypeKind {
+func (d StructDefinition) Kind() TypeKind {
 	return TypeKindStruct
 }
 
-func (d StructDeclaration) Base() Type {
+func (d StructDefinition) Base() Type {
 	return nil
 }
 
-func (d StructDeclaration) Equals(c Type) bool {
-	compareType, isDeclaration := c.(StructDeclaration)
+func (d StructDefinition) Equals(c Type) bool {
+	compareType, isDeclaration := c.(StructDefinition)
 
 	if !isDeclaration {
 		return false
@@ -70,10 +70,10 @@ func (d StructDeclaration) Equals(c Type) bool {
 	return true
 }
 
-func (t StructDeclaration) ElementaryType() Type { return elementaryType(t) }
-func (t StructDeclaration) AliasedType() Type    { return aliasedType(t) }
+func (t StructDefinition) ElementaryType() Type { return elementaryType(t) }
+func (t StructDefinition) AliasedType() Type    { return aliasedType(t) }
 
-func (d StructDeclaration) FindField(name string) (StructField, error) {
+func (d StructDefinition) FindField(name string) (StructField, error) {
 	for _, field := range d.Fields() {
 		if field.Name() == name {
 			return field, nil
@@ -101,31 +101,31 @@ func (v StructValue) Value() Expression {
 	return v.value
 }
 
-type StructDefinition struct {
+type StructInitialization struct {
 	t      Type
 	values []StructValue
 }
 
-func NewStructDefinition(t Type, values ...StructValue) StructDefinition {
-	return StructDefinition{
+func NewStructInitialization(t Type, values ...StructValue) StructInitialization {
+	return StructInitialization{
 		t,
 		values,
 	}
 }
 
-func (d StructDefinition) StatementType() StatementType {
+func (d StructInitialization) StatementType() StatementType {
 	return STATEMENT_TYPE_STRUCT_DEFINITION
 }
 
-func (d StructDefinition) ValueType() ValueType {
+func (d StructInitialization) ValueType() ValueType {
 	return NewValueType(d.t, false)
 }
 
-func (d StructDefinition) IsConstant() bool {
+func (d StructInitialization) IsConstant() bool {
 	return false
 }
 
-func (d StructDefinition) Values() []StructValue {
+func (d StructInitialization) Values() []StructValue {
 	return d.values
 }
 

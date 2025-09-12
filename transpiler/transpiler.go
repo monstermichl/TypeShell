@@ -80,14 +80,14 @@ func (t *transpiler) evaluateValueTypeDefaultValue(valueType parser.ValueType) (
 	case parser.TypeKindString:
 		defaultValue = conv.StringToString("")
 	case parser.TypeKindStruct:
-		structDeclaration, valid := valueType.Type().(parser.StructDeclaration)
+		structDefinition, valid := valueType.Type().(parser.StructDefinition)
 
 		if !valid {
 			return "", errors.New("struct declaration could not be evaluated")
 		}
 		values := []parser.StructValue{}
 
-		for _, field := range structDeclaration.Fields() {
+		for _, field := range structDefinition.Fields() {
 			fieldValueType := field.ValueType()
 			defaultValueTemp, err := t.evaluateValueTypeDefaultValue(fieldValueType)
 
@@ -98,8 +98,8 @@ func (t *transpiler) evaluateValueTypeDefaultValue(valueType parser.ValueType) (
 		}
 
 		// Create helper struct definition.
-		structDefinition := parser.NewStructDefinition(structDeclaration, values...)
-		result, err := t.evaluateExpression(structDefinition, true)
+		structInitialization := parser.NewStructInitialization(structDefinition, values...)
+		result, err := t.evaluateExpression(structInitialization, true)
 
 		if err != nil {
 			return "", err
@@ -682,7 +682,7 @@ func (t *transpiler) evaluateFunctionCall(functionCall parser.FunctionCall, valu
 		param := params[i]
 
 		switch evaluationType := arg.ValueType().Type().(type) {
-		case parser.StructDeclaration:
+		case parser.StructDefinition:
 			// If passed argument is a struct, the values need to be copied to avoid manipulation of the original.
 			paramName := param.LayerName()
 
@@ -772,7 +772,7 @@ func (t *transpiler) evaluateSliceInstantiation(instantiation parser.SliceInstan
 	return newExpressionResult(s), nil
 }
 
-func (t *transpiler) evaluateStructDefinition(definition parser.StructDefinition, valueUsed bool) (expressionResult, error) {
+func (t *transpiler) evaluateStructInitialization(definition parser.StructInitialization, valueUsed bool) (expressionResult, error) {
 	values := []StructValue{}
 
 	for _, value := range definition.Values() {
@@ -786,7 +786,7 @@ func (t *transpiler) evaluateStructDefinition(definition parser.StructDefinition
 			value: result.firstValue(),
 		})
 	}
-	s, err := t.converter.StructDefinition(values, valueUsed)
+	s, err := t.converter.StructInitialization(values, valueUsed)
 
 	if err != nil {
 		return expressionResult{}, err
@@ -992,7 +992,7 @@ func (t *transpiler) evaluateExpression(expression parser.Expression, valueUsed 
 	case parser.STATEMENT_TYPE_SLICE_INSTANTIATION:
 		return t.evaluateSliceInstantiation(expression.(parser.SliceInstantiation), valueUsed)
 	case parser.STATEMENT_TYPE_STRUCT_DEFINITION:
-		return t.evaluateStructDefinition(expression.(parser.StructDefinition), valueUsed)
+		return t.evaluateStructInitialization(expression.(parser.StructInitialization), valueUsed)
 	case parser.STATEMENT_TYPE_INPUT:
 		return t.evaluateInput(expression.(parser.Input), valueUsed)
 	case parser.STATEMENT_TYPE_COPY:

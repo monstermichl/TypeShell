@@ -387,12 +387,12 @@ func defaultVarValue(valueType ValueType, ctx context) (Expression, error) {
 			case TypeKindString:
 				return StringLiteral{}, nil
 			case TypeKindStruct:
-				structDeclaration, exists := elementaryDataType.(StructDeclaration)
+				structDefinition, exists := elementaryDataType.(StructDefinition)
 
 				if exists {
 					structValues := []StructValue{}
 
-					for _, field := range structDeclaration.Fields() {
+					for _, field := range structDefinition.Fields() {
 						defaultValue, err := defaultVarValue(field.ValueType(), ctx)
 
 						if err != nil {
@@ -406,7 +406,7 @@ func defaultVarValue(valueType ValueType, ctx context) (Expression, error) {
 							value: defaultValue,
 						})
 					}
-					return NewStructDefinition(valueType.Type(), structValues...), nil
+					return NewStructInitialization(valueType.Type(), structValues...), nil
 				}
 			}
 		} else {
@@ -1222,21 +1222,21 @@ func (p *Parser) evaluateValueType(ctx context) (ValueType, error) {
 	return evaluatedType, nil
 }
 
-func (p *Parser) evaluateStructDeclaration(name string, ctx context) (StructDeclaration, error) {
+func (p *Parser) evaluateStructDefinition(name string, ctx context) (StructDefinition, error) {
 	structToken := p.eat()
 
 	if structToken.Type() != lexer.STRUCT {
-		return StructDeclaration{}, p.expectedKeywordError("struct", structToken)
+		return StructDefinition{}, p.expectedKeywordError("struct", structToken)
 	}
 	nextToken := p.eat()
 
 	if nextToken.Type() != lexer.OPENING_CURLY_BRACKET {
-		return StructDeclaration{}, p.expectedError(`"{"`, nextToken)
+		return StructDefinition{}, p.expectedError(`"{"`, nextToken)
 	}
 	nextToken = p.eat()
 
 	if nextToken.Type() != lexer.NEWLINE {
-		return StructDeclaration{}, p.expectedNewlineError(nextToken)
+		return StructDefinition{}, p.expectedNewlineError(nextToken)
 	}
 	fields := []StructField{}
 
@@ -1245,18 +1245,18 @@ func (p *Parser) evaluateStructDeclaration(name string, ctx context) (StructDecl
 		nameTokens, err := p.evaluateNames()
 
 		if err != nil {
-			return StructDeclaration{}, err
+			return StructDefinition{}, err
 		}
 		valueTypeToken := p.peek()
 		valueType, err := p.evaluateValueType(ctx)
 
 		if err != nil {
-			return StructDeclaration{}, err
+			return StructDefinition{}, err
 		}
 
 		// Don't allow nested structs for now.
 		if valueType.Type().Kind() == TypeKindStruct {
-			return StructDeclaration{}, p.atError("nested structs are not allowed", valueTypeToken)
+			return StructDefinition{}, p.atError("nested structs are not allowed", valueTypeToken)
 		}
 
 		for _, nameToken := range nameTokens {
@@ -1268,7 +1268,7 @@ func (p *Parser) evaluateStructDeclaration(name string, ctx context) (StructDecl
 		nextToken = p.eat()
 
 		if nextToken.Type() != lexer.NEWLINE {
-			return StructDeclaration{}, p.expectedNewlineError(nextToken)
+			return StructDefinition{}, p.expectedNewlineError(nextToken)
 		}
 		nextToken = p.peek()
 
@@ -1277,7 +1277,7 @@ func (p *Parser) evaluateStructDeclaration(name string, ctx context) (StructDecl
 			break
 		}
 	}
-	return NewStructDeclaration(name, fields), nil
+	return NewStructDefinition(name, fields), nil
 }
 
 func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
@@ -1310,12 +1310,12 @@ func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 		if isAlias {
 			return nil, p.atError("struct alias is not supported", assignToken)
 		}
-		structDeclaration, err := p.evaluateStructDeclaration(name, ctx)
+		structDefinition, err := p.evaluateStructDefinition(name, ctx)
 
 		if err != nil {
 			return nil, err
 		}
-		valueType = NewValueType(structDeclaration, false)
+		valueType = NewValueType(structDefinition, false)
 	} else {
 		valueType, err = p.evaluateValueType(ctx)
 
@@ -2584,11 +2584,11 @@ func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expr
 	if typeDeclarationKind != TypeKindStruct {
 		return nil, p.expectedError(fmt.Sprintf("%s but got %s", TypeKindStruct, typeDeclarationKind), identifierToken)
 	}
-	structDeclaration := typeDeclaration.(StructDeclaration)
+	structDefinition := typeDeclaration.(StructDefinition)
 
 	// Check field.
 	fieldName := fieldToken.Value()
-	foundField, err := structDeclaration.FindField(fieldName)
+	foundField, err := structDefinition.FindField(fieldName)
 
 	if err != nil {
 		return nil, p.atError(err.Error(), fieldToken)
@@ -3322,8 +3322,8 @@ func (p *Parser) evaluateStructInitialization(ctx context) (Expression, error) {
 	if err != nil {
 		return nil, err
 	}
-	structInitialization := intialization.(StructDefinition)
-	structDeclaration, valid := structValueType.Type().(StructDeclaration)
+	structInitialization := intialization.(StructInitialization)
+	structDefinition, valid := structValueType.Type().(StructDefinition)
 
 	if !valid || structValueType.IsSlice() {
 		return nil, p.expectedError(fmt.Sprintf("struct type but got %s", structValueType.String()), nextToken)
@@ -3334,7 +3334,7 @@ func (p *Parser) evaluateStructInitialization(ctx context) (Expression, error) {
 		if len(fieldName) == 0 {
 			return p.expectedError("field name", initValue.nameToken)
 		}
-		structField, err := structDeclaration.FindField(fieldName)
+		structField, err := structDefinition.FindField(fieldName)
 
 		if err != nil {
 			return err
@@ -3558,7 +3558,7 @@ func (p *Parser) evaluateStructAssignment(ctx context) (Statement, error) {
 	} else if namedValueBaseType.Kind() != TypeKindStruct {
 		return nil, p.expectedError(fmt.Sprintf("struct but variable is of type %s", namedValueBaseType.Kind()), nameToken)
 	}
-	structDeclaration := namedValueBaseType.(StructDeclaration)
+	structDefinition := namedValueBaseType.(StructDefinition)
 	nextToken := p.eat()
 
 	if nextToken.Type() != lexer.DOT {
@@ -3569,7 +3569,7 @@ func (p *Parser) evaluateStructAssignment(ctx context) (Statement, error) {
 	if nextToken.Type() != lexer.IDENTIFIER {
 		return nil, p.expectedError(`struct field`, nextToken)
 	}
-	structField, err := structDeclaration.FindField(nextToken.Value())
+	structField, err := structDefinition.FindField(nextToken.Value())
 
 	if err != nil {
 		return nil, p.atError(err.Error(), nextToken)

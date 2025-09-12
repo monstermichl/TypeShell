@@ -643,7 +643,7 @@ func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
-func (c *converter) StructDefinition(values []transpiler.StructValue, valueUsed bool) (string, error) {
+func (c *converter) StructInitialization(values []transpiler.StructValue, valueUsed bool) (string, error) {
 	helper := c.nextDynamicHelperVar()
 
 	for _, value := range values {
