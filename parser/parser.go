@@ -3226,6 +3226,7 @@ func (p *Parser) evaluateInitializationValues(checkCallout func(initValue initVa
 				if slices.Contains(names, name) {
 					return nil, p.atError(fmt.Sprintf("a value has already been assigned to %s", name), nameToken)
 				}
+				names = append(names, name)
 				initValue.name = name
 			}
 			valueToken := p.peek()
