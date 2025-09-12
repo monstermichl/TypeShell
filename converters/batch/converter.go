@@ -816,7 +816,11 @@ func (c *converter) varAssignmentString(name string, value string, global bool) 
 }
 
 func (c *converter) varEvaluationString(name string, global bool) string {
-	return fmt.Sprintf("!%s!", c.varName(name, global))
+		// Only evaluate if it's not already evaluated.
+	if !strings.HasPrefix(name, "!") && !strings.HasSuffix(name, "!") {
+		return fmt.Sprintf("!%s!", c.varName(name, global))
+	}
+	return name
 }
 
 func (c *converter) ifStart(condition string, startAddition string) error {
