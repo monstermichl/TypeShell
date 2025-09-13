@@ -221,11 +221,11 @@ func (c *converter) ProgramEnd() error {
 	}
 
 	if c.structAssignmentHelperRequired {
-		// %1: Slice name
+		// %1: Struct name
 		// %2: Assigned field
 		// arg0: Assigned value
 		c.addHelper("struct assignment", structAssignmentHelper,
-			c.sliceAssignmentString("!%1!", "%2", fmt.Sprintf("!%s!", funcArgVar(0)), false),
+			c.structAssignmentString("%1", "%2", fmt.Sprintf("!%s!", funcArgVar(0)), false),
 		)
 	}
 
@@ -286,7 +286,7 @@ func (c *converter) SliceAssignment(name string, index string, value string, def
 
 func (c *converter) StructAssignment(name string, field string, value string, global bool) error {
 	c.structAssignmentHelperRequired = true
-	c.callFunc(structAssignmentHelper, []string{value}, c.varName(name, global), field)
+	c.callFunc(structAssignmentHelper, []string{value}, c.varEvaluationString(name, global), field)
 	return nil
 }
 

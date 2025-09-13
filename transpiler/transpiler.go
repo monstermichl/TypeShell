@@ -396,6 +396,46 @@ func (t *transpiler) evaluateFor(forStatement parser.For) error {
 	return conv.ForEnd()
 }
 
+func (t *transpiler) evaluateExpressionAssignment(assignedExpression parser.Expression) (expressionResult, error) {
+	result, err := t.evaluateExpression(assignedExpression, true)
+	value := result.firstValue()
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+
+	switch evaluationType := assignedExpression.ValueType().Type().(type) {
+	case parser.StructDefinition:
+		newStruct, err := t.converter.StructInitialization([]StructValue{}, true)
+
+		if err != nil {
+			return expressionResult{}, err
+		}
+
+		// If expression is a struct, the values need to be copied to avoid manipulation of the original.
+		for _, field := range evaluationType.Fields() {
+			fieldName := field.Name()
+			fieldValue, err := t.converter.StructEvaluation(value, fieldName, true)
+
+			if err != nil {
+				return expressionResult{}, nil
+			}
+			err = t.converter.StructAssignment(newStruct, fieldName, fieldValue, false)
+
+			if err != nil {
+				return expressionResult{}, err
+			}
+		}
+		evaluatedValue, err := t.converter.VarEvaluation(newStruct, true, false)
+
+		if err != nil {
+			return expressionResult{}, err
+		}
+		value = evaluatedValue
+	}
+	return newExpressionResult(value), nil
+}
+
 func (t *transpiler) evaluateNamedValuesDefinition(definition parser.NamedValuesDefinition) error {
 	for _, assignment := range definition.Assignments() {
 		err := t.evaluate(assignment)
@@ -419,7 +459,7 @@ func (t *transpiler) evaluateConstDefinition(definition parser.ConstDefinition) 
 
 func (t *transpiler) evaluateVarDefinition(definition parser.VariableDefinitionValueAssignment) error {
 	for i, variable := range definition.Variables() {
-		result, err := t.evaluateExpression(definition.Values()[i], true)
+		result, err := t.evaluateExpressionAssignment(definition.Values()[i])
 
 		if err != nil {
 			return err
@@ -434,7 +474,7 @@ func (t *transpiler) evaluateVarDefinition(definition parser.VariableDefinitionV
 }
 
 func (t *transpiler) evaluateVarDefinitionCallAssignment(definition parser.VariableDefinitionCallAssignment) error {
-	result, err := t.evaluateExpression(definition.Call(), true)
+	result, err := t.evaluateExpression(definition.Call(), true) // TODO: Handle issue https://github.com/monstermichl/TypeShell/issues/54 here as well?
 
 	if err != nil {
 		return err
@@ -460,7 +500,7 @@ func (t *transpiler) evaluateVarDefinitionCallAssignment(definition parser.Varia
 
 func (t *transpiler) evaluateVarAssignment(assignment parser.VariableAssignmentValueAssignment) error {
 	for i, variable := range assignment.Variables() {
-		result, err := t.evaluateExpression(assignment.Values()[i], true)
+		result, err := t.evaluateExpressionAssignment(assignment.Values()[i])
 
 		if err != nil {
 			return err
@@ -475,7 +515,7 @@ func (t *transpiler) evaluateVarAssignment(assignment parser.VariableAssignmentV
 }
 
 func (t *transpiler) evaluateVarAssignmentCallAssignment(assignment parser.VariableAssignmentCallAssignment) error {
-	result, err := t.evaluateExpression(assignment.Call(), true)
+	result, err := t.evaluateExpression(assignment.Call(), true) // TODO: Handle issue https://github.com/monstermichl/TypeShell/issues/54 here as well?
 
 	if err != nil {
 		return err
@@ -506,7 +546,7 @@ func (t *transpiler) evaluateSliceAssignment(assignment parser.SliceAssignment) 
 		return err
 	}
 	value := assignment.Value()
-	valueResult, err := t.evaluateExpression(value, true)
+	result, err := t.evaluateExpressionAssignment(value)
 
 	if err != nil {
 		return err
@@ -517,12 +557,12 @@ func (t *transpiler) evaluateSliceAssignment(assignment parser.SliceAssignment) 
 	if err != nil {
 		return err
 	}
-	return t.converter.SliceAssignment(assignment.LayerName(), indexResult.firstValue(), valueResult.firstValue(), defaultValue, assignment.Global())
+	return t.converter.SliceAssignment(assignment.LayerName(), indexResult.firstValue(), result.firstValue(), defaultValue, assignment.Global())
 }
 
 func (t *transpiler) evaluateStructAssignment(assignment parser.StructAssignment) error {
 	value := assignment.Value()
-	valueResult, err := t.evaluateExpression(value.Value(), true)
+	valueResult, err := t.evaluateExpressionAssignment(value.Value())
 
 	if err != nil {
 		return err
@@ -667,47 +707,12 @@ func (t *transpiler) evaluateFunctionDefinition(functionDefinition parser.Functi
 	return conv.FuncEnd()
 }
 
-func (t *transpiler) evaluateExpressionAssignment(assigneeName string, assignedExpression parser.Expression) (expressionResult, error) {
-	result, err := t.evaluateExpression(assignedExpression, true)
-	value := result.firstValue()
-
-	if err != nil {
-		return expressionResult{}, err
-	}
-
-	switch evaluationType := assignedExpression.ValueType().Type().(type) {
-	case parser.StructDefinition:
-		// If expression is a struct, the values need to be copied to avoid manipulation of the original.
-		for _, field := range evaluationType.Fields() {
-			fieldName := field.Name()
-			fieldValue, err := t.converter.StructEvaluation(value, fieldName, true)
-
-			if err != nil {
-				return expressionResult{}, nil
-			}
-			err = t.converter.StructAssignment(assigneeName, fieldName, fieldValue, false)
-
-			if err != nil {
-				return expressionResult{}, err
-			}
-		}
-		evaluatedValue, err := t.converter.VarEvaluation(assigneeName, true, false)
-
-		if err != nil {
-			return expressionResult{}, err
-		}
-		value = evaluatedValue
-	}
-	return newExpressionResult(value), nil
-}
-
 func (t *transpiler) evaluateFunctionCall(functionCall parser.FunctionCall, valueUsed bool) (expressionResult, error) {
 	name := functionCall.Name()
-	params := functionCall.Params()
 	args := []string{}
 
-	for i, arg := range functionCall.Args() {
-		result, err := t.evaluateExpressionAssignment(params[i].LayerName(), arg)
+	for _, arg := range functionCall.Args() {
+		result, err := t.evaluateExpressionAssignment(arg)
 
 		if err != nil {
 			return expressionResult{}, err
@@ -763,7 +768,7 @@ func (t *transpiler) evaluateSliceInstantiation(instantiation parser.SliceInstan
 	values := []string{}
 
 	for _, expr := range instantiation.Values() {
-		result, err := t.evaluateExpression(expr, true)
+		result, err := t.evaluateExpressionAssignment(expr)
 
 		if err != nil {
 			return expressionResult{}, err
@@ -782,7 +787,7 @@ func (t *transpiler) evaluateStructInitialization(definition parser.StructInitia
 	values := []StructValue{}
 
 	for _, value := range definition.Values() {
-		result, err := t.evaluateExpression(value.Value(), true)
+		result, err := t.evaluateExpressionAssignment(value.Value())
 
 		if err != nil {
 			return expressionResult{}, err
