@@ -216,6 +216,7 @@ func (c *converter) ProgramEnd() error {
 	if c.sliceLenGetHelperRequired {
 		c.addHelper("slice length get", sliceLenGetHelper,
 			`set "_len=!%1_len!"`,
+			`if "!_len!" == "" set /A "_len=0"`,
 		)
 	}
 
