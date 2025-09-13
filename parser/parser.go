@@ -1247,16 +1247,10 @@ func (p *Parser) evaluateStructDefinition(name string, ctx context) (StructDefin
 		if err != nil {
 			return StructDefinition{}, err
 		}
-		valueTypeToken := p.peek()
 		valueType, err := p.evaluateValueType(ctx)
 
 		if err != nil {
 			return StructDefinition{}, err
-		}
-
-		// Don't allow nested structs for now.
-		if valueType.Type().Kind() == TypeKindStruct {
-			return StructDefinition{}, p.atError("nested structs are not allowed", valueTypeToken)
 		}
 
 		for _, nameToken := range nameTokens {

@@ -28,6 +28,10 @@ func TestReturnDifferentStructsSuccess(t *testing.T) {
 	testReturnDifferentStructsSuccess(t, transpileBash)
 }
 
+func TestNestedStructSuccess(t *testing.T) {
+	testNestedStructSuccess(t, transpileBash)
+}
+
 func TestStructFieldAssignedTwiceInInitializationFail(t *testing.T) {
 	testStructFieldAssignedTwiceInInitializationFail(t, transpileBash)
 }

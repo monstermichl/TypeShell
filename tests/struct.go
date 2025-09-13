@@ -141,6 +141,27 @@ func testReturnDifferentStructsSuccess(t *testing.T, transpilerFunc transpilerFu
 	})
 }
 
+func testNestedStructSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		type myStruct struct {
+			a string
+		}
+
+		type myStruct2 struct {
+			a string
+			b myStruct
+		}
+
+		s2 := myStruct2{a: "Hello", b: myStruct{a: "World"}}
+		s := s2.b
+
+		print(s2.a, s.a)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "Hello World", output)
+	})
+}
+
 func testStructFieldAssignedTwiceInInitializationFail(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		type myStruct struct {
