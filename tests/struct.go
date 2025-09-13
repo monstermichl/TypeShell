@@ -162,6 +162,26 @@ func testNestedStructSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	})
 }
 
+func testStructEvaluationChainingSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		type myStruct struct {
+			a string
+		}
+
+		type myStruct2 struct {
+			a string
+			b myStruct
+		}
+
+		s := myStruct2{a: "Hello", b: myStruct{a: "World"}}
+
+		print(s.a, s.b.a)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "Hello World", output)
+	})
+}
+
 func testStructFieldAssignedTwiceInInitializationFail(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		type myStruct struct {

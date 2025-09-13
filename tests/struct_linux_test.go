@@ -36,6 +36,10 @@ func TestStructFieldAssignedTwiceInInitializationFail(t *testing.T) {
 	testStructFieldAssignedTwiceInInitializationFail(t, transpileBash)
 }
 
+func TestStructEvaluationChainingSuccess(t *testing.T) {
+	testStructEvaluationChainingSuccess(t, transpileBash)
+}
+
 func TestStructUnknownFieldInInitializationFail(t *testing.T) {
 	testStructUnknownFieldInInitializationFail(t, transpileBash)
 }

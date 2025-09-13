@@ -32,6 +32,10 @@ func TestNestedStructSuccess(t *testing.T) {
 	testNestedStructSuccess(t, transpileBatch)
 }
 
+func TestStructEvaluationChainingSuccess(t *testing.T) {
+	testStructEvaluationChainingSuccess(t, transpileBatch)
+}
+
 func TestStructFieldAssignedTwiceInInitializationFail(t *testing.T) {
 	testStructFieldAssignedTwiceInInitializationFail(t, transpileBatch)
 }
