@@ -2563,35 +2563,36 @@ func (p *Parser) evaluateTypeDefinition(ctx context) (Expression, error) {
 	}, nil
 }
 
-func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expression, error) {
+func (p *Parser) evaluateStructFields(importAlias string, stopOnLastStruct bool, ctx context) (Expression, StructField, error) {
 	identifierToken := p.peek() // Eat identifier token.
 
 	if identifierToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedIdentifierError(identifierToken)
+		return nil, StructField{}, p.expectedIdentifierError(identifierToken)
 	}
 	value, err := p.evaluateNamedValueEvaluation(ctx)
 
 	if err != nil {
-		return nil, err
+		return nil, StructField{}, err
 	}
-	var expr Expression
+	expr := value
+	var structField StructField
 
 	for {
 		dotToken := p.eat()
 
 		if dotToken.Type() != lexer.DOT {
-			return nil, p.expectedError(`"."`, dotToken)
+			return nil, StructField{}, p.expectedError(`"."`, dotToken)
 		}
 		fieldToken := p.eat()
 
 		if fieldToken.Type() != lexer.IDENTIFIER {
-			return nil, p.expectedError("field name", fieldToken)
+			return nil, StructField{}, p.expectedError("field name", fieldToken)
 		}
 		typeDeclaration := value.ValueType().Type()
 		typeDeclarationKind := typeDeclaration.Kind()
 
 		if typeDeclarationKind != TypeKindStruct {
-			return nil, p.expectedError(fmt.Sprintf("%s but got %s", TypeKindStruct, typeDeclarationKind), identifierToken)
+			return nil, StructField{}, p.expectedError(fmt.Sprintf("%s but got %s", TypeKindStruct, typeDeclarationKind), identifierToken)
 		}
 		structDefinition := typeDeclaration.(StructDefinition)
 
@@ -2600,20 +2601,32 @@ func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expr
 		foundField, err := structDefinition.FindField(fieldName)
 
 		if err != nil {
-			return nil, p.atError(err.Error(), fieldToken)
+			return nil, StructField{}, p.atError(err.Error(), fieldToken)
 		}
-		expr = StructEvaluation{
+		structField = foundField
+		exprTemp := StructEvaluation{
 			value: value,
 			field: foundField,
 		}
-		
+		exprTempKind := exprTemp.ValueType().Type().Kind()
+
+		if exprTempKind != TypeKindStruct && stopOnLastStruct {
+			break
+		}
+		expr = exprTemp
+
 		// Allow chaining.
-		if p.peek().Type() != lexer.DOT || expr.ValueType().Type().Kind() != TypeKindStruct {
+		if p.peek().Type() != lexer.DOT || exprTempKind != TypeKindStruct {
 			break
 		}
 		value = expr
 	}
-	return expr, nil
+	return expr, structField, nil
+}
+
+func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expression, error) {
+	expr, _, err := p.evaluateStructFields(importAlias, false, ctx)
+	return expr, err
 }
 
 func (p *Parser) evaluateNamedValueEvaluation(ctx context) (Expression, error) {
@@ -3554,65 +3567,33 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 }
 
 func (p *Parser) evaluateStructAssignment(ctx context) (Statement, error) {
-	nameToken := p.eat()
-
-	if nameToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedError("struct variable", nameToken)
-	}
-	name := nameToken.Value()
-	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
-
-	if !exists {
-		return nil, p.variableNotDefinedError(name, nameToken)
-	} else if namedValue.IsConstant() {
-		return nil, p.constantError(name, nameToken)
-	}
-	namedValueValueType := namedValue.ValueType()
-	namedValueBaseType := namedValueValueType.Type()
-
-	if namedValueValueType.IsSlice() {
-		return nil, p.expectedError("struct but got slice", nameToken)
-	} else if namedValueBaseType.Kind() != TypeKindStruct {
-		return nil, p.expectedError(fmt.Sprintf("struct but variable is of type %s", namedValueBaseType.Kind()), nameToken)
-	}
-	structDefinition := namedValueBaseType.(StructDefinition)
-	nextToken := p.eat()
-
-	if nextToken.Type() != lexer.DOT {
-		return nil, p.expectedError(`"."`, nextToken)
-	}
-	nextToken = p.eat()
-
-	if nextToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedError(`struct field`, nextToken)
-	}
-	structField, err := structDefinition.FindField(nextToken.Value())
-
-	if err != nil {
-		return nil, p.atError(err.Error(), nextToken)
-	}
-	nextToken = p.eat()
-
-	if nextToken.Type() != lexer.ASSIGN_OPERATOR {
-		return nil, p.expectedError(`"="`, nameToken)
-	}
-	valueToken := p.peek()
-	value, err := p.evaluateExpression(ctx)
+	expr, field, err := p.evaluateStructFields("", true, ctx) // TODO: Find out if importAlias must be passed correctly.
 
 	if err != nil {
 		return nil, err
 	}
-	variableValueType := structField.ValueType()
-	assignedValueType := value.ValueType()
+	nextToken := p.eat()
 
-	if !variableValueType.Equals(assignedValueType) {
-		return nil, p.expectedError(fmt.Sprintf("%s value but got %s", variableValueType.String(), assignedValueType.String()), valueToken)
+	if nextToken.Type() != lexer.ASSIGN_OPERATOR {
+		return nil, p.expectedError(`"="`, nextToken)
+	}
+	assignedValueToken := p.peek()
+	assignedValue, err := p.evaluateExpression(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	fieldValueType := field.ValueType()
+	assignedValueType := assignedValue.ValueType()
+
+	if !fieldValueType.Equals(assignedValueType) {
+		return nil, p.expectedError(fmt.Sprintf("%s value but got %s", fieldValueType.String(), assignedValueType.String()), assignedValueToken)
 	}
 	return StructAssignment{
-		Variable: namedValue.(Variable),
-		value: StructValue{
-			StructField: structField,
-			value:       value,
+		value: expr,
+		assignment: StructValue{
+			StructField: field,
+			value:       assignedValue,
 		},
 	}, nil
 }

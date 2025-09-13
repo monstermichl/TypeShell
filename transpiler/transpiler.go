@@ -561,8 +561,13 @@ func (t *transpiler) evaluateSliceAssignment(assignment parser.SliceAssignment) 
 }
 
 func (t *transpiler) evaluateStructAssignment(assignment parser.StructAssignment) error {
-	value := assignment.Value()
-	valueResult, err := t.evaluateExpressionAssignment(value.Value())
+	structResult, err := t.evaluateExpression(assignment.Value(), true)
+
+	if err != nil {
+		return err
+	}
+	fieldAssignment := assignment.Assignment()
+	valueResult, err := t.evaluateExpressionAssignment(fieldAssignment.Value())
 
 	if err != nil {
 		return err
@@ -571,7 +576,7 @@ func (t *transpiler) evaluateStructAssignment(assignment parser.StructAssignment
 	if err != nil {
 		return err
 	}
-	return t.converter.StructAssignment(assignment.LayerName(), value.Name(), valueResult.firstValue(), assignment.Global())
+	return t.converter.StructAssignment(structResult.firstValue(), fieldAssignment.Name(), valueResult.firstValue(), false)
 }
 
 func (t *transpiler) evaluateConstEvaluation(evaluation parser.ConstEvaluation, valueUsed bool) (expressionResult, error) {

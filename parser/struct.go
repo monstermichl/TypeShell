@@ -130,16 +130,28 @@ func (d StructInitialization) Values() []StructValue {
 }
 
 type StructAssignment struct {
-	Variable
-	value StructValue
+	value      Expression
+	assignment StructValue
 }
 
 func (a StructAssignment) StatementType() StatementType {
 	return STATEMENT_TYPE_STRUCT_ASSIGNMENT
 }
 
-func (a StructAssignment) Value() StructValue {
+func (a StructAssignment) ValueType() ValueType {
+	return a.assignment.ValueType()
+}
+
+func (a StructAssignment) IsConstant() bool {
+	return false
+}
+
+func (a StructAssignment) Value() Expression {
 	return a.value
+}
+
+func (a StructAssignment) Assignment() StructValue {
+	return a.assignment
 }
 
 type StructEvaluation struct {
