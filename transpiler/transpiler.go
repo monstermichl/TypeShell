@@ -667,46 +667,52 @@ func (t *transpiler) evaluateFunctionDefinition(functionDefinition parser.Functi
 	return conv.FuncEnd()
 }
 
+func (t *transpiler) evaluateExpressionAssignment(assigneeName string, assignedExpression parser.Expression) (expressionResult, error) {
+	result, err := t.evaluateExpression(assignedExpression, true)
+	value := result.firstValue()
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+
+	switch evaluationType := assignedExpression.ValueType().Type().(type) {
+	case parser.StructDefinition:
+		// If expression is a struct, the values need to be copied to avoid manipulation of the original.
+		for _, field := range evaluationType.Fields() {
+			fieldName := field.Name()
+			fieldValue, err := t.converter.StructEvaluation(value, fieldName, true)
+
+			if err != nil {
+				return expressionResult{}, nil
+			}
+			err = t.converter.StructAssignment(assigneeName, fieldName, fieldValue, false)
+
+			if err != nil {
+				return expressionResult{}, err
+			}
+		}
+		evaluatedValue, err := t.converter.VarEvaluation(assigneeName, true, false)
+
+		if err != nil {
+			return expressionResult{}, err
+		}
+		value = evaluatedValue
+	}
+	return newExpressionResult(value), nil
+}
+
 func (t *transpiler) evaluateFunctionCall(functionCall parser.FunctionCall, valueUsed bool) (expressionResult, error) {
 	name := functionCall.Name()
 	params := functionCall.Params()
 	args := []string{}
 
 	for i, arg := range functionCall.Args() {
-		result, err := t.evaluateExpression(arg, true)
-		value := result.firstValue()
+		result, err := t.evaluateExpressionAssignment(params[i].LayerName(), arg)
 
 		if err != nil {
 			return expressionResult{}, err
 		}
-		param := params[i]
-
-		switch evaluationType := arg.ValueType().Type().(type) {
-		case parser.StructDefinition:
-			// If passed argument is a struct, the values need to be copied to avoid manipulation of the original.
-			paramName := param.LayerName()
-
-			for _, field := range evaluationType.Fields() {
-				fieldName := field.Name()
-				fieldValue, err := t.converter.StructEvaluation(value, fieldName, true)
-
-				if err != nil {
-					return expressionResult{}, nil
-				}
-				err = t.converter.StructAssignment(paramName, fieldName, fieldValue, false)
-
-				if err != nil {
-					return expressionResult{}, err
-				}
-			}
-			evaluatedValue, err := t.converter.VarEvaluation(paramName, true, false)
-
-			if err != nil {
-				return expressionResult{}, err
-			}
-			value = evaluatedValue
-		}
-		args = append(args, value)
+		args = append(args, result.firstValue())
 	}
 	returnTypes := functionCall.ReturnTypes()
 	values, err := t.converter.FuncCall(name, args, returnTypes, valueUsed)
