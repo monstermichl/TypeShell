@@ -175,11 +175,11 @@ func (c *converter) ProgramEnd() error {
 			":_sch_loop",
 			`if "!_i!" lss "!_len!" (`,
 			`for /f "delims=" %%i in ("%2_!_i!") do set "_v=!%%i!"`,
-			c.sliceAssignmentString("!%1!", "!_i!", "!_v!", false),
+			c.sliceAssignmentString("%1", "!_i!", "!_v!", false),
 			`set /A "_i=!_i!+1"`,
 			"goto :_sch_loop",
 			")",
-			c.callFuncString(sliceLenSetHelper, []string{}, "!%1!", "!_i!"),
+			c.callFuncString(sliceLenSetHelper, []string{}, "%1", "!_i!"),
 		)
 	}
 
@@ -192,18 +192,18 @@ func (c *converter) ProgramEnd() error {
 		// %3: Default value
 		// arg0: Assigned value
 		c.addHelper("slice assignment", sliceAssignmentHelper,
-			c.callFuncString(sliceLenGetHelper, []string{}, "!%1!"), // Get current slice length.
+			c.callFuncString(sliceLenGetHelper, []string{}, "%1"), // Get current slice length.
 			`set "_i=!_len!"`,
 			":_sah_loop",
 			`if "!_i!" lss "%2" (`,
-			c.sliceAssignmentString("!%1!", "!_i!", "%3", false),
+			c.sliceAssignmentString("%1", "!_i!", "%3", false),
 			`set /A "_i=!_i!+1"`,
 			"goto :_sah_loop",
 			") else (",
 			`set /A "_len=%2+1"`,
-			c.callFuncString(sliceLenSetHelper, []string{}, "!%1!", "!_len!"),
+			c.callFuncString(sliceLenSetHelper, []string{}, "%1", "!_len!"),
 			")",
-			c.sliceAssignmentString("!%1!", "%2", fmt.Sprintf("!%s!", funcArgVar(0)), false),
+			c.sliceAssignmentString("%1", "%2", fmt.Sprintf("!%s!", funcArgVar(0)), false),
 		)
 	}
 
@@ -279,7 +279,7 @@ func (c *converter) VarAssignment(name string, value string, global bool) error 
 
 func (c *converter) SliceAssignment(name string, index string, value string, defaultValue string, global bool) error {
 	c.sliceAssignmentHelperRequired = true
-	c.callFunc(sliceAssignmentHelper, []string{value}, c.varName(name, global), index, defaultValue)
+	c.callFunc(sliceAssignmentHelper, []string{value}, c.varEvaluationString(name, global), index, defaultValue)
 	return nil
 }
 
@@ -647,7 +647,7 @@ func (c *converter) SliceLen(name string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
 	c.sliceLenGetHelperRequired = true
-	c.callFunc(sliceLenGetHelper, []string{}, name)
+	c.callFunc(sliceLenGetHelper, []string{}, c.varEvaluationString(name, false))
 	c.VarAssignment(helper, c.varEvaluationString("_len", true), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
@@ -770,7 +770,7 @@ func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 
 func (c *converter) Copy(destination string, source string, valueUsed bool, global bool) (string, error) {
 	c.sliceCopyHelperRequired = true
-	c.callFunc(sliceCopyHelper, []string{}, c.varName(destination, global), source)
+	c.callFunc(sliceCopyHelper, []string{}, c.varEvaluationString(destination, global), source)
 
 	c.callFunc(sliceLenGetHelper, []string{}, c.varEvaluationString(destination, global))
 	return c.varEvaluationString("_len", true), nil
