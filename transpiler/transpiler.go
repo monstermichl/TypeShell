@@ -612,7 +612,13 @@ func (t *transpiler) evaluateSliceEvaluation(evaluation parser.SliceEvaluation, 
 }
 
 func (t *transpiler) evaluateStructEvaluation(evaluation parser.StructEvaluation, valueUsed bool) (expressionResult, error) {
-	s, err := t.converter.StructEvaluation(evaluation.LayerName(), evaluation.Field().Name(), valueUsed)
+	value := evaluation.Value()
+	result, err := t.evaluateExpression(value, true)
+
+	if err != nil {
+		return expressionResult{}, err
+	}
+	s, err := t.converter.StructEvaluation(result.firstValue(), evaluation.Field().Name(), valueUsed)
 
 	if err != nil {
 		return expressionResult{}, err

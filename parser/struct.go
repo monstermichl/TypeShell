@@ -143,12 +143,24 @@ func (a StructAssignment) Value() StructValue {
 }
 
 type StructEvaluation struct {
-	Variable
+	value Expression
 	field StructField
 }
 
 func (e StructEvaluation) StatementType() StatementType {
 	return STATEMENT_TYPE_STRUCT_EVALUATION
+}
+
+func (e StructEvaluation) Value() Expression {
+	return e.value
+}
+
+func (e StructEvaluation) ValueType() ValueType {
+	return e.field.ValueType()
+}
+
+func (e StructEvaluation) IsConstant() bool {
+	return false
 }
 
 func (e StructEvaluation) Field() StructField {

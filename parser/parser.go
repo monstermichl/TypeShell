@@ -2564,16 +2564,15 @@ func (p *Parser) evaluateTypeDefinition(ctx context) (Expression, error) {
 }
 
 func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expression, error) {
-	identifierToken := p.eat() // Eat identifier token.
+	identifierToken := p.peek() // Eat identifier token.
 
 	if identifierToken.Type() != lexer.IDENTIFIER {
 		return nil, p.expectedIdentifierError(identifierToken)
 	}
-	name := identifierToken.Value()
-	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
+	value, err := p.evaluateNamedValueEvaluation(ctx)
 
-	if !exists {
-		return nil, p.variableNotDefinedError(name, identifierToken)
+	if err != nil {
+		return nil, err
 	}
 	dotToken := p.eat()
 
@@ -2585,7 +2584,7 @@ func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expr
 	if fieldToken.Type() != lexer.IDENTIFIER {
 		return nil, p.expectedError("field name", fieldToken)
 	}
-	typeDeclaration := namedValue.ValueType().Type()
+	typeDeclaration := value.ValueType().Type()
 	typeDeclarationKind := typeDeclaration.Kind()
 
 	if typeDeclarationKind != TypeKindStruct {
@@ -2601,8 +2600,8 @@ func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expr
 		return nil, p.atError(err.Error(), fieldToken)
 	}
 	return StructEvaluation{
-		Variable: namedValue.(Variable),
-		field:    foundField,
+		value: value,
+		field: foundField,
 	}, nil
 }
 
