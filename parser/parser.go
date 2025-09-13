@@ -2574,54 +2574,62 @@ func (p *Parser) evaluateStructFields(importAlias string, stopOnLastStruct bool,
 	if err != nil {
 		return nil, StructField{}, err
 	}
-	expr := value
-	var structField StructField
+	return p.evaluateStructFieldsFromExpression(value, identifierToken, importAlias, stopOnLastStruct, ctx)
+}
 
-	for {
-		dotToken := p.eat()
+func (p *Parser) evaluateStructFieldsFromExpression(structExpression Expression, structExpressionToken lexer.Token, importAlias string, stopOnLastStruct bool, ctx context) (Expression, StructField, error) {
+	kind := structExpression.ValueType().Type().Kind()
 
-		if dotToken.Type() != lexer.DOT {
-			return nil, StructField{}, p.expectedError(`"."`, dotToken)
-		}
-		fieldToken := p.eat()
-
-		if fieldToken.Type() != lexer.IDENTIFIER {
-			return nil, StructField{}, p.expectedError("field name", fieldToken)
-		}
-		typeDeclaration := value.ValueType().Type()
-		typeDeclarationKind := typeDeclaration.Kind()
-
-		if typeDeclarationKind != TypeKindStruct {
-			return nil, StructField{}, p.expectedError(fmt.Sprintf("%s but got %s", TypeKindStruct, typeDeclarationKind), identifierToken)
-		}
-		structDefinition := typeDeclaration.(StructDefinition)
-
-		// Check field.
-		fieldName := fieldToken.Value()
-		foundField, err := structDefinition.FindField(fieldName)
-
-		if err != nil {
-			return nil, StructField{}, p.atError(err.Error(), fieldToken)
-		}
-		structField = foundField
-		exprTemp := StructEvaluation{
-			value: value,
-			field: foundField,
-		}
-		exprTempKind := exprTemp.ValueType().Type().Kind()
-
-		if exprTempKind != TypeKindStruct && stopOnLastStruct {
-			break
-		}
-		expr = exprTemp
-
-		// Allow chaining.
-		if p.peek().Type() != lexer.DOT || exprTempKind != TypeKindStruct {
-			break
-		}
-		value = expr
+	if kind != TypeKindStruct {
+		return nil, StructField{}, p.atError(fmt.Sprintf("struct type but got %s", kind), structExpressionToken)
 	}
-	return expr, structField, nil
+	expr := structExpression
+	dotToken := p.eat()
+
+	if dotToken.Type() != lexer.DOT {
+		return nil, StructField{}, p.expectedError(`"."`, dotToken)
+	}
+	fieldToken := p.eat()
+
+	if fieldToken.Type() != lexer.IDENTIFIER {
+		return nil, StructField{}, p.expectedError("field name", fieldToken)
+	}
+	typeDeclaration := structExpression.ValueType().Type()
+	typeDeclarationKind := typeDeclaration.Kind()
+
+	if typeDeclarationKind != TypeKindStruct {
+		return nil, StructField{}, p.expectedError(fmt.Sprintf("%s but got %s", TypeKindStruct, typeDeclarationKind), structExpressionToken)
+	}
+	structDefinition := typeDeclaration.(StructDefinition)
+
+	// Check field.
+	fieldName := fieldToken.Value()
+	foundField, err := structDefinition.FindField(fieldName)
+
+	if err != nil {
+		return nil, StructField{}, p.atError(err.Error(), fieldToken)
+	}
+	structField := foundField
+	exprTemp := StructEvaluation{
+		value: structExpression,
+		field: foundField,
+	}
+	exprTempValueType := exprTemp.ValueType()
+	exprTempKind := exprTempValueType.Type().Kind()
+	exprTempValueIsSlice := exprTempValueType.IsSlice()
+	nextToken := p.peek()
+	nextTokenType := nextToken.Type()
+
+	// Allow chaining.
+	if nextTokenType == lexer.OPENING_SQUARE_BRACKET && exprTempValueIsSlice {
+		expr, err = p.evaluateSubscriptFromExpression(exprTemp, nextToken, ctx)
+		structField = StructField{}
+	} else if nextTokenType == lexer.DOT && exprTempKind == TypeKindStruct {
+		expr, structField, err = p.evaluateStructFieldsFromExpression(exprTemp, nextToken, importAlias, stopOnLastStruct, ctx)
+	} else if !stopOnLastStruct {
+		expr = exprTemp
+	}
+	return expr, structField, err
 }
 
 func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expression, error) {
@@ -3404,6 +3412,12 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 	if err != nil {
 		return nil, err
 	}
+	return p.evaluateSubscriptFromExpression(value, valueToken, ctx)
+}
+
+func (p *Parser) evaluateSubscriptFromExpression(value Expression, valueToken lexer.Token, ctx context) (Expression, error) {
+	var err error
+
 	valueType := value.ValueType()
 	isSlice := valueType.IsSlice()
 
@@ -3495,11 +3509,16 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 			endIndex:   endIndex,
 		}, nil
 	}
-	return SliceEvaluation{
+	var expr Expression = SliceEvaluation{
 		value: value,
 		index: startIndex,
 		t:     valueType.Type(),
-	}, nil
+	}
+
+	if p.peek().Type() == lexer.DOT && expr.ValueType().Type().Kind() == TypeKindStruct {
+		expr, _, err = p.evaluateStructFieldsFromExpression(expr, p.peek(), "", false, ctx)
+	}
+	return expr, err
 }
 
 func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
