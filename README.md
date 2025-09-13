@@ -178,6 +178,79 @@ for i := 0; i < len(s); i++ {
 }
 ```
 
+### Types
+TypeShell supports the definition of types. However, types which result in slices are not supported yet.
+
+```golang
+// Define a type.
+type myType int
+
+var a myType
+a = myType(24)
+```
+
+```golang
+// Define an alias.
+type myType = int
+
+var a myType
+a = 24
+```
+
+```golang
+// Define a struct.
+type myStruct struct {
+    a    string
+    b    string
+    c, d int
+}
+```
+
+### Structs
+```golang
+// Define a simple struct.
+type myStruct struct {
+    greeting string
+    planet   string
+}
+
+// Define a new struct variable.
+var s myStruct = myStruct{greeting: "Hello", planet: "World"}
+
+// Assign a value to a struct field.
+s.planet = "Mars"
+
+// Retrieve values from the struct.
+print(s.greeting, s.planet)
+```
+
+Nested structs are also supported.
+```golang
+// Define structs.
+type myNestedStruct struct {
+    planet string
+}
+
+type myStruct struct {
+    greeting string
+    info     myNestedStruct
+}
+
+// Define a new struct variable.
+var s myStruct = myStruct{
+    greeting: "Hello",
+    info: myNestedStruct{
+        planet: "World",
+    },
+}
+
+// Assign a value to a nested struct field.
+s.info.planet = "Mars"
+
+// Retrieve values from the structs.
+print(s.greeting, s.info.planet)
+```
+
 ### Programs/Scripts
 ```golang
 // Programs/Scripts are called by stating the name preceded by an @.
@@ -228,25 +301,6 @@ import (
 )
 
 gocode.SomeFunction()
-```
-
-### Type declarations
-TypeShell supports the declaration of types. However, types which result in slices are not supported yet.
-
-```golang
-// Define a type.
-type myType int
-
-var a myType
-a = myType(24)
-```
-
-```golang
-// Define an alias.
-type myType = int
-
-var a myType
-a = 24
 ```
 
 ### Builtin
