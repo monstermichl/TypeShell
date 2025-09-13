@@ -2574,35 +2574,46 @@ func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expr
 	if err != nil {
 		return nil, err
 	}
-	dotToken := p.eat()
+	var expr Expression
 
-	if dotToken.Type() != lexer.DOT {
-		return nil, p.expectedError(`"."`, dotToken)
+	for {
+		dotToken := p.eat()
+
+		if dotToken.Type() != lexer.DOT {
+			return nil, p.expectedError(`"."`, dotToken)
+		}
+		fieldToken := p.eat()
+
+		if fieldToken.Type() != lexer.IDENTIFIER {
+			return nil, p.expectedError("field name", fieldToken)
+		}
+		typeDeclaration := value.ValueType().Type()
+		typeDeclarationKind := typeDeclaration.Kind()
+
+		if typeDeclarationKind != TypeKindStruct {
+			return nil, p.expectedError(fmt.Sprintf("%s but got %s", TypeKindStruct, typeDeclarationKind), identifierToken)
+		}
+		structDefinition := typeDeclaration.(StructDefinition)
+
+		// Check field.
+		fieldName := fieldToken.Value()
+		foundField, err := structDefinition.FindField(fieldName)
+
+		if err != nil {
+			return nil, p.atError(err.Error(), fieldToken)
+		}
+		expr = StructEvaluation{
+			value: value,
+			field: foundField,
+		}
+		
+		// Allow chaining.
+		if p.peek().Type() != lexer.DOT || expr.ValueType().Type().Kind() != TypeKindStruct {
+			break
+		}
+		value = expr
 	}
-	fieldToken := p.eat()
-
-	if fieldToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedError("field name", fieldToken)
-	}
-	typeDeclaration := value.ValueType().Type()
-	typeDeclarationKind := typeDeclaration.Kind()
-
-	if typeDeclarationKind != TypeKindStruct {
-		return nil, p.expectedError(fmt.Sprintf("%s but got %s", TypeKindStruct, typeDeclarationKind), identifierToken)
-	}
-	structDefinition := typeDeclaration.(StructDefinition)
-
-	// Check field.
-	fieldName := fieldToken.Value()
-	foundField, err := structDefinition.FindField(fieldName)
-
-	if err != nil {
-		return nil, p.atError(err.Error(), fieldToken)
-	}
-	return StructEvaluation{
-		value: value,
-		field: foundField,
-	}, nil
+	return expr, nil
 }
 
 func (p *Parser) evaluateNamedValueEvaluation(ctx context) (Expression, error) {
