@@ -247,9 +247,19 @@ func (c *converter) ProgramEnd() error {
 	}
 
 	if c.echoHelperRequired {
-		v := c.varEvaluationString(funcArgVar(0), true)
+		arg := funcArgVar(0)
+		helper := c.nextHelperVar()
+		v := c.varEvaluationString(arg, true)
+
 		c.addHelper("echo", echoHelper,
-			fmt.Sprintf(`if "%s" neq "" (echo %s) else echo.`, v, v), // echo. could be problematic (see discussion: https://stackoverflow.com/a/20691061).
+			c.varAssignmentString(helper, v, true),
+
+			// Check if passed value is already empty, because if it's already empty and the replace evaluation
+			// is execute ("!str: =!") the resulting string would be " ="... Yeah, that's Batch... So if the
+			// string is already empty, no replacement needs to take place and the helper-variable must be
+			// checked directly.
+			fmt.Sprintf(`if "%s" neq "" %s`, v, c.varAssignmentString(helper, fmt.Sprintf("!%s: =!", c.varName(arg, true)), true)),
+			fmt.Sprintf(`if "%s" neq "" (echo %s) else echo.`, c.varEvaluationString(helper, true), v), // echo. could be problematic (see discussion: https://stackoverflow.com/a/20691061).
 		)
 	}
 	c.addEndLine(":end")
@@ -816,7 +826,7 @@ func (c *converter) varAssignmentString(name string, value string, global bool) 
 }
 
 func (c *converter) varEvaluationString(name string, global bool) string {
-		// Only evaluate if it's not already evaluated.
+	// Only evaluate if it's not already evaluated.
 	if !strings.HasPrefix(name, "!") && !strings.HasSuffix(name, "!") {
 		return fmt.Sprintf("!%s!", c.varName(name, global))
 	}
