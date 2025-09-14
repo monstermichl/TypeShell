@@ -36,25 +36,6 @@ func Join(elems []string, sep string) string {
 	return s
 }
 
-func HasPrefix(s string, prefix string) bool {
-	l := len(prefix)
-
-	if len(s) >= l {
-		return s[:l] == prefix
-	}
-	return false
-}
-
-func HasSuffix(s string, suffix string) bool {
-	l := len(suffix)
-
-	if len(s) >= l {
-		l *= -1
-		return s[l:] == suffix
-	}
-	return false
-}
-
 func Count(s string, substr string) int {
 	lenS := len(s)
 	lenSub := len(substr)
@@ -162,15 +143,19 @@ func ReplaceAll(s string, old string, new string) string {
 }
 
 func CutPrefix(s string, prefix string) (string, bool) {
-	if HasPrefix(s, prefix) {
-		return s[len(prefix):], true
+	l := len(prefix)
+
+	if s[:l] == prefix {
+		return s[l:], true
 	}
 	return s, false
 }
 
 func CutSuffix(s string, suffix string) (string, bool) {
-	if HasSuffix(s, suffix) {
-		return s[0 : len(s)-len(suffix)], true
+	l := len(suffix)
+
+	if s[l*-1:] == suffix {
+		return s[0 : len(s)-l], true
 	}
 	return s, false
 }
@@ -186,6 +171,14 @@ func Cut(s string, sep string) (string, string, bool) {
 		}
 	}
 	return s, "", false
+}
+
+func HasPrefix(s string, prefix string) bool {
+	return s[:len(prefix)] == prefix
+}
+
+func HasSuffix(s string, suffix string) bool {
+	return s[len(suffix)*-1:] == suffix
 }
 
 func TrimPrefix(s string, prefix string) string {
