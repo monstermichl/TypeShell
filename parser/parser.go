@@ -3346,11 +3346,20 @@ func (p *Parser) evaluateSliceInitialization(ctx context) (Expression, error) {
 	for _, initValue := range initValues {
 		values = append(values, initValue.value)
 	}
-	initialization := SliceInstantiation{
+	var expr Expression = SliceInstantiation{
 		t:      sliceValueType.Type(),
 		values: values,
 	}
-	return initialization, nil
+	nextToken = p.peek()
+
+	if nextToken.Type() == lexer.OPENING_SQUARE_BRACKET {
+		expr, err = p.evaluateSubscriptFromExpression(expr, nextToken, ctx)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+	return expr, nil
 }
 
 func (p *Parser) evaluateStructInitialization(ctx context) (Expression, error) {

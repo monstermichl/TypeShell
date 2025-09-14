@@ -12,6 +12,10 @@ func TestDefineSliceRowValuesSuccess(t *testing.T) {
 	testDefineSliceRowValuesSuccess(t, transpileBatch)
 }
 
+func TestDefineSliceAndDirectlyGetIndexSuccess(t *testing.T) {
+	testDefineSliceAndDirectlyGetIndexSuccess(t, transpileBatch)
+}
+
 func TestSliceAssignValuesSuccess(t *testing.T) {
 	testSliceAssignValuesSuccess(t, transpileBatch)
 }

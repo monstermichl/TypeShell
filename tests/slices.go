@@ -31,6 +31,15 @@ func testDefineSliceRowValuesSuccess(t *testing.T, transpilerFunc transpilerFunc
 	})
 }
 
+func testDefineSliceAndDirectlyGetIndexSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		print([]int{1, 2}[1])
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "2", output)
+	})
+}
+
 func testSliceAssignValuesSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		var a = []int{1, 2}
