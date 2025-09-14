@@ -3546,6 +3546,7 @@ func (p *Parser) evaluateSubscriptFromExpression(value Expression, valueToken le
 }
 
 func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
+	identifierToken := p.peek()
 	expr, err := p.evaluateSubscript(ctx)
 
 	if err != nil {
@@ -3582,9 +3583,8 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 			assignment: NewStructValue(t.Field().Name(), value),
 		}, nil
 	default:
-		fmt.Println(t)
+		return nil, p.atError(fmt.Sprintf("unsupported type %s", t.ValueType().String()), identifierToken)
 	}
-	return expr, nil
 }
 
 func (p *Parser) evaluateStructAssignment(ctx context) (Statement, error) {
