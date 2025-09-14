@@ -1,17 +1,13 @@
 func Index(s string, substr string) int {
 	sul := len(substr)
 	ind := -1
+	lenS := len(s)
 
-	for i := 0; i < len(s); i++ {
+	for i := 0; i < lenS; i++ {
 		j := 0
 
-		for ; j < sul; j++ {
-			si := i + j
-			char := s[si]
-
-			if s[i+j] != substr[j] {
-				break
-			}
+		for ; j < sul && s[i+j] == substr[j]; j++ {
+			// Everything is already handled in the condition.
 		}
 
 		if j == sul {
