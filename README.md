@@ -390,6 +390,7 @@ if err != nil {
 
 ### Slices
 If a slice index does not exist on assignment, it and its intermediate indices are created.
+
 ```golang
 s := []string{"Hello"}
 
@@ -398,6 +399,23 @@ s[2] = "World"
 print(s[0]) // Prints "Hello".
 print(s[1]) // Prints "".
 print(s[2]) // Prints "World".
+```
+
+### Performance
+Try to avoid function calls like *len* in for-conditions if possible since they are evaluated for each iteration.
+
+```golang
+// Don't do this.
+for i := 0; i < len(s); i++ {
+    ...
+}
+
+// Do this instead.
+lenS := len(s)
+
+for i := 0; i < lenS; i++ {
+    ...
+}
 ```
 
 ## Visual Studio Code
