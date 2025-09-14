@@ -36,6 +36,10 @@ func TestStringWithNewlineSuccess(t *testing.T) {
 	testStringWithNewlineSuccess(t, transpileBatch)
 }
 
+func TestStringLiteralSubscriptSuccess(t *testing.T) {
+	testStringLiteralSubscriptSuccess(t, transpileBatch)
+}
+
 func TestStringWithoutNewlineSuccess(t *testing.T) {
 	testStringWithoutNewlineSuccess(t, transpileBatch)
 }

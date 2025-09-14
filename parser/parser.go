@@ -2721,6 +2721,11 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 		expr = StringLiteral{
 			value: value,
 		}
+		nextToken := p.peek()
+
+		if nextToken.Type() == lexer.OPENING_SQUARE_BRACKET {
+			expr, err = p.evaluateSubscriptFromExpression(expr, nextToken, ctx)
+		}
 
 	// Handle groups.
 	case lexer.OPENING_ROUND_BRACKET:

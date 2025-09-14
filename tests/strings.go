@@ -86,6 +86,15 @@ func testStringRangeNoIndicesSubscriptSuccess(t *testing.T, transpilerFunc trans
 	})
 }
 
+func testStringLiteralSubscriptSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		print("test"[1:2])
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "test"[1:2], output)
+	})
+}
+
 func testStringWithNewlineSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		s := "hello\nworld"
