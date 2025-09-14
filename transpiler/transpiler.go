@@ -403,35 +403,38 @@ func (t *transpiler) evaluateExpressionAssignment(assignedExpression parser.Expr
 	if err != nil {
 		return expressionResult{}, err
 	}
+	valueType := assignedExpression.ValueType()
 
-	switch evaluationType := assignedExpression.ValueType().Type().(type) {
-	case parser.StructDefinition:
-		newStruct, err := t.converter.StructInitialization([]StructValue{}, true)
-
-		if err != nil {
-			return expressionResult{}, err
-		}
-
-		// If expression is a struct, the values need to be copied to avoid manipulation of the original.
-		for _, field := range evaluationType.Fields() {
-			fieldName := field.Name()
-			fieldValue, err := t.converter.StructEvaluation(value, fieldName, true)
-
-			if err != nil {
-				return expressionResult{}, nil
-			}
-			err = t.converter.StructAssignment(newStruct, fieldName, fieldValue, false)
+	if !valueType.IsSlice() {
+		switch evaluationType := valueType.Type().(type) {
+		case parser.StructDefinition:
+			newStruct, err := t.converter.StructInitialization([]StructValue{}, true)
 
 			if err != nil {
 				return expressionResult{}, err
 			}
-		}
-		evaluatedValue, err := t.converter.VarEvaluation(newStruct, true, false)
 
-		if err != nil {
-			return expressionResult{}, err
+			// If expression is a struct, the values need to be copied to avoid manipulation of the original.
+			for _, field := range evaluationType.Fields() {
+				fieldName := field.Name()
+				fieldValue, err := t.converter.StructEvaluation(value, fieldName, true)
+
+				if err != nil {
+					return expressionResult{}, nil
+				}
+				err = t.converter.StructAssignment(newStruct, fieldName, fieldValue, false)
+
+				if err != nil {
+					return expressionResult{}, err
+				}
+			}
+			evaluatedValue, err := t.converter.VarEvaluation(newStruct, true, false)
+
+			if err != nil {
+				return expressionResult{}, err
+			}
+			value = evaluatedValue
 		}
-		value = evaluatedValue
 	}
 	return newExpressionResult(value), nil
 }
