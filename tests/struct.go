@@ -60,6 +60,20 @@ func testDeclareAndDefineStructWithValuesOneLineSuccess(t *testing.T, transpiler
 	})
 }
 
+func testGetFieldDirectlyFromStructInitializationSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		type myStruct struct {
+			a, b string
+			c    bool
+			d    int
+		}
+		print(myStruct{a: "Hello", b: "World"}.b)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "World", output)
+	})
+}
+
 func testDeclareAndDefineStructSliceSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		type myStruct struct {

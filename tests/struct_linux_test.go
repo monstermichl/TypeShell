@@ -16,6 +16,10 @@ func TestDeclareAndDefineStructWithValuesOneLineSuccess(t *testing.T) {
 	testDeclareAndDefineStructWithValuesOneLineSuccess(t, transpileBash)
 }
 
+func TestGetFieldDirectlyFromStructInitializationSuccess(t *testing.T) {
+	testGetFieldDirectlyFromStructInitializationSuccess(t, transpileBash)
+}
+
 func TestDeclareAndDefineStructSliceSuccess(t *testing.T) {
 	testDeclareAndDefineStructSliceSuccess(t, transpileBash)
 }

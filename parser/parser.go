@@ -3405,7 +3405,17 @@ func (p *Parser) evaluateStructInitialization(ctx context) (Expression, error) {
 	if err != nil {
 		return nil, err
 	}
-	return structInitialization, nil
+	var expr Expression = structInitialization
+	nextToken = p.peek()
+
+	if nextToken.Type() == lexer.DOT {
+		expr, _, err = p.evaluateStructFieldsFromExpression(expr, nextToken, "", false, ctx) // TODO: Find out if importAlias must be passed correctly.
+
+		if err != nil {
+			return nil, err
+		}
+	}
+	return expr, nil
 }
 
 func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
