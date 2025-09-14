@@ -3384,7 +3384,7 @@ func (p *Parser) evaluateStructInitialization(ctx context) (Expression, error) {
 		if !valueDataType.Equals(structFieldValueType) {
 			return p.expectedError(fmt.Sprintf("%s value but got %s", structFieldValueType.String(), valueDataType.String()), initValue.valueToken)
 		}
-		structInitialization.values = append(structInitialization.values, NewStructValue(fieldName, structFieldValueType, value))
+		structInitialization.values = append(structInitialization.values, NewStructValue(fieldName, value))
 		return nil
 	}, ctx)
 
@@ -3522,49 +3522,15 @@ func (p *Parser) evaluateSubscriptFromExpression(value Expression, valueToken le
 }
 
 func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
-	nameToken := p.eat()
-
-	if nameToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedError("slice variable", nameToken)
-	}
-	name := nameToken.Value()
-	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
-
-	if !exists {
-		return nil, p.variableNotDefinedError(name, nameToken)
-	} else if namedValue.IsConstant() {
-		return nil, p.constantError(name, nameToken)
-	}
-	variableValueType := namedValue.ValueType()
-
-	if !variableValueType.IsSlice() {
-		return nil, p.expectedError(fmt.Sprintf("slice but variable is of type %s", variableValueType.String()), nameToken)
-	}
-	nextToken := p.eat()
-
-	if nextToken.Type() != lexer.OPENING_SQUARE_BRACKET {
-		return nil, p.expectedError(`"["`, nextToken)
-	}
-	nextToken = p.peek()
-	index, err := p.evaluateExpression(ctx)
+	expr, err := p.evaluateSubscript(ctx)
 
 	if err != nil {
 		return nil, err
 	}
-	indexValueType := index.ValueType()
-
-	if !indexValueType.IsInt() {
-		return nil, p.expectedError(fmt.Sprintf("%s as index but got %s", TypeKindInt, indexValueType.String()), nextToken)
-	}
-	nextToken = p.eat()
-
-	if nextToken.Type() != lexer.CLOSING_SQUARE_BRACKET {
-		return nil, p.expectedError(`"]"`, nextToken)
-	}
-	nextToken = p.eat()
+	nextToken := p.eat()
 
 	if nextToken.Type() != lexer.ASSIGN_OPERATOR {
-		return nil, p.expectedError(`"="`, nameToken)
+		return nil, p.expectedError(`"="`, nextToken)
 	}
 	valueToken := p.peek()
 	value, err := p.evaluateExpression(ctx)
@@ -3572,17 +3538,29 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 	if err != nil {
 		return nil, err
 	}
-	variableType := variableValueType.Type()
+	sliceType := expr.ValueType().Type()
 	assignedType := value.ValueType().Type()
 
-	if !variableType.Equals(assignedType) {
-		return nil, p.expectedError(fmt.Sprintf("%s value but got %s", variableType.Name(), assignedType.Name()), valueToken)
+	if !sliceType.Equals(assignedType) {
+		return nil, p.expectedError(fmt.Sprintf("%s value but got %s", sliceType.Name(), assignedType.Name()), valueToken)
 	}
-	return SliceAssignment{
-		Variable: namedValue.(Variable),
-		index:    index,
-		value:    value,
-	}, nil
+
+	switch t := expr.(type) {
+	case SliceEvaluation:
+		return SliceAssignment{
+			value:      t.Value(),
+			index:      t.Index(),
+			assignment: value,
+		}, nil
+	case StructEvaluation:
+		return StructAssignment{
+			value:      t.Value(),
+			assignment: NewStructValue(t.Field().Name(), value),
+		}, nil
+	default:
+		fmt.Println(t)
+	}
+	return expr, nil
 }
 
 func (p *Parser) evaluateStructAssignment(ctx context) (Statement, error) {

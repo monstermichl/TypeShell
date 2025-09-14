@@ -94,7 +94,7 @@ func (t *transpiler) evaluateValueTypeDefaultValue(valueType parser.ValueType) (
 			if err != nil {
 				return "", err
 			}
-			values = append(values, parser.NewStructValue(field.Name(), fieldValueType, parser.NewStringLiteral(defaultValueTemp)))
+			values = append(values, parser.NewStructValue(field.Name(), parser.NewStringLiteral(defaultValueTemp)))
 		}
 
 		// Create helper struct definition.
@@ -543,24 +543,29 @@ func (t *transpiler) evaluateVarAssignmentCallAssignment(assignment parser.Varia
 }
 
 func (t *transpiler) evaluateSliceAssignment(assignment parser.SliceAssignment) error {
+	sliceResult, err := t.evaluateExpression(assignment.Value(), true)
+
+	if err != nil {
+		return err
+	}
 	indexResult, err := t.evaluateIndex(assignment.Index(), true)
 
 	if err != nil {
 		return err
 	}
-	value := assignment.Value()
-	result, err := t.evaluateExpressionAssignment(value)
+	assignmentValue := assignment.Assignment()
+	result, err := t.evaluateExpressionAssignment(assignmentValue)
 
 	if err != nil {
 		return err
 	}
-	valueType := value.ValueType()
+	valueType := assignmentValue.ValueType()
 	defaultValue, err := t.evaluateValueTypeDefaultValue(valueType)
 
 	if err != nil {
 		return err
 	}
-	return t.converter.SliceAssignment(assignment.LayerName(), indexResult.firstValue(), result.firstValue(), defaultValue, assignment.Global())
+	return t.converter.SliceAssignment(sliceResult.firstValue(), indexResult.firstValue(), result.firstValue(), defaultValue, false)
 }
 
 func (t *transpiler) evaluateStructAssignment(assignment parser.StructAssignment) error {
@@ -571,11 +576,7 @@ func (t *transpiler) evaluateStructAssignment(assignment parser.StructAssignment
 	}
 	fieldAssignment := assignment.Assignment()
 	valueResult, err := t.evaluateExpressionAssignment(fieldAssignment.Value())
-
-	if err != nil {
-		return err
-	}
-
+	
 	if err != nil {
 		return err
 	}

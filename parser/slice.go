@@ -48,23 +48,23 @@ func (s SliceEvaluation) IsConstant() bool {
 }
 
 type SliceAssignment struct {
-	Variable
-	index Expression
-	value Expression
+	value      Expression
+	index      Expression
+	assignment Expression
 }
 
 func (s SliceAssignment) StatementType() StatementType {
 	return STATEMENT_TYPE_SLICE_ASSIGNMENT
 }
 
-func (s SliceAssignment) Name() string {
-	return s.name
+func (s SliceAssignment) Value() Expression {
+	return s.value
 }
 
 func (s SliceAssignment) Index() Expression {
 	return s.index
 }
 
-func (s SliceAssignment) Value() Expression {
-	return s.value
+func (s SliceAssignment) Assignment() Expression {
+	return s.assignment
 }

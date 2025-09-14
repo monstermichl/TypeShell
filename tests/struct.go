@@ -203,6 +203,30 @@ func testStructAssignmentChainingSuccess(t *testing.T, transpilerFunc transpiler
 	})
 }
 
+func testStructSliceCombinationSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		type nestedStruct struct {
+		    info string
+		}
+
+		type easyStruct struct {
+			info     []nestedStruct
+			comments []string
+		}
+
+		sl := []easyStruct{easyStruct{info: []nestedStruct{nestedStruct{info: "new"}}, comments: []string{"Hello World"}}}
+		sl[1] = easyStruct{comments: []string{"Ciao Jupiter", "Bye Mars"}}
+		sl[1].comments = []string{sl[1].comments[0]}
+		sl[0].info[0].info = "updated"
+
+		print(sl[1].comments[0])
+		print(sl[0].info[0].info)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "Ciao Jupiter\nupdated", output)
+	})
+}
+
 func testStructFieldAssignedTwiceInInitializationFail(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		type myStruct struct {

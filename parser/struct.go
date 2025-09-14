@@ -87,11 +87,11 @@ type StructValue struct {
 	value Expression
 }
 
-func NewStructValue(name string, valueType ValueType, value Expression) StructValue {
+func NewStructValue(name string, value Expression) StructValue {
 	return StructValue{
 		StructField: StructField{
 			name,
-			valueType,
+			value.ValueType(),
 		},
 		value: value,
 	}

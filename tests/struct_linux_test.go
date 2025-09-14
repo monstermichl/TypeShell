@@ -36,6 +36,10 @@ func TestStructAssignmentChainingSuccess(t *testing.T) {
 	testStructAssignmentChainingSuccess(t, transpileBash)
 }
 
+func TestStructSliceCombinationSuccess(t *testing.T) {
+	testStructSliceCombinationSuccess(t, transpileBash)
+}
+
 func TestStructFieldAssignedTwiceInInitializationFail(t *testing.T) {
 	testStructFieldAssignedTwiceInInitializationFail(t, transpileBash)
 }
