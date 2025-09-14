@@ -65,7 +65,7 @@ func Count(s string, substr string) int {
 	c := 0
 
 	for i := 0; i < lenS; {
-		if HasPrefix(s[i:], substr) {
+		if s[i:i+lenSub] == substr {
 			c++
 			i += lenSub
 		} else {
@@ -138,18 +138,17 @@ func Replace(s string, old string, new string, n int) string {
 		res = new
 		rep++
 	}
+	lenS := len(s)
 
-	for i < len(s) && (rep < n || n < 0) {
-		c := s[i]
-
+	for i < lenS && (rep < n || n < 0) {
 		if lenOld == 0 {
-			res += c + new
+			res += s[i] + new
 			i++
-		} else if HasPrefix(s[i:], old) {
+		} else if s[i:i+lenOld] == old {
 			res += new
 			i += lenOld
 		} else {
-			res += c
+			res += s[i]
 			i++
 			continue
 		}
