@@ -33,6 +33,19 @@ func testSubtractionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	})
 }
 
+
+func testSubtractionOfNegativeIntLiteralSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		var a = 3
+		var b = a -1
+
+		print(b)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, strconv.Itoa(2), output)
+	})
+}
+
 func testMultiplicationSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		var a = 2

@@ -12,6 +12,10 @@ func TestSubtractionSuccess(t *testing.T) {
 	testSubtractionSuccess(t, transpileBash)
 }
 
+func TestSubtractionOfNegativeIntLiteralSuccess(t *testing.T) {
+	testSubtractionOfNegativeIntLiteralSuccess(t, transpileBash)
+}
+
 func TestMultiplicationSuccess(t *testing.T) {
 	testMultiplicationSuccess(t, transpileBash)
 }

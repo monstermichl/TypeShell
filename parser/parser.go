@@ -2976,16 +2976,36 @@ func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperators []BinaryO
 	// To implement associativity, use for-loop and keep appending same prio-expressions.
 	for {
 		operatorToken := p.peek()
-		operator := operatorToken.Value()
+		operator := ""
+		var rightExpression Expression
 
-		if operatorToken.Type() != lexer.BINARY_OPERATOR || !slices.Contains(allowedOperators, operator) {
-			break
+		// If next token is a number literal and it's less then 0, automatically
+		// insert an addition operator.
+		if operatorToken.Type() == lexer.NUMBER_LITERAL {
+			rightExpression, err = p.evaluateSingleExpression(ctx)
+
+			if err != nil {
+				return nil, err
+			}
+			numberLiteral := rightExpression.(IntegerLiteral)
+
+			if numberLiteral.Value() < 0 {
+				operator = "+"
+			}
 		}
-		p.eat() // Eat operator token.
-		rightExpression, err := higherPrioOperation(ctx)
 
-		if err != nil {
-			return nil, err
+		if len(operator) == 0 {
+			operator = operatorToken.Value()
+
+			if operatorToken.Type() != lexer.BINARY_OPERATOR || !slices.Contains(allowedOperators, operator) {
+				break
+			}
+			p.eat() // Eat operator token.
+			rightExpression, err = higherPrioOperation(ctx)
+
+			if err != nil {
+				return nil, err
+			}
 		}
 		leftType := leftExpression.ValueType()
 		rightType := rightExpression.ValueType()
