@@ -297,10 +297,10 @@ It's also possible to include files from a remote source. If the loaded code is 
 ```golang
 // Remote import.
 import (
-    gocode "https://exampleserver.com/somegofile.go"
+    ext "https://exampleserver.com/somegofile.tsh"
 )
 
-gocode.SomeFunction()
+ext.SomeFunction()
 ```
 
 ### Builtin
