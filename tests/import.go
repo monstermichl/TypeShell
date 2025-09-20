@@ -129,6 +129,52 @@ func testImportedSliceAssignmentSuccess(t *testing.T, transpilerFunc transpilerC
 	})
 }
 
+func testImportSimpleTypeSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) {
+	transpilerFunc(t, func(dir string) (string, error) {
+		importFile := "import.tsh"
+		t := "MyType"
+		err := os.WriteFile(filepath.Join(dir, importFile), []byte(`
+			type `+t+` string`,
+		), 0700)
+
+		if err != nil {
+			return "", err
+		}
+		return `
+			import imp "` + importFile + `"
+			s := imp.` + t + `("Hello")
+			print(s)
+		`, nil
+	}, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "Hello", output)
+	})
+}
+
+func testImportStructTypeSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) {
+	transpilerFunc(t, func(dir string) (string, error) {
+		importFile := "import.tsh"
+		t := "MyType"
+		err := os.WriteFile(filepath.Join(dir, importFile), []byte(`
+			type `+t+` struct {
+				field string
+			}`,
+		), 0700)
+
+		if err != nil {
+			return "", err
+		}
+		return `
+			import imp "` + importFile + `"
+			s := imp.` + t + `{field: "Hello"}
+			print(s.field)
+		`, nil
+	}, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "Hello", output)
+	})
+}
+
 func testImportConstAssignmentFail(t *testing.T, transpilerFunc transpilerCalloutFunc) {
 	value := "Hello World"
 	constant := "PublicConst"

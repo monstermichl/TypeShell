@@ -32,6 +32,14 @@ func TestImportedSliceAssignmentSuccess(t *testing.T) {
 	testImportedSliceAssignmentSuccess(t, transpileBashFunc)
 }
 
+func TestImportSimpleTypeSuccess(t *testing.T) {
+	testImportSimpleTypeSuccess(t, transpileBashFunc)
+}
+
+func TestImportStructTypeSuccess(t *testing.T) {
+	testImportStructTypeSuccess(t, transpileBashFunc)
+}
+
 func TestImportConstAssignmentFail(t *testing.T) {
 	testImportConstAssignmentFail(t, transpileBashFunc)
 }

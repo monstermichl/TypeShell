@@ -1,7 +1,9 @@
 package parser
 
 type TypeDeclaration struct {
-	name string
+	name      string
+	valueType ValueType
+	public    bool
 }
 
 func (t TypeDeclaration) StatementType() StatementType {
@@ -10,6 +12,14 @@ func (t TypeDeclaration) StatementType() StatementType {
 
 func (t TypeDeclaration) Name() string {
 	return t.name
+}
+
+func (t TypeDeclaration) ValueType() ValueType {
+	return t.valueType
+}
+
+func (t TypeDeclaration) Public() bool {
+	return t.public
 }
 
 type TypeDefinition struct {

@@ -66,7 +66,7 @@ type context struct {
 	iotaCounter int
 }
 
-func newContext() context {
+func newContext(prefix string) context {
 	c := context{
 		imports:     map[string]string{},
 		types:       map[string]Type{},
@@ -77,10 +77,10 @@ func newContext() context {
 	}
 
 	// Add elementary types.
-	c.addType(NewValueType(TypeBool{}, false))
-	c.addType(NewValueType(TypeInt{}, false))
-	c.addType(NewValueType(TypeString{}, false))
-	c.addType(NewValueType(TypeError{}, false))
+	c.addType(prefix, NewValueType(TypeBool{}, false))
+	c.addType(prefix, NewValueType(TypeInt{}, false))
+	c.addType(prefix, NewValueType(TypeString{}, false))
+	c.addType(prefix, NewValueType(TypeError{}, false))
 
 	return c
 }
@@ -146,10 +146,10 @@ func (c context) addImport(alias string, hash string) error {
 	return nil
 }
 
-func (c context) addType(valueType ValueType) error {
+func (c context) addType(prefix string, valueType ValueType) error {
 	t := valueType.Type()
 	name := t.Name()
-	_, exists := c.findType(name)
+	_, exists := c.findType(name, prefix)
 
 	if exists {
 		return fmt.Errorf("type %s has already been defined", name)
@@ -158,7 +158,7 @@ func (c context) addType(valueType ValueType) error {
 		// TODO: Add support.
 		return errors.New("slices are not allowed yet in type declarations")
 	}
-	c.types[name] = t
+	c.types[buildPrefixedName(prefix, name)] = t
 	return nil
 }
 
@@ -196,8 +196,13 @@ func (c context) findImport(alias string) (string, bool) {
 	return hash, exists
 }
 
-func (c context) findType(typeName string) (Type, bool) {
-	t, exists := c.types[typeName]
+func (c context) findType(typeName string, prefix string) (Type, bool) {
+	prefixedName, err := c.buildPrefixedName(typeName, prefix, true, true)
+
+	if err != nil {
+		return nil, false
+	}
+	t, exists := c.types[prefixedName]
 	return t, exists
 }
 
@@ -372,50 +377,6 @@ func allowedCompareOperators(t ValueType) []CompareOperator {
 	return operators
 }
 
-func defaultVarValue(valueType ValueType, ctx context) (Expression, error) {
-	foundType, exists := ctx.findType(valueType.Type().Name())
-
-	if exists {
-		elementaryDataType := foundType.ElementaryType()
-
-		if !valueType.IsSlice() {
-			switch elementaryDataType.Kind() {
-			case TypeKindBool:
-				return BooleanLiteral{}, nil
-			case TypeKindInt:
-				return IntegerLiteral{}, nil
-			case TypeKindString:
-				return StringLiteral{}, nil
-			case TypeKindStruct:
-				structDefinition, exists := elementaryDataType.(StructDefinition)
-
-				if exists {
-					structValues := []StructValue{}
-
-					for _, field := range structDefinition.Fields() {
-						defaultValue, err := defaultVarValue(field.ValueType(), ctx)
-
-						if err != nil {
-							return nil, err
-						}
-						structValues = append(structValues, StructValue{
-							StructField: StructField{
-								name:      field.Name(),
-								valueType: field.ValueType(),
-							},
-							value: defaultValue,
-						})
-					}
-					return NewStructInitialization(valueType.Type(), structValues...), nil
-				}
-			}
-		} else {
-			return SliceInstantiation{t: elementaryDataType}, nil
-		}
-	}
-	return nil, fmt.Errorf("no default value found for type %s", valueType.String())
-}
-
 func incrementDecrementStatement(variable Variable, increment bool) Statement {
 	operation := BINARY_OPERATOR_ADDITION
 
@@ -443,16 +404,16 @@ func isPublic(name string) bool {
 	return false
 }
 
-func buildPrefixedName(prefix string, funcName string) string {
+func buildPrefixedName(prefix string, name string) string {
 	if len(prefix) > 0 {
 		prefix = fmt.Sprintf("%s_", prefix)
 
 		// Only prefix if it doesn't already have the prefix.
-		if !strings.HasPrefix(funcName, prefix) {
-			funcName = fmt.Sprintf("%s%s", prefix, funcName)
+		if !strings.HasPrefix(name, prefix) {
+			name = fmt.Sprintf("%s%s", prefix, name)
 		}
 	}
-	return funcName
+	return name
 }
 
 func updateExtInfo(infoPath string, remotePath string, localPath string) error {
@@ -589,6 +550,50 @@ func (p *Parser) isShortVarInit() bool {
 
 	// Short initialization is an arbitrary number of identifiers and commas plus the short init operator (e.g. x, y := ...).
 	return err == nil
+}
+
+func (p *Parser) defaultVarValue(valueType ValueType, ctx context) (Expression, error) {
+	foundType, exists := ctx.findType(valueType.Type().Name(), p.prefix)
+
+	if exists {
+		elementaryDataType := foundType.ElementaryType()
+
+		if !valueType.IsSlice() {
+			switch elementaryDataType.Kind() {
+			case TypeKindBool:
+				return BooleanLiteral{}, nil
+			case TypeKindInt:
+				return IntegerLiteral{}, nil
+			case TypeKindString:
+				return StringLiteral{}, nil
+			case TypeKindStruct:
+				structDefinition, exists := elementaryDataType.(StructDefinition)
+
+				if exists {
+					structValues := []StructValue{}
+
+					for _, field := range structDefinition.Fields() {
+						defaultValue, err := p.defaultVarValue(field.ValueType(), ctx)
+
+						if err != nil {
+							return nil, err
+						}
+						structValues = append(structValues, StructValue{
+							StructField: StructField{
+								name:      field.Name(),
+								valueType: field.ValueType(),
+							},
+							value: defaultValue,
+						})
+					}
+					return NewStructInitialization(valueType.Type(), structValues...), nil
+				}
+			}
+		} else {
+			return SliceInstantiation{t: elementaryDataType}, nil
+		}
+	}
+	return nil, fmt.Errorf("no default value found for type %s", valueType.String())
 }
 
 func (p *Parser) checkNewNamedValueNameToken(token lexer.Token, ctx context) error {
@@ -782,7 +787,7 @@ func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword stri
 }
 
 func (p *Parser) evaluateProgram() (Program, error) {
-	ctx := newContext()
+	ctx := newContext(p.prefix)
 	statements, err := p.evaluateImports(ctx)
 
 	if err != nil {
@@ -1013,6 +1018,13 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 			if _, exists = ctx.functions[name]; !exists && definedFunction.Public() {
 				ctx.functions[name] = definedFunction
 			}
+		case STATEMENT_TYPE_TYPE_DECLARATION:
+			definedType := statement.(TypeDeclaration)
+			name := definedType.Name()
+
+			if _, exists = ctx.types[name]; !exists && definedType.Public() {
+				ctx.types[name] = definedType.ValueType().Type()
+			}
 		}
 
 		// Prevent code duplication.
@@ -1142,6 +1154,13 @@ func (p *Parser) evaluateBlockContent(terminationTokenTypes []lexer.TokenType, c
 					if err != nil {
 						return nil, err
 					}
+				case STATEMENT_TYPE_TYPE_DECLARATION:
+					// Store new type.
+					err = ctx.addType(prefix, stmt.(TypeDeclaration).ValueType())
+
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
 		}
@@ -1204,7 +1223,7 @@ func (p *Parser) evaluateBlock(callback blockCallback, ctx context, scope scope)
 	return statements, nil
 }
 
-func (p *Parser) evaluateValueType(ctx context) (ValueType, error) {
+func (p *Parser) evaluateValueType(ctx context, importAliases ...string) (ValueType, error) {
 	nextToken := p.peek()
 	evaluatedType := NewValueType(TypeUnknown{}, false)
 
@@ -1216,8 +1235,19 @@ func (p *Parser) evaluateValueType(ctx context) (ValueType, error) {
 		if nextToken.Type() != lexer.CLOSING_SQUARE_BRACKET {
 			return evaluatedType, p.expectedError(`"]"`, nextToken)
 		}
-		nextToken = p.peek()
 		evaluatedType.isSlice = true
+	}
+	var importAlias string
+
+	if len(importAliases) > 0 {
+		importAlias = strings.Join(importAliases, "")
+	} else {
+		var err error
+		importAlias, nextToken, err = p.evaluateImportAlias(ctx)
+
+		if err != nil {
+			return evaluatedType, err
+		}
 	}
 
 	// Evaluate data type.
@@ -1225,7 +1255,9 @@ func (p *Parser) evaluateValueType(ctx context) (ValueType, error) {
 		return evaluatedType, p.expectedError("data type", nextToken)
 	}
 	p.eat() // Eat data type token.
-	foundDefinition, exists := ctx.findType(nextToken.Value())
+	name := nextToken.Value()
+	prefix, _ := p.createImportName(importAlias, name)
+	foundDefinition, exists := ctx.findType(name, prefix)
 
 	if !exists {
 		return evaluatedType, p.expectedError("valid data type", nextToken)
@@ -1307,6 +1339,11 @@ func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 		p.eat()
 	}
 	name := nameToken.Value()
+	isPublic := isPublic(name)
+
+	if ctx.global() {
+		name = buildPrefixedName(p.prefix, name)
+	}
 	valueTypeToken := p.peek()
 
 	var valueType ValueType
@@ -1333,12 +1370,7 @@ func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 		// Create a wrapper with the same type but different name.
 		valueType = NewValueType(NewTypeCustom(name, isAlias, t.Kind(), t), valueType.IsSlice())
 	}
-	err = ctx.addType(valueType)
-
-	if err != nil {
-		return nil, p.atError(err.Error(), nameToken)
-	}
-	return TypeDeclaration{name}, nil
+	return TypeDeclaration{name, valueType, isPublic}, nil
 }
 
 func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Statement, error) {
@@ -1617,7 +1649,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 			// If no value has been specified, define default value.
 			if lenValues == 0 {
 				for _, variable := range namedValues {
-					value, err := defaultVarValue(variable.ValueType(), ctx)
+					value, err := p.defaultVarValue(variable.ValueType(), ctx)
 
 					if err != nil {
 						return nil, err
@@ -2531,17 +2563,18 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 	return stmt, nil
 }
 
-func (p *Parser) evaluateTypeDefinition(ctx context) (Expression, error) {
+func (p *Parser) evaluateTypeDefinition(importAlias string, ctx context) (Expression, error) {
 	identifierToken := p.eat() // Eat identifier token.
 
 	if identifierToken.Type() != lexer.IDENTIFIER {
 		return nil, p.expectedIdentifierError(identifierToken)
 	}
-	typeName := identifierToken.Value()
-	definitionTypeDeclaration, exists := ctx.findType(typeName)
+	name := identifierToken.Value()
+	prefix, dotedName := p.createImportName(importAlias, name)
+	definitionTypeDeclaration, exists := ctx.findType(name, prefix)
 
 	if !exists {
-		return nil, p.typeNotDefinedError(typeName, identifierToken)
+		return nil, p.typeNotDefinedError(dotedName, identifierToken)
 	}
 	nextToken := p.eat()
 
@@ -2557,7 +2590,7 @@ func (p *Parser) evaluateTypeDefinition(ctx context) (Expression, error) {
 	exprValueType := expr.ValueType()
 
 	if !exists {
-		return nil, p.typeNotDefinedError(typeName, identifierToken)
+		return nil, p.typeNotDefinedError(dotedName, identifierToken)
 	}
 	definitionAliasType := definitionTypeDeclaration.ElementaryType()
 	exprAliasType := exprValueType.Type().ElementaryType()
@@ -2798,31 +2831,33 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 
 	// Handle identifiers.
 	case lexer.IDENTIFIER:
-		importAlias, _, errTemp := p.evaluateImportAlias(ctx)
+		importAlias, token, errTemp := p.evaluateImportAlias(ctx)
 		err = errTemp
 
 		if err != nil {
 			return nil, err
 		}
+		value = token.Value()
 		nextToken := p.peekAt(1)
+		prefix, _ := p.createImportName(importAlias, value)
 
 		switch nextToken.Type() {
 		case lexer.OPENING_ROUND_BRACKET:
 			// If a type exists with the provided name, it's a type-cast/-instantiation.
-			_, exists := ctx.findType(value)
+			_, exists := ctx.findType(value, prefix)
 
 			if exists {
-				expr, err = p.evaluateTypeDefinition(ctx)
+				expr, err = p.evaluateTypeDefinition(importAlias, ctx)
 			} else {
 				expr, err = p.evaluateFunctionCall(importAlias, ctx)
 			}
 		case lexer.OPENING_SQUARE_BRACKET:
 			expr, err = p.evaluateSubscript(importAlias, ctx)
 		case lexer.OPENING_CURLY_BRACKET:
-			_, valid := ctx.findType(value)
+			_, valid := ctx.findType(value, prefix)
 
 			if valid {
-				expr, err = p.evaluateStructInitialization(ctx)
+				expr, err = p.evaluateStructInitialization(importAlias, ctx)
 			}
 		case lexer.DOT:
 			expr, err = p.evaluateStructEvaluation(importAlias, ctx)
@@ -3399,14 +3434,14 @@ func (p *Parser) evaluateSliceInitialization(ctx context) (Expression, error) {
 	return expr, nil
 }
 
-func (p *Parser) evaluateStructInitialization(ctx context) (Expression, error) {
+func (p *Parser) evaluateStructInitialization(importAlias string, ctx context) (Expression, error) {
 	nextToken := p.peek()
-	structValueType, err := p.evaluateValueType(ctx)
+	structValueType, err := p.evaluateValueType(ctx, importAlias)
 
 	if err != nil {
 		return nil, err
 	}
-	intialization, err := defaultVarValue(structValueType, ctx)
+	intialization, err := p.defaultVarValue(structValueType, ctx)
 
 	if err != nil {
 		return nil, err
