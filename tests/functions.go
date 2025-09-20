@@ -86,6 +86,44 @@ func testSliceParamFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) 
 	})
 }
 
+func testStructParamFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		type easyStruct struct {
+			a string
+		}
+
+		func test(s easyStruct) {
+			s.a = "Bye"
+		}
+		s := easyStruct{a: "Hello"}
+		print(s.a)
+		test(s)
+		print(s.a)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "Hello\nHello", output)
+	})
+}
+
+func testStructPointerParamFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		type easyStruct struct {
+			a string
+		}
+
+		func test(s *easyStruct) {
+			s.a = "Bye"
+		}
+		s := easyStruct{a: "Hello"}
+		print(s.a)
+		test(s)
+		print(s.a)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "Hello\nBye", output)
+	})
+}
+
 func testCallFunctionFromFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		func test1(retVal1 int, retVal2 int) (int, int) {

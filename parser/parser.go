@@ -1862,8 +1862,8 @@ func (p *Parser) evaluateVarAssignment(importAlias string, ctx context) (Stateme
 	}, nil
 }
 
-func (p *Parser) evaluateParams(ctx context) ([]Variable, error) {
-	params := []Variable{}
+func (p *Parser) evaluateParams(ctx context) ([]Param, error) {
+	params := []Param{}
 
 	for {
 		nameToken := p.peek()
@@ -1884,10 +1884,25 @@ func (p *Parser) evaluateParams(ctx context) ([]Variable, error) {
 		if exists {
 			return params, fmt.Errorf("scope already contains a variable with the name %s", name)
 		}
+		pointer := false
+		pointerToken := p.peek()
+
+		if pointerToken.Type() == lexer.BINARY_OPERATOR {
+			p.eat()
+			pointerValue := pointerToken.Value()
+
+			if pointerValue != "*" {
+				return nil, p.expectedError(fmt.Sprintf(`"*" but got "%s"`, pointerValue), pointerToken)
+			}
+			pointer = true
+		}
+		valueTypeToken := p.peek()
 		valueType, err := p.evaluateValueType(ctx)
 
 		if err != nil {
 			return nil, err
+		} else if pointer && valueType.Type().Kind() != TypeKindStruct {
+			return nil, p.atError(fmt.Sprintf("pointers are only supported for structs but got %s", valueType.String()), valueTypeToken)
 		}
 		nextToken := p.peek()
 		nextTokenType := nextToken.Type()
@@ -1897,7 +1912,7 @@ func (p *Parser) evaluateParams(ctx context) ([]Variable, error) {
 		} else if nextTokenType == lexer.COMMA {
 			p.eat()
 		}
-		params = append(params, NewVariable(name, valueType, ctx.layer+1, false))
+		params = append(params, NewParam(name, valueType, ctx.layer+1, false, pointer))
 	}
 	return params, nil
 }
@@ -1925,7 +1940,7 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 		return nil, p.expectedError("unique function name", nameToken)
 	}
 	openingBrace := p.peek()
-	params := []Variable{}
+	params := []Param{}
 
 	// Clone context to avoid modification of the original.
 	ctx = ctx.clone()
@@ -2704,8 +2719,16 @@ func (p *Parser) evaluateNamedValueEvaluation(importAlias string, ctx context) (
 			Const: namedValue.(Const),
 		}, nil
 	}
+	param, isParam := namedValue.(Param)
+	var variable Variable
+
+	if isParam {
+		variable = NewVariable(param.Name(), param.ValueType(), param.Layer(), param.Public())
+	} else {
+		variable = namedValue.(Variable)
+	}
 	return VariableEvaluation{
-		Variable: namedValue.(Variable),
+		Variable: variable,
 	}, nil
 }
 
@@ -3155,7 +3178,7 @@ func (p *Parser) evaluateLogicalOperation(ctx context, operator LogicalOperator,
 	return leftExpression, nil
 }
 
-func (p *Parser) evaluateArguments(typeName string, name string, params []Variable, ctx context) ([]Expression, error) {
+func (p *Parser) evaluateArguments(typeName string, name string, params []Param, ctx context) ([]Expression, error) {
 	var err error
 	openingBraceToken := p.eat()
 

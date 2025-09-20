@@ -28,6 +28,14 @@ func TestSliceParamFunctionSuccess(t *testing.T) {
 	testSliceParamFunctionSuccess(t, transpileBash)
 }
 
+func TestStructParamFunctionSuccess(t *testing.T) {
+	testStructParamFunctionSuccess(t, transpileBash)
+}
+
+func TestStructPointerParamFunctionSuccess(t *testing.T) {
+	testStructPointerParamFunctionSuccess(t, transpileBash)
+}
+
 func TestCallFunctionFromFunctionSuccess(t *testing.T) {
 	testCallFunctionFromFunctionSuccess(t, transpileBash)
 }

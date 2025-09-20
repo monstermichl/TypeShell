@@ -3,7 +3,7 @@ package parser
 type FunctionDefinition struct {
 	name        string
 	returnTypes []ValueType
-	params      []Variable
+	params      []Param
 	body        []Statement
 	public      bool
 }
@@ -28,7 +28,7 @@ func (e FunctionDefinition) ReturnTypes() []ValueType {
 	return e.returnTypes
 }
 
-func (e FunctionDefinition) Params() []Variable {
+func (e FunctionDefinition) Params() []Param {
 	return e.params
 }
 
@@ -43,7 +43,7 @@ func (e FunctionDefinition) Public() bool {
 type FunctionCall struct {
 	name        string
 	returnTypes []ValueType
-	params      []Variable
+	params      []Param
 	arguments   []Expression
 }
 
@@ -67,7 +67,7 @@ func (e FunctionCall) ReturnTypes() []ValueType {
 	return e.returnTypes
 }
 
-func (e FunctionCall) Params() []Variable {
+func (e FunctionCall) Params() []Param {
 	return e.params
 }
 
