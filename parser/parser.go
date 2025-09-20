@@ -649,6 +649,18 @@ func (p *Parser) cleanProgram(program Program) (Program, error) {
 	}, nil
 }
 
+func (p *Parser) createImportName(importAlias string, name string) (string, string) {
+	prefix := p.prefix
+	dotedName := name
+
+	// If it's an include-function call, use provided alias.
+	if len(importAlias) > 0 {
+		prefix = importAlias
+		dotedName = fmt.Sprintf("%s.%s", importAlias, name)
+	}
+	return prefix, dotedName
+}
+
 func (p *Parser) evaluateNames() ([]lexer.Token, error) {
 	nameTokens := []lexer.Token{}
 
@@ -976,20 +988,20 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 							ctx.namedValues[name] = []NamedValue{variable}
 						}
 					}
-				case ConstDefinition:
-					for _, constant := range t.Constants() {
-						name := constant.Name()
-
-						if _, exists = ctx.namedValues[name]; !exists && constant.Public() {
-							ctx.namedValues[name] = []NamedValue{constant}
-						}
-					}
 				case VariableDefinitionCallAssignment:
 					for _, variable := range t.Variables() {
 						name := variable.Name()
 
 						if _, exists = ctx.namedValues[name]; !exists && variable.Public() {
 							ctx.namedValues[name] = []NamedValue{variable}
+						}
+					}
+				case ConstDefinition:
+					for _, constant := range t.Constants() {
+						name := constant.Name()
+
+						if _, exists = ctx.namedValues[name]; !exists && constant.Public() {
+							ctx.namedValues[name] = []NamedValue{constant}
 						}
 					}
 				}
@@ -1332,6 +1344,7 @@ func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Statement, error) {
 	isShortVarInit := !evalConst && p.isShortVarInit()
 	noun := "variable"
+	global := ctx.global()
 
 	if evalConst {
 		noun = "constant"
@@ -1444,7 +1457,6 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 		// Fill variables slice (might not contain the final type after this step).
 		for _, nameToken := range nameTokens {
 			prefix := p.prefix
-			global := ctx.global()
 			name := nameToken.Value()
 			namedValue, exists := ctx.findNamedValue(name, prefix, global)
 
@@ -1670,7 +1682,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
 	return p.evaluateNamedValueDefinition(false, ctx)
 }
 
-func (p *Parser) evaluateCompoundAssignment(ctx context) (Statement, error) {
+func (p *Parser) evaluateCompoundAssignment(importAlias string, ctx context) (Statement, error) {
 	nameTokens, err := p.evaluateNames()
 
 	if err != nil {
@@ -1712,14 +1724,15 @@ func (p *Parser) evaluateCompoundAssignment(ctx context) (Statement, error) {
 		return nil, p.expectedError("a single value on the right side", valuesToken)
 	}
 	name := nameToken.Value()
+	prefix, dotedName := p.createImportName(importAlias, name)
 
 	// Make sure variable has been defined.
-	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
+	namedValue, exists := ctx.findNamedValue(name, prefix, ctx.global())
 
 	if !exists {
-		return nil, p.variableNotDefinedError(name, nameToken)
+		return nil, p.variableNotDefinedError(dotedName, nameToken)
 	} else if namedValue.IsConstant() {
-		return nil, p.constantError(name, nameToken)
+		return nil, p.constantError(dotedName, nameToken)
 	}
 	definedVariable := namedValue.(Variable)
 	valueType := valuesTypes[0]
@@ -1746,7 +1759,7 @@ func (p *Parser) evaluateCompoundAssignment(ctx context) (Statement, error) {
 	}, nil
 }
 
-func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
+func (p *Parser) evaluateVarAssignment(importAlias string, ctx context) (Statement, error) {
 	nameTokens, err := p.evaluateNames()
 
 	if err != nil {
@@ -1786,14 +1799,15 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
 
 	for i, nameToken := range nameTokens {
 		name := nameToken.Value()
+		prefix, dotedName := p.createImportName(importAlias, name)
 
 		// Make sure variable has been defined.
-		namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
+		namedValue, exists := ctx.findNamedValue(name, prefix, ctx.global())
 
 		if !exists {
-			return nil, p.variableNotDefinedError(name, nameToken)
+			return nil, p.variableNotDefinedError(dotedName, nameToken)
 		} else if namedValue.IsConstant() {
-			return nil, p.constantError(name, nameToken)
+			return nil, p.constantError(dotedName, nameToken)
 		}
 		valueType := valuesTypes[i]
 		expectedValueType := namedValue.ValueType()
@@ -1801,7 +1815,7 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Statement, error) {
 		if !valueType.Equals(expectedValueType) {
 			return nil, p.expectedError(fmt.Sprintf("%s but got %s", expectedValueType.String(), valueType.String()), valuesToken)
 		}
-		variables = append(variables, NewVariable(name, valueType, namedValue.Layer(), isPublic(name)))
+		variables = append(variables, NewVariable(namedValue.Name(), valueType, namedValue.Layer(), isPublic(name)))
 	}
 
 	if isMultiReturnFuncCall {
@@ -2569,15 +2583,15 @@ func (p *Parser) evaluateStructFields(importAlias string, stopOnLastStruct bool,
 	if identifierToken.Type() != lexer.IDENTIFIER {
 		return nil, StructField{}, p.expectedIdentifierError(identifierToken)
 	}
-	value, err := p.evaluateNamedValueEvaluation(ctx)
+	value, err := p.evaluateNamedValueEvaluation(importAlias, ctx)
 
 	if err != nil {
 		return nil, StructField{}, err
 	}
-	return p.evaluateStructFieldsFromExpression(value, identifierToken, importAlias, stopOnLastStruct, ctx)
+	return p.evaluateStructFieldsFromExpression(value, identifierToken, stopOnLastStruct, ctx)
 }
 
-func (p *Parser) evaluateStructFieldsFromExpression(structExpression Expression, structExpressionToken lexer.Token, importAlias string, stopOnLastStruct bool, ctx context) (Expression, StructField, error) {
+func (p *Parser) evaluateStructFieldsFromExpression(structExpression Expression, structExpressionToken lexer.Token, stopOnLastStruct bool, ctx context) (Expression, StructField, error) {
 	kind := structExpression.ValueType().Type().Kind()
 
 	if kind != TypeKindStruct {
@@ -2625,7 +2639,7 @@ func (p *Parser) evaluateStructFieldsFromExpression(structExpression Expression,
 		expr, err = p.evaluateSubscriptFromExpression(exprTemp, nextToken, ctx)
 		structField = StructField{}
 	} else if nextTokenType == lexer.DOT && exprTempKind == TypeKindStruct {
-		expr, structField, err = p.evaluateStructFieldsFromExpression(exprTemp, nextToken, importAlias, stopOnLastStruct, ctx)
+		expr, structField, err = p.evaluateStructFieldsFromExpression(exprTemp, nextToken, stopOnLastStruct, ctx)
 	} else if !stopOnLastStruct {
 		expr = exprTemp
 	}
@@ -2637,17 +2651,19 @@ func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expr
 	return expr, err
 }
 
-func (p *Parser) evaluateNamedValueEvaluation(ctx context) (Expression, error) {
+func (p *Parser) evaluateNamedValueEvaluation(importAlias string, ctx context) (Expression, error) {
 	identifierToken := p.eat() // Eat identifier token.
 
 	if identifierToken.Type() != lexer.IDENTIFIER {
 		return nil, p.expectedIdentifierError(identifierToken)
 	}
 	name := identifierToken.Value()
-	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
+	prefix, dotedName := p.createImportName(importAlias, name)
+
+	namedValue, exists := ctx.findNamedValue(name, prefix, ctx.global())
 
 	if !exists {
-		return nil, p.variableNotDefinedError(name, identifierToken)
+		return nil, p.variableNotDefinedError(dotedName, identifierToken)
 	}
 
 	if namedValue.IsConstant() {
@@ -2801,7 +2817,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 				expr, err = p.evaluateFunctionCall(importAlias, ctx)
 			}
 		case lexer.OPENING_SQUARE_BRACKET:
-			expr, err = p.evaluateSubscript(ctx)
+			expr, err = p.evaluateSubscript(importAlias, ctx)
 		case lexer.OPENING_CURLY_BRACKET:
 			_, valid := ctx.findType(value)
 
@@ -2814,7 +2830,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 
 		// If nothing has been set yet, try to evaluate named value.
 		if expr == nil && err == nil {
-			expr, err = p.evaluateNamedValueEvaluation(ctx)
+			expr, err = p.evaluateNamedValueEvaluation(importAlias, ctx)
 		}
 
 	default:
@@ -2890,9 +2906,8 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 	var err error
 
 	token := p.peek()
-	tokenType := token.Type()
 
-	switch tokenType {
+	switch token.Type() {
 	case lexer.TYPE_DECLARATION:
 		stmt, err = p.evaluateTypeDeclaration(ctx)
 	case lexer.CONST_DEFINITION:
@@ -2924,27 +2939,36 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 		if p.isShortVarInit() {
 			stmt, err = p.evaluateVarDefinition(ctx)
 		} else {
+			var importAlias string
+			importAlias, token, err = p.evaluateImportAlias(ctx)
+
+			if err != nil {
+				return nil, err
+			}
+
 			// If token is identifier it could be a slice assignment, an increment or a decrement.
 			if token.Type() == lexer.IDENTIFIER {
 				switch nextTokenType := p.peekAt(1).Type(); nextTokenType {
 				case lexer.INCREMENT_OPERATOR, lexer.DECREMENT_OPERATOR:
-					stmt, err = p.evaluateIncrementDecrement(ctx)
+					stmt, err = p.evaluateIncrementDecrement(importAlias, ctx)
 				case lexer.COMPOUND_ASSIGN_OPERATOR:
-					stmt, err = p.evaluateCompoundAssignment(ctx)
+					stmt, err = p.evaluateCompoundAssignment(importAlias, ctx)
 				case lexer.ASSIGN_OPERATOR, lexer.COMMA:
-					stmt, err = p.evaluateVarAssignment(ctx)
+					stmt, err = p.evaluateVarAssignment(importAlias, ctx)
 				default:
-					variable, exists := ctx.findNamedValue(token.Value(), p.prefix, ctx.global())
+					name := token.Value()
+					prefix, _ := p.createImportName(importAlias, name)
+					variable, exists := ctx.findNamedValue(name, prefix, ctx.global())
 
 					switch nextTokenType {
 					case lexer.DOT:
 						// Could be a library variable or a struct assignment.
 						// TODO: Handle library stuff as well, but for now handle struct assignment.
-						stmt, err = p.evaluateStructAssignment(ctx)
+						stmt, err = p.evaluateStructAssignment(importAlias, ctx)
 					default:
 						// If variable has been defined and is a slice, handles slice assignment.
 						if exists && variable.ValueType().IsSlice() {
-							stmt, err = p.evaluateSliceAssignment(ctx)
+							stmt, err = p.evaluateSliceAssignment(importAlias, ctx)
 						}
 					}
 				}
@@ -3183,14 +3207,7 @@ func (p *Parser) evaluateFunctionCall(importAlias string, ctx context) (Call, er
 		return nil, p.expectedError("function identifier", nextToken)
 	}
 	name := nextToken.Value()
-	prefix := p.prefix
-	dotedName := name
-
-	// If it's an include-function call, use provided alias.
-	if len(importAlias) > 0 {
-		prefix = importAlias
-		dotedName = fmt.Sprintf("%s.%s", importAlias, name)
-	}
+	prefix, dotedName := p.createImportName(importAlias, name)
 
 	// Make sure function has been defined.
 	definedFunction, exists := ctx.findFunction(name, prefix)
@@ -3429,7 +3446,7 @@ func (p *Parser) evaluateStructInitialization(ctx context) (Expression, error) {
 	nextToken = p.peek()
 
 	if nextToken.Type() == lexer.DOT {
-		expr, _, err = p.evaluateStructFieldsFromExpression(expr, nextToken, "", false, ctx) // TODO: Find out if importAlias must be passed correctly.
+		expr, _, err = p.evaluateStructFieldsFromExpression(expr, nextToken, false, ctx) // TODO: Find out if importAlias must be passed correctly.
 
 		if err != nil {
 			return nil, err
@@ -3438,7 +3455,7 @@ func (p *Parser) evaluateStructInitialization(ctx context) (Expression, error) {
 	return expr, nil
 }
 
-func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
+func (p *Parser) evaluateSubscript(importAlias string, ctx context) (Expression, error) {
 	var value Expression
 	var err error
 
@@ -3446,7 +3463,7 @@ func (p *Parser) evaluateSubscript(ctx context) (Expression, error) {
 
 	switch valueToken.Type() {
 	case lexer.IDENTIFIER:
-		value, err = p.evaluateNamedValueEvaluation(ctx)
+		value, err = p.evaluateNamedValueEvaluation(importAlias, ctx)
 	case lexer.STRING_LITERAL:
 		value, err = p.evaluateExpression(ctx)
 	default:
@@ -3560,14 +3577,14 @@ func (p *Parser) evaluateSubscriptFromExpression(value Expression, valueToken le
 	}
 
 	if p.peek().Type() == lexer.DOT && expr.ValueType().Type().Kind() == TypeKindStruct {
-		expr, _, err = p.evaluateStructFieldsFromExpression(expr, p.peek(), "", false, ctx)
+		expr, _, err = p.evaluateStructFieldsFromExpression(expr, p.peek(), false, ctx)
 	}
 	return expr, err
 }
 
-func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
+func (p *Parser) evaluateSliceAssignment(importAlias string, ctx context) (Statement, error) {
 	identifierToken := p.peek()
-	expr, err := p.evaluateSubscript(ctx)
+	expr, err := p.evaluateSubscript(importAlias, ctx)
 
 	if err != nil {
 		return nil, err
@@ -3607,8 +3624,8 @@ func (p *Parser) evaluateSliceAssignment(ctx context) (Statement, error) {
 	}
 }
 
-func (p *Parser) evaluateStructAssignment(ctx context) (Statement, error) {
-	expr, field, err := p.evaluateStructFields("", true, ctx) // TODO: Find out if importAlias must be passed correctly.
+func (p *Parser) evaluateStructAssignment(importAlias string, ctx context) (Statement, error) {
+	expr, field, err := p.evaluateStructFields(importAlias, true, ctx) // TODO: Find out if importAlias must be passed correctly.
 
 	if err != nil {
 		return nil, err
@@ -3639,19 +3656,20 @@ func (p *Parser) evaluateStructAssignment(ctx context) (Statement, error) {
 	}, nil
 }
 
-func (p *Parser) evaluateIncrementDecrement(ctx context) (Statement, error) {
+func (p *Parser) evaluateIncrementDecrement(importAlias string, ctx context) (Statement, error) {
 	identifierToken := p.eat()
 
 	if identifierToken.Type() != lexer.IDENTIFIER {
 		return nil, p.expectedIdentifierError(identifierToken)
 	}
 	name := identifierToken.Value()
-	namedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
+	prefix, dotedName := p.createImportName(importAlias, name)
+	namedValue, exists := ctx.findNamedValue(name, prefix, ctx.global())
 
 	if !exists {
-		return nil, p.variableNotDefinedError(name, identifierToken)
+		return nil, p.variableNotDefinedError(dotedName, identifierToken)
 	} else if namedValue.IsConstant() {
-		return nil, p.constantError(name, identifierToken)
+		return nil, p.constantError(dotedName, identifierToken)
 	}
 	variable := namedValue.(Variable)
 	valueType := variable.ValueType()

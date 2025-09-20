@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -80,5 +82,89 @@ func testImportsFromExternalSourceSuccess(t *testing.T, transpilerFunc transpile
 	}, func(output string, err error) {
 		require.Nil(t, err)
 		require.Equal(t, "1", output)
+	})
+}
+
+func testImportVariableSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) {
+	value := "Hello World"
+
+	transpilerFunc(t, func(dir string) (string, error) {
+		importFile := "import.tsh"
+		variable := "PublicVariable"
+		err := os.WriteFile(filepath.Join(dir, importFile), []byte(variable+` := "`+value+`"`), 0700)
+
+		if err != nil {
+			return "", err
+		}
+		return `
+			import imp "` + importFile + `"
+			print(imp.` + variable + `)
+		`, nil
+	}, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, value, output)
+	})
+}
+
+func testImportedSliceAssignmentSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) {
+	values := []string{"Hello", "World"}
+
+	transpilerFunc(t, func(dir string) (string, error) {
+		importFile := "import.tsh"
+		variable := "PublicVariable"
+		err := os.WriteFile(filepath.Join(dir, importFile), []byte(variable+` := []string{"`+values[0]+`", "`+values[1]+`"}`), 0700)
+
+		if err != nil {
+			return "", err
+		}
+		return `
+			import imp "` + importFile + `"
+			print(imp.` + variable + `[0])
+			imp.` + variable + `[0] = "Bye"
+			print(imp.` + variable + `[0])
+		`, nil
+	}, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "Hello\nBye", output)
+	})
+}
+
+func testImportConstAssignmentFail(t *testing.T, transpilerFunc transpilerCalloutFunc) {
+	value := "Hello World"
+	constant := "PublicConst"
+
+	transpilerFunc(t, func(dir string) (string, error) {
+		importFile := "import.tsh"
+		err := os.WriteFile(filepath.Join(dir, importFile), []byte(`const `+constant+` = "`+value+`"`), 0700)
+
+		if err != nil {
+			return "", err
+		}
+		return `
+			import imp "` + importFile + `"
+			imp.` + constant + ` = "Something else"
+		`, nil
+	}, func(output string, err error) {
+		require.EqualError(t, shortenError(err), "cannot assign a value to constant imp."+constant)
+	})
+}
+
+func testImportPrivateVariableFail(t *testing.T, transpilerFunc transpilerCalloutFunc) {
+	variable := "privateVariable"
+	value := "Hello World"
+
+	transpilerFunc(t, func(dir string) (string, error) {
+		importFile := "import.tsh"
+		err := os.WriteFile(filepath.Join(dir, importFile), []byte(variable+` := "`+value+`"`), 0700)
+
+		if err != nil {
+			return "", err
+		}
+		return `
+			import imp "` + importFile + `"
+			print(imp.` + variable + `)
+		`, nil
+	}, func(output string, err error) {
+		require.EqualError(t, shortenError(err), "variable imp."+variable+" has not been defined")
 	})
 }

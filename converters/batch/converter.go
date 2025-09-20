@@ -636,7 +636,7 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (
 	// way. However, you can work around this by using for /f to evaluate the variable dynamically
 	c.addLine(
 		fmt.Sprintf(`for /f "delims=" %%%%i in ("%s_%s") do set "%s=!%%%%i!"`,
-			name, // TODO: Is global flag even required here? Because value is already passed to function.
+			name,
 			index,
 			c.varName(helper, false),
 		),
