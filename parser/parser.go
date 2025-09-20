@@ -1947,7 +1947,7 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 
 	// Remove all named values that are not global.
 	for key := range ctx.namedValues {
-		slices.DeleteFunc(ctx.namedValues[key], func(v NamedValue) bool {
+		ctx.namedValues[key] = slices.DeleteFunc(ctx.namedValues[key], func(v NamedValue) bool {
 			return !v.Global()
 		})
 	}
