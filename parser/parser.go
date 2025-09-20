@@ -1924,7 +1924,32 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 		return nil, p.expectedError("function definition at top level", functionToken)
 	}
 	if functionToken.Type() != lexer.FUNCTION_DEFINITION {
-		return nil, p.expectedError("function definition", functionToken)
+		return nil, p.expectedKeywordError("func", functionToken)
+	}
+	nextToken := p.peek()
+	var receiver *Param
+
+	// Evaluate possible receiver.
+	if nextToken.Type() == lexer.OPENING_ROUND_BRACKET {
+		p.eat()
+		receiverToken := p.peek()
+		receivers, err := p.evaluateParams(ctx)
+
+		if err != nil {
+			return nil, err
+		} else if len(receivers) != 1 {
+			return nil, p.expectedError("exactly one receiver", receiverToken)
+		}
+		receiver = &receivers[0]
+
+		if receiver.ValueType().IsSlice() {
+			return nil, p.atError("slices are not allowed as receivers", receiverToken)
+		}
+		nextToken = p.eat()
+
+		if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
+			return nil, p.expectedError(`")"`, nextToken)
+		}
 	}
 	nameToken := p.eat()
 
@@ -1932,6 +1957,11 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 		return nil, p.expectedError("function name", nameToken)
 	}
 	name := nameToken.Value()
+
+	// If a receiver exists, add its type name to the function name.
+	if receiver != nil {
+		name = fmt.Sprintf("%s_%s", receiver.ValueType().Type().Name(), name)
+	}
 
 	// Make sure no function exists with the same name.
 	_, exists := ctx.findFunction(name, p.prefix)
@@ -2001,6 +2031,11 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 			return nil, p.expectedError(`"," or ")"`, nextToken)
 		}
 		returnTypeToken = p.peek()
+	}
+
+	// If a receiver exists, add it as first param.
+	if receiver != nil {
+		params = slices.Insert(params, 0, *receiver)
 	}
 
 	// Add parameters to variables.
