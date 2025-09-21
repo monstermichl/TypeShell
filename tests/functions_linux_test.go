@@ -36,6 +36,14 @@ func TestStructPointerParamFunctionSuccess(t *testing.T) {
 	testStructPointerParamFunctionSuccess(t, transpileBash)
 }
 
+func TestStructReceiverFunctionSuccess(t *testing.T) {
+	testStructReceiverFunctionSuccess(t, transpileBash)
+}
+
+func TestStructPointerReceiverFunctionSuccess(t *testing.T) {
+	testStructPointerReceiverFunctionSuccess(t, transpileBash)
+}
+
 func TestCallFunctionFromFunctionSuccess(t *testing.T) {
 	testCallFunctionFromFunctionSuccess(t, transpileBash)
 }
