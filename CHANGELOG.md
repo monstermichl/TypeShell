@@ -14,7 +14,7 @@
 - Add os std library.
 
 ### Improvements
-- Performance improvements of str strings.
+- Performance improvements of std strings.
 
 ### Fixes
 - Multiple imports lead to error (https://github.com/monstermichl/TypeShell/issues/40).
