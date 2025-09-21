@@ -2933,7 +2933,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 	if err != nil {
 		return nil, err
 	}
-	expr, err = p.evaluateChaining(expr, ctx)
+	expr, _, err = p.evaluateChaining(expr, ctx)
 
 	if err != nil {
 		return nil, err
@@ -3553,23 +3553,26 @@ func (p *Parser) evaluateStructInitialization(importAlias string, ctx context) (
 	return expr, nil
 }
 
-func (p *Parser) evaluateChaining(expr Expression, ctx context) (Expression, error) {
+func (p *Parser) evaluateChaining(expr Expression, ctx context) (Expression, bool, error) {
 	var err error
 
 	nextToken := p.peek()
 	nextTokenType := nextToken.Type()
 	valueType := expr.ValueType()
+	chained := true
 
 	if nextTokenType == lexer.OPENING_SQUARE_BRACKET && valueType.SupportsSubscript() {
 		expr, err = p.evaluateSubscriptFromExpression(expr, nextToken, ctx)
 	} else if nextTokenType == lexer.DOT && valueType.SupportsField() {
 		expr, _, err = p.evaluateStructFieldsFromExpression(expr, nextToken, false, ctx)
+	} else {
+		chained = false
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return expr, err
+	return expr, chained, err
 }
 
 func (p *Parser) evaluateSubscript(importAlias string, ctx context) (Expression, error) {
