@@ -2712,16 +2712,14 @@ func (p *Parser) evaluateStructFieldsFromExpression(structExpression Expression,
 		field: foundField,
 	}
 	exprTempValueType := exprTemp.ValueType()
-	exprTempKind := exprTempValueType.Type().Kind()
-	exprTempValueIsSlice := exprTempValueType.IsSlice()
 	nextToken := p.peek()
 	nextTokenType := nextToken.Type()
 
 	// Allow chaining.
-	if nextTokenType == lexer.OPENING_SQUARE_BRACKET && exprTempValueIsSlice {
-		expr, err = p.evaluateSubscriptFromExpression(exprTemp, nextToken, ctx)
+	if nextTokenType == lexer.OPENING_SQUARE_BRACKET && exprTempValueType.SupportsSubscript() {
+		expr, _, err = p.evaluateChaining(exprTemp, ctx)
 		structField = StructField{}
-	} else if nextTokenType == lexer.DOT && exprTempKind == TypeKindStruct {
+	} else if nextTokenType == lexer.DOT && exprTempValueType.SupportsField() {
 		expr, structField, err = p.evaluateStructFieldsFromExpression(exprTemp, nextToken, stopOnLastStruct, ctx)
 	} else if !stopOnLastStruct {
 		expr = exprTemp
@@ -3682,23 +3680,22 @@ func (p *Parser) evaluateSubscriptFromExpression(value Expression, valueToken le
 	if !endIndexValueType.IsInt() {
 		return nil, p.expectedError(fmt.Sprintf("%s as stop-index but got %s", TypeKindInt, endIndexValueType.String()), endToken)
 	}
+	var expr Expression
 
 	if !isSlice {
-		return StringSubscript{
+		expr = StringSubscript{
 			value:      value,
 			startIndex: startIndex,
 			endIndex:   endIndex,
-		}, nil
+		}
+	} else {
+		expr = SliceEvaluation{
+			value:     value,
+			index:     startIndex,
+			valueType: NewValueType(valueType.Type(), false),
+		}
 	}
-	var expr Expression = SliceEvaluation{
-		value:     value,
-		index:     startIndex,
-		valueType: NewValueType(valueType.Type(), false),
-	}
-
-	if p.peek().Type() == lexer.DOT && expr.ValueType().Type().Kind() == TypeKindStruct {
-		expr, _, err = p.evaluateStructFieldsFromExpression(expr, p.peek(), false, ctx)
-	}
+	expr, _, err = p.evaluateChaining(expr, ctx)
 	return expr, err
 }
 
