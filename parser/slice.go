@@ -22,9 +22,9 @@ func (s SliceInstantiation) Values() []Expression {
 }
 
 type SliceEvaluation struct {
-	value Expression
-	index Expression
-	t     Type
+	value     Expression
+	index     Expression
+	valueType ValueType
 }
 
 func (s SliceEvaluation) StatementType() StatementType {
@@ -40,7 +40,7 @@ func (s SliceEvaluation) Index() Expression {
 }
 
 func (s SliceEvaluation) ValueType() ValueType {
-	return ValueType{t: s.t}
+	return s.valueType
 }
 
 func (s SliceEvaluation) IsConstant() bool {

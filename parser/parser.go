@@ -2417,9 +2417,9 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 
 		if iterableValueType.IsSlice() {
 			iterableEvaluation = SliceEvaluation{
-				value: iterableExpression,
-				index: VariableEvaluation{indexVar},
-				t:     iterableValueType.Type(),
+				value:     iterableExpression,
+				index:     VariableEvaluation{indexVar},
+				valueType: iterableValueType,
 			}
 		} else if iterableValueType.IsString() {
 			iterableEvaluation = StringSubscript{
@@ -3664,9 +3664,9 @@ func (p *Parser) evaluateSubscriptFromExpression(value Expression, valueToken le
 		}, nil
 	}
 	var expr Expression = SliceEvaluation{
-		value: value,
-		index: startIndex,
-		t:     valueType.Type(),
+		value:     value,
+		index:     startIndex,
+		valueType: NewValueType(valueType.Type(), false),
 	}
 
 	if p.peek().Type() == lexer.DOT && expr.ValueType().Type().Kind() == TypeKindStruct {
