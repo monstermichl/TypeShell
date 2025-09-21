@@ -77,10 +77,11 @@ func (e FunctionCall) Args() []Expression {
 
 func functionValueType(returnTypes []ValueType) ValueType {
 	var valueType ValueType
+	length := len(returnTypes)
 
-	if len(returnTypes) > 1 {
+	if length > 1 {
 		valueType = NewValueType(TypeMultiple{}, false)
-	} else {
+	} else if length > 0 {
 		valueType = returnTypes[0]
 	}
 	return valueType
