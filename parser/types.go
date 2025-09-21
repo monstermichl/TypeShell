@@ -185,6 +185,14 @@ func (vt ValueType) IsSlice() bool {
 	return vt.isSlice
 }
 
+func (vt ValueType) SupportsSubscript() bool {
+	return vt.IsSlice() || vt.IsString()
+}
+
+func (vt ValueType) SupportsField() bool {
+	return !vt.IsSlice() && vt.Type().Kind() == TypeKindStruct
+}
+
 func (vt ValueType) String() string {
 	s := string(vt.Type().Name())
 
