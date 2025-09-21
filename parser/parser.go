@@ -416,6 +416,10 @@ func buildPrefixedName(prefix string, name string) string {
 	return name
 }
 
+func buildReceiverFunctionName(receiverValueType ValueType, name string) string {
+	return fmt.Sprintf("%s_%s", receiverValueType.Type().Name(), name)
+}
+
 func updateExtInfo(infoPath string, remotePath string, localPath string) error {
 	var lines = []string{}
 
@@ -1960,7 +1964,7 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 
 	// If a receiver exists, add its type name to the function name.
 	if receiver != nil {
-		name = fmt.Sprintf("%s_%s", receiver.ValueType().Type().Name(), name)
+		name = buildReceiverFunctionName(receiver.ValueType(), name)
 	}
 
 	// Make sure no function exists with the same name.
@@ -2671,10 +2675,10 @@ func (p *Parser) evaluateStructFields(importAlias string, stopOnLastStruct bool,
 	if err != nil {
 		return nil, StructField{}, err
 	}
-	return p.evaluateStructFieldsFromExpression(value, identifierToken, stopOnLastStruct, ctx)
+	return p.evaluateStructFieldsFromExpression(importAlias, value, identifierToken, stopOnLastStruct, ctx)
 }
 
-func (p *Parser) evaluateStructFieldsFromExpression(structExpression Expression, structExpressionToken lexer.Token, stopOnLastStruct bool, ctx context) (Expression, StructField, error) {
+func (p *Parser) evaluateStructFieldsFromExpression(importAlias string, structExpression Expression, structExpressionToken lexer.Token, stopOnLastStruct bool, ctx context) (Expression, StructField, error) {
 	kind := structExpression.ValueType().Type().Kind()
 
 	if kind != TypeKindStruct {
@@ -2686,7 +2690,7 @@ func (p *Parser) evaluateStructFieldsFromExpression(structExpression Expression,
 	if dotToken.Type() != lexer.DOT {
 		return nil, StructField{}, p.expectedError(`"."`, dotToken)
 	}
-	fieldToken := p.eat()
+	fieldToken := p.peek()
 
 	if fieldToken.Type() != lexer.IDENTIFIER {
 		return nil, StructField{}, p.expectedError("field name", fieldToken)
@@ -2701,30 +2705,45 @@ func (p *Parser) evaluateStructFieldsFromExpression(structExpression Expression,
 
 	// Check field.
 	fieldName := fieldToken.Value()
-	foundField, err := structDefinition.FindField(fieldName)
+	isCall := p.peekAt(1).Type() == lexer.OPENING_ROUND_BRACKET
 
-	if err != nil {
-		return nil, StructField{}, p.atError(err.Error(), fieldToken)
-	}
-	structField := foundField
-	exprTemp := StructEvaluation{
-		value: structExpression,
-		field: foundField,
-	}
-	exprTempValueType := exprTemp.ValueType()
-	nextToken := p.peek()
-	nextTokenType := nextToken.Type()
+	if isCall {
+		if !expr.ValueType().SupportsField() {
+			return nil, StructField{}, p.atError(fmt.Sprintf("%s is not a struct", fieldName), fieldToken)
+		}
+		expr, err := p.evaluateFunctionCall(importAlias, expr, ctx)
 
-	// Allow chaining.
-	if nextTokenType == lexer.OPENING_SQUARE_BRACKET && exprTempValueType.SupportsSubscript() {
-		expr, _, err = p.evaluateChaining(exprTemp, ctx)
-		structField = StructField{}
-	} else if nextTokenType == lexer.DOT && exprTempValueType.SupportsField() {
-		expr, structField, err = p.evaluateStructFieldsFromExpression(exprTemp, nextToken, stopOnLastStruct, ctx)
-	} else if !stopOnLastStruct {
-		expr = exprTemp
+		if err != nil {
+			return nil, StructField{}, err
+		}
+		return expr, StructField{}, nil
+	} else {
+		p.eat() // Eat field name token.
+		foundField, err := structDefinition.FindField(fieldName)
+
+		if err != nil {
+			return nil, StructField{}, p.atError(err.Error(), fieldToken)
+		}
+		structField := foundField
+		exprTemp := StructEvaluation{
+			value: structExpression,
+			field: foundField,
+		}
+		exprTempValueType := exprTemp.ValueType()
+		nextToken := p.peek()
+		nextTokenType := nextToken.Type()
+
+		// Allow chaining.
+		if nextTokenType == lexer.OPENING_SQUARE_BRACKET && exprTempValueType.SupportsSubscript() {
+			expr, _, err = p.evaluateChaining(exprTemp, ctx)
+			structField = StructField{}
+		} else if nextTokenType == lexer.DOT && exprTempValueType.SupportsField() {
+			expr, structField, err = p.evaluateStructFieldsFromExpression(importAlias, exprTemp, nextToken, stopOnLastStruct, ctx)
+		} else if !stopOnLastStruct {
+			expr = exprTemp
+		}
+		return expr, structField, err
 	}
-	return expr, structField, err
 }
 
 func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expression, error) {
@@ -2905,7 +2924,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 			if exists {
 				expr, err = p.evaluateTypeDefinition(importAlias, ctx)
 			} else {
-				expr, err = p.evaluateFunctionCall(importAlias, ctx)
+				expr, err = p.evaluateFunctionCall(importAlias, nil, ctx)
 			}
 		case lexer.OPENING_SQUARE_BRACKET:
 			expr, err = p.evaluateSubscript(importAlias, ctx)
@@ -3058,9 +3077,13 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 
 					switch nextTokenType {
 					case lexer.DOT:
-						// Could be a library variable or a struct assignment.
-						// TODO: Handle library stuff as well, but for now handle struct assignment.
-						stmt, err = p.evaluateStructAssignment(importAlias, ctx)
+						_, errTemp := p.findBefore(lexer.ASSIGN_OPERATOR, lexer.NEWLINE, lexer.EOF)
+
+						if errTemp == nil {
+							stmt, err = p.evaluateStructAssignment(importAlias, ctx)
+						} else {
+							stmt, err = p.evaluateStructEvaluation(importAlias, ctx)
+						}
 					default:
 						// If variable has been defined and is a slice, handles slice assignment.
 						if exists && variable.ValueType().IsSlice() {
@@ -3216,7 +3239,7 @@ func (p *Parser) evaluateLogicalOperation(ctx context, operator LogicalOperator,
 	return leftExpression, nil
 }
 
-func (p *Parser) evaluateArguments(typeName string, name string, params []Param, ctx context) ([]Expression, error) {
+func (p *Parser) evaluateArguments(typeName string, name string, params []Param, receiver Expression, ctx context) ([]Expression, error) {
 	var err error
 	openingBraceToken := p.eat()
 
@@ -3233,6 +3256,10 @@ func (p *Parser) evaluateArguments(typeName string, name string, params []Param,
 	}
 	argsLengthError := func(amount int) error {
 		return fmt.Errorf("%s %s expects %d parameters but got %d", typeName, name, paramsLength, amount)
+	}
+
+	if receiver != nil {
+		args = append(args, receiver)
 	}
 
 	// While next-token is not closing brace, evaluate arguments.
@@ -3296,13 +3323,17 @@ func (p *Parser) evaluateArguments(typeName string, name string, params []Param,
 	return args, nil
 }
 
-func (p *Parser) evaluateFunctionCall(importAlias string, ctx context) (Call, error) {
+func (p *Parser) evaluateFunctionCall(importAlias string, receiver Expression, ctx context) (Call, error) {
 	nextToken := p.eat()
 
 	if nextToken.Type() != lexer.IDENTIFIER {
 		return nil, p.expectedError("function identifier", nextToken)
 	}
 	name := nextToken.Value()
+
+	if receiver != nil {
+		name = buildReceiverFunctionName(receiver.ValueType(), name)
+	}
 	prefix, dotedName := p.createImportName(importAlias, name)
 
 	// Make sure function has been defined.
@@ -3311,7 +3342,7 @@ func (p *Parser) evaluateFunctionCall(importAlias string, ctx context) (Call, er
 	if !exists {
 		return nil, p.notDefinedError("function", dotedName, nextToken)
 	}
-	args, err := p.evaluateArguments("function", dotedName, definedFunction.params, ctx)
+	args, err := p.evaluateArguments("function", dotedName, definedFunction.params, receiver, ctx)
 
 	if err != nil {
 		return nil, err
@@ -3350,7 +3381,7 @@ func (p *Parser) evaluateAppCall(ctx context) (Call, error) {
 	default:
 		return nil, p.expectedError("program identifier or string literal", nextToken)
 	}
-	args, err := p.evaluateArguments("program", name, nil, ctx)
+	args, err := p.evaluateArguments("program", name, nil, nil, ctx)
 
 	if err != nil {
 		return nil, err
@@ -3542,7 +3573,7 @@ func (p *Parser) evaluateStructInitialization(importAlias string, ctx context) (
 	nextToken = p.peek()
 
 	if nextToken.Type() == lexer.DOT {
-		expr, _, err = p.evaluateStructFieldsFromExpression(expr, nextToken, false, ctx) // TODO: Find out if importAlias must be passed correctly.
+		expr, _, err = p.evaluateStructFieldsFromExpression(importAlias, expr, nextToken, false, ctx)
 
 		if err != nil {
 			return nil, err
@@ -3562,7 +3593,7 @@ func (p *Parser) evaluateChaining(expr Expression, ctx context) (Expression, boo
 	if nextTokenType == lexer.OPENING_SQUARE_BRACKET && valueType.SupportsSubscript() {
 		expr, err = p.evaluateSubscriptFromExpression(expr, nextToken, ctx)
 	} else if nextTokenType == lexer.DOT && valueType.SupportsField() {
-		expr, _, err = p.evaluateStructFieldsFromExpression(expr, nextToken, false, ctx)
+		expr, _, err = p.evaluateStructFieldsFromExpression("", expr, nextToken, false, ctx)
 	} else {
 		chained = false
 	}
@@ -3742,7 +3773,7 @@ func (p *Parser) evaluateSliceAssignment(importAlias string, ctx context) (State
 }
 
 func (p *Parser) evaluateStructAssignment(importAlias string, ctx context) (Statement, error) {
-	expr, field, err := p.evaluateStructFields(importAlias, true, ctx) // TODO: Find out if importAlias must be passed correctly.
+	expr, field, err := p.evaluateStructFields(importAlias, true, ctx)
 
 	if err != nil {
 		return nil, err
