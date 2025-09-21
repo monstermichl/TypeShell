@@ -179,7 +179,7 @@ for i := 0; i < len(s); i++ {
 ```
 
 ### Types
-TypeShell supports the definition of types. However, types which result in slices are not supported yet.
+TypeShell supports the definition of types.
 
 ```golang
 // Define a type.
@@ -224,7 +224,7 @@ s.planet = "Mars"
 print(s.greeting, s.planet)
 ```
 
-Nested structs are also supported.
+#### Nested structs
 ```golang
 // Define structs.
 type myNestedStruct struct {
@@ -249,6 +249,56 @@ s.info.planet = "Mars"
 
 // Retrieve values from the structs.
 print(s.greeting, s.info.planet)
+```
+
+#### Function receivers
+Functions can have a struct as receiver. This way the function can be called directly on the struct and the corresponding struct is passed to the function automatically.
+
+```golang
+// Define a struct.
+type myStruct struct {
+    greeting string
+}
+
+// Define a function with the struct as receiver.
+func (s myStruct) greet() {
+	print(s.greeting)
+}
+
+s := myStruct{greeting: "Hello"}
+
+// Call struct function.
+s.greet()
+```
+
+#### Struct pointers
+Structs can also be passed as pointers to functions. This is true for parameters and for receivers.
+
+```golang
+// Define a structs.
+type myStruct struct {
+    greeting string
+}
+
+type mySecondStruct struct {
+	planet string
+}
+
+// Define a function with a pointer receiver and a pointer parameter.
+func (g *myStruct) greet(p *mySecondStruct) {
+	print(g.greeting, p.planet)
+	
+	// Update receiver and parameter value.
+	g.greeting = "Bye"
+	p.planet = "Mars"
+}
+
+s1 := myStruct{greeting: "Hello"}
+s2 := mySecondStruct{planet: "World"}
+
+// Call struct function.
+s1.greet(s2) // Prints "Hello World".
+s1.greet(s2) // Prints "Bye Mars".
 ```
 
 ### Programs/Scripts
@@ -400,6 +450,12 @@ print(s[0]) // Prints "Hello".
 print(s[1]) // Prints "".
 print(s[2]) // Prints "World".
 ```
+
+### Types
+Types which result in slices are not supported yet.
+
+### Pointers
+Pointers are only supported as function parameters and only for structs.
 
 ### Performance
 Try to avoid function calls like *len* in for-conditions if possible since they are evaluated for each iteration.
