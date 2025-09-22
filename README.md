@@ -122,8 +122,12 @@ for i := 0; i < 5; i++ {
     // Do something.
 }
 
-// For-range-loop (supported for slices and strings).
+// For-range-loop (supported for slices, strings and integers).
 for i, v := range s {
+    // Do something.
+}
+
+for i := range 5 {
     // Do something.
 }
 ```
@@ -272,7 +276,7 @@ s.greet()
 ```
 
 #### Struct pointers
-Structs can also be passed as pointers to functions. This is true for parameters and for receivers.
+Structs can also be passed to functions as pointers. This holds true for parameters and receivers.
 
 ```golang
 // Define a structs.
@@ -327,9 +331,7 @@ TypeShell does not support import of packages like Go does, but it supports sing
 
 ```golang
 // Relative file import.
-import (
-    hp "helper.tsh"
-)
+import hp "helper.tsh"
 
 hp.HelperFunc()
 ```
@@ -452,7 +454,11 @@ print(s[2]) // Prints "World".
 ```
 
 ### Types
-Types which result in slices are not supported yet.
+Type definitions which result in slices are not supported yet.
+
+```golang
+type myType []string // Not supported.
+```
 
 ### Pointers
 Pointers are only supported as function parameters and only for structs.
