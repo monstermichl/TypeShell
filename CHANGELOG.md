@@ -12,6 +12,7 @@
 - Add for-range support for numbers (https://github.com/monstermichl/TypeShell/issues/51).
 - Make subscript available on string literals (https://github.com/monstermichl/TypeShell/issues/15).
 - Add support for one type specification for consecutive parameters with same type (https://github.com/monstermichl/TypeShell/issues/38).
+- Add support for different number bases (https://github.com/monstermichl/TypeShell/issues/65).
 - Add os std library.
 
 ### Improvements

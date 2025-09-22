@@ -294,10 +294,14 @@ func Tokenize(source string) ([]Token, error) {
 			// Create bool token.
 			token = newToken(match, BOOL_LITERAL, ogRow, ogColumn)
 			i += len(match)
-		} else if match := regexp.MustCompile(`^-?\d+(\.\d+)?`).FindString(source[i:]); match != "" {
-			// Create number token.
-			token = newToken(match, NUMBER_LITERAL, ogRow, ogColumn)
-			i += len(match)
+		} else if match := regexp.MustCompile(`^(((\d(o|O|x|X|b|B))(\d+))|(-?\d+(\.\d+)?))`).FindString(source[i:]); match != "" {
+			parsed, err := strconv.ParseInt(strings.ToLower(match), 0, 32)
+
+			if err == nil {
+				// Create number token.
+				token = newToken(strconv.Itoa(int(parsed)), NUMBER_LITERAL, ogRow, ogColumn)
+				i += len(match)
+			}
 		} else if regexp.MustCompile(`[a-zA-Z_]`).MatchString(c0) {
 			identifier := ""
 
