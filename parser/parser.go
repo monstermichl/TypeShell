@@ -1870,23 +1870,33 @@ func (p *Parser) evaluateParams(ctx context) ([]Param, error) {
 	params := []Param{}
 
 	for {
-		nameToken := p.peek()
-		nameTokenType := nameToken.Type()
-
 		// If closing bracket has been discovered, all parameters have been parsed.
-		if nameTokenType == lexer.CLOSING_ROUND_BRACKET {
+		if p.peek().Type() == lexer.CLOSING_ROUND_BRACKET {
 			break
 		}
-		if nameTokenType != lexer.IDENTIFIER {
-			return params, p.expectedError("parameter name", nameToken)
-		}
-		p.eat()
+		names := []string{}
 
-		name := nameToken.Value()
-		_, exists := ctx.findNamedValue(name, p.prefix, false)
+		for {
+			nameToken := p.peek()
+			nameTokenType := nameToken.Type()
 
-		if exists {
-			return params, fmt.Errorf("scope already contains a variable with the name %s", name)
+			if nameTokenType != lexer.IDENTIFIER {
+				return params, p.expectedError("parameter name", nameToken)
+			}
+			p.eat()
+
+			name := nameToken.Value()
+			_, exists := ctx.findNamedValue(name, p.prefix, false)
+
+			if exists {
+				return params, fmt.Errorf("scope already contains a variable with the name %s", name)
+			}
+			names = append(names, name)
+
+			if p.peek().Type() != lexer.COMMA {
+				break
+			}
+			p.eat() // Eat comma token.
 		}
 		pointer := false
 		pointerToken := p.peek()
@@ -1916,7 +1926,10 @@ func (p *Parser) evaluateParams(ctx context) ([]Param, error) {
 		} else if nextTokenType == lexer.COMMA {
 			p.eat()
 		}
-		params = append(params, NewParam(name, valueType, ctx.layer+1, false, pointer))
+
+		for _, name := range names {
+			params = append(params, NewParam(name, valueType, ctx.layer+1, false, pointer))
+		}
 	}
 	return params, nil
 }

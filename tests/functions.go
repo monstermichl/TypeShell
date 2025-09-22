@@ -68,6 +68,19 @@ func testMultiParamFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) 
 	})
 }
 
+func testMultiParamWithSameTypeFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		func test(s1, s2, s3 string, s4, s5 string) {
+			print(s1, s2, s3, s4, s5)
+		}
+
+		test("Hello", "World", "or", "goodbye", "!")
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "Hello World or goodbye !", output)
+	})
+}
+
 func testSliceParamFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		func test(s []int) {

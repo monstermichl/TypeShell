@@ -1,6 +1,6 @@
 # TypeShell changelog
 
-## v0.2.0 - 2025-09-21
+## v0.2.0 - xxxx-xx-xx
 ### New
 - Add type definition support (https://github.com/monstermichl/TypeShell/issues/45).
 - Add constants support (https://github.com/monstermichl/TypeShell/issues/41).
@@ -11,6 +11,7 @@
 - Include std in release (https://github.com/monstermichl/TypeShell/issues/43).
 - Add for-range support for numbers (https://github.com/monstermichl/TypeShell/issues/51).
 - Make subscript available on string literals (https://github.com/monstermichl/TypeShell/issues/15).
+- Add support for one type specification for consecutive parameters with same type (https://github.com/monstermichl/TypeShell/issues/38).
 - Add os std library.
 
 ### Improvements

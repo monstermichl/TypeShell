@@ -24,6 +24,10 @@ func TestMultiParamFunctionSuccess(t *testing.T) {
 	testMultiParamFunctionSuccess(t, transpileBash)
 }
 
+func TestMultiParamWithSameTypeFunctionSuccess(t *testing.T) {
+	testMultiParamWithSameTypeFunctionSuccess(t, transpileBash)
+}
+
 func TestSliceParamFunctionSuccess(t *testing.T) {
 	testSliceParamFunctionSuccess(t, transpileBash)
 }
