@@ -8,7 +8,7 @@
 - Allow passing of structs to functions as pointer (https://github.com/monstermichl/TypeShell/issues/63).
 - Add function receiver support (https://github.com/monstermichl/TypeShell/issues/64).
 - Add support for remote imports (https://github.com/monstermichl/TypeShell/issues/46).
-- Include std in release (https://github.com/monstermichl/TypeShell/issues/43).
+- Include std and README.md in release (https://github.com/monstermichl/TypeShell/issues/43).
 - Add for-range support for numbers (https://github.com/monstermichl/TypeShell/issues/51).
 - Make subscript available on string literals (https://github.com/monstermichl/TypeShell/issues/15).
 - Add support for one type specification for consecutive parameters with same type (https://github.com/monstermichl/TypeShell/issues/38).

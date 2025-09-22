@@ -93,7 +93,7 @@ jobs:
           echo "Building for ${{ matrix.os }} ${{ matrix.arch }}"
           GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -o "${EXECUTABLE}" tsh.go
 
-          zip -r "${PACKAGE}" std/ "${EXECUTABLE}"
+          zip -r "${PACKAGE}" std/ "${EXECUTABLE}" "README.md"
 
       - name: Release
         if: ${{ github.event_name == 'release' }}
