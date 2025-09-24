@@ -206,10 +206,11 @@ func (c context) findType(typeName string, prefix string) (Type, bool) {
 	return t, exists
 }
 
-func (c context) findNamedValue(name string, prefix string, global bool) (NamedValue, bool) {
+func (c context) findNamedValueExt(name string, prefix string, global bool) (NamedValue, bool) {
 	prefixedName, err := c.buildPrefixedName(name, prefix, global, true)
 
 	if err != nil {
+
 		return nil, false
 	}
 	stack, exists := c.namedValues[prefixedName]
@@ -222,6 +223,17 @@ func (c context) findNamedValue(name string, prefix string, global bool) (NamedV
 		}
 	}
 	return nil, false
+}
+
+func (c context) findNamedValue(name string, prefix string) (NamedValue, bool) {
+	prefix = strings.TrimSpace(prefix)
+	namedValue, exists := c.findNamedValueExt(name, prefix, false)
+
+	// If named-value has not been found locally, search globally.
+	if !exists && len(prefix) > 0 {
+		namedValue, exists = c.findNamedValueExt(name, prefix, true)
+	}
+	return namedValue, exists
 }
 
 func (c context) findFunction(name string, prefix string) (FunctionDefinition, bool) {
@@ -602,7 +614,7 @@ func (p *Parser) defaultVarValue(valueType ValueType, ctx context) (Expression, 
 
 func (p *Parser) checkNewNamedValueNameToken(token lexer.Token, ctx context) error {
 	name := token.Value()
-	foundNamedValue, exists := ctx.findNamedValue(name, p.prefix, ctx.global())
+	foundNamedValue, exists := ctx.findNamedValue(name, p.prefix)
 
 	if exists && foundNamedValue.Layer() == ctx.layer {
 		namedValueType := "variable"
@@ -1494,7 +1506,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 		for _, nameToken := range nameTokens {
 			prefix := p.prefix
 			name := nameToken.Value()
-			namedValue, exists := ctx.findNamedValue(name, prefix, global)
+			namedValue, exists := ctx.findNamedValue(name, prefix)
 
 			if !exists {
 				if evalConst {
@@ -1763,7 +1775,7 @@ func (p *Parser) evaluateCompoundAssignment(importAlias string, ctx context) (St
 	prefix, dotedName := p.createImportName(importAlias, name)
 
 	// Make sure variable has been defined.
-	namedValue, exists := ctx.findNamedValue(name, prefix, ctx.global())
+	namedValue, exists := ctx.findNamedValue(name, prefix)
 
 	if !exists {
 		return nil, p.variableNotDefinedError(dotedName, nameToken)
@@ -1838,7 +1850,7 @@ func (p *Parser) evaluateVarAssignment(importAlias string, ctx context) (Stateme
 		prefix, dotedName := p.createImportName(importAlias, name)
 
 		// Make sure variable has been defined.
-		namedValue, exists := ctx.findNamedValue(name, prefix, ctx.global())
+		namedValue, exists := ctx.findNamedValue(name, prefix)
 
 		if !exists {
 			return nil, p.variableNotDefinedError(dotedName, nameToken)
@@ -1887,7 +1899,7 @@ func (p *Parser) evaluateParams(ctx context) ([]Param, error) {
 			p.eat()
 
 			name := nameToken.Value()
-			_, exists := ctx.findNamedValue(name, p.prefix, false)
+			_, exists := ctx.findNamedValue(name, p.prefix)
 
 			if exists {
 				return params, fmt.Errorf("scope already contains a variable with the name %s", name)
@@ -2798,8 +2810,7 @@ func (p *Parser) evaluateNamedValueEvaluation(importAlias string, ctx context) (
 	}
 	name := identifierToken.Value()
 	prefix, dotedName := p.createImportName(importAlias, name)
-
-	namedValue, exists := ctx.findNamedValue(name, prefix, ctx.global())
+	namedValue, exists := ctx.findNamedValue(name, prefix)
 
 	if !exists {
 		return nil, p.variableNotDefinedError(dotedName, identifierToken)
@@ -3112,7 +3123,7 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 				default:
 					name := token.Value()
 					prefix, _ := p.createImportName(importAlias, name)
-					variable, exists := ctx.findNamedValue(name, prefix, ctx.global())
+					variable, exists := ctx.findNamedValue(name, prefix)
 
 					switch nextTokenType {
 					case lexer.DOT:
@@ -3885,7 +3896,7 @@ func (p *Parser) evaluateIncrementDecrement(importAlias string, ctx context) (St
 	}
 	name := identifierToken.Value()
 	prefix, dotedName := p.createImportName(importAlias, name)
-	namedValue, exists := ctx.findNamedValue(name, prefix, ctx.global())
+	namedValue, exists := ctx.findNamedValue(name, prefix)
 
 	if !exists {
 		return nil, p.variableNotDefinedError(dotedName, identifierToken)
