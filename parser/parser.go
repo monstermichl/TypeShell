@@ -340,7 +340,13 @@ func (p *Parser) parse(path string, imported bool) (Program, error) {
 		h := sha256.New()
 		h.Write(source)
 
-		p.prefix = fmt.Sprintf("%x", h.Sum(nil))[0:7] // Only use the 7 first characters (inspired by Git).
+		prefix := fmt.Sprintf("%x", h.Sum(nil))[0:7] // Only use the 7 first characters (inspired by Git).
+
+		// If prefix starts with a number, prepend an "x" to make sure it starts with a letter.
+		if regexp.MustCompile(`^\d`).MatchString(prefix) {
+			prefix = fmt.Sprintf("x%s", prefix)
+		}
+		p.prefix = prefix
 	}
 	program, err := p.evaluateProgram()
 
