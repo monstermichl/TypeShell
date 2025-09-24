@@ -561,6 +561,14 @@ func (p *Parser) eat() lexer.Token {
 	return token
 }
 
+func (p *Parser) vomit(amount uint) lexer.Token {
+	for amount > 0 && p.index > 0 {
+		p.index--
+		amount--
+	}
+	return p.peek()
+}
+
 func (p *Parser) isShortVarInit() bool {
 	_, err := p.findAllowed(lexer.SHORT_INIT_OPERATOR, lexer.IDENTIFIER, lexer.COMMA)
 
@@ -3144,6 +3152,14 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 			}
 
 			if err == nil && stmt == nil {
+				// If importAlias has already been evaluated, but no case was hit, reset
+				// the token pointer by 2 to set it back to the import-alias token. This
+				// is kinda ugly but the importAlias does not belong into the context
+				// and this way it's not necessary to propagate it from function to
+				// function.
+				if len(importAlias) > 0 {
+					p.vomit(2)
+				}
 				stmt, err = p.evaluateExpression(ctx)
 			}
 		}

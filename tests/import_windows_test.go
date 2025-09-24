@@ -24,6 +24,10 @@ func TestImportsFromExternalSourceSuccess(t *testing.T) {
 	testImportsFromExternalSourceSuccess(t, transpileBatchFunc)
 }
 
+func TestCallImportedFunctionAsStatementSuccess(t *testing.T) {
+	testCallImportedFunctionAsStatementSuccess(t, transpileBatchFunc)
+}
+
 func TestImportVariableSuccess(t *testing.T) {
 	testImportVariableSuccess(t, transpileBatchFunc)
 }

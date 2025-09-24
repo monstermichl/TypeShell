@@ -85,6 +85,17 @@ func testImportsFromExternalSourceSuccess(t *testing.T, transpilerFunc transpile
 	})
 }
 
+func testCallImportedFunctionAsStatementSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) {
+	transpilerFunc(t, func(dir string) (string, error) {
+		return `
+			import "strings"
+			strings.Contains("Hello World", "Wor")
+		`, nil
+	}, func(output string, err error) {
+		require.Nil(t, err)
+	})
+}
+
 func testImportVariableSuccess(t *testing.T, transpilerFunc transpilerCalloutFunc) {
 	value := "Hello World"
 
