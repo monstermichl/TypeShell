@@ -25,6 +25,7 @@
 - Print with spaces only shows echo off message (Batch) (https://github.com/monstermichl/TypeShell/issues/53).
 - Subtraction is not considered subtraction if number comes directly after minus (https://github.com/monstermichl/TypeShell/issues/62).
 - Using imported variables/constants doesn't work (https://github.com/monstermichl/TypeShell/issues/49).
+- Globally defined variables/constants not found if used in imported function (https://github.com/monstermichl/TypeShell/issues/67).
   
 ## v0.1.1 - 2025-07-05
 ### New
