@@ -142,11 +142,24 @@ func division(a int, b int) int {
 func divisionWithRemainder(a int, b int) (int, int) {
     return division(a, b), a % b
 }
+
+// Function call.
+division(5, 2)
 ```
 
 ```golang
-// Function call.
-sum(2, 5)
+// Define function with optional parameters.
+func sum(vals ...int) int {
+    sum := 0
+
+    for _, val := range vals {
+        sum += val
+    }
+    return sum
+}
+
+// Call function with an arbitrary amount of arguments.
+sum(1, 2, 3, 4)
 ```
 
 ### Slices

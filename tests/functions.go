@@ -175,6 +175,56 @@ func testStructPointerReceiverFunctionSuccess(t *testing.T, transpilerFunc trans
 	})
 }
 
+func testOptionalParamsFunctionWithParamsSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		func test(a, b int, c ...string) {
+			print(a, b)
+
+			for _, val := range c {
+				print(val)
+			}
+		}
+
+		test(1, 2, "Hello", "World")
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "1 2\nHello\nWorld", output)
+	})
+}
+
+func testOptionalParamsFunctionWithoutParamsSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		func test(a, b int, c ...string) {
+			print(a, b)
+
+			for _, val := range c {
+				print(val)
+			}
+		}
+
+		test(1, 2)
+	`, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "1 2", output)
+	})
+}
+
+func testOptionalParamsFunctionWithWrongTypeFail(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		func test(a, b int, c ...string) {
+			print(a, b)
+
+			for _, val := range c {
+				print(val)
+			}
+		}
+
+		test(1, 2, 3)
+	`, func(output string, err error) {
+		require.EqualError(t, shortenError(err), "expected type of parameter c is string but got int")
+	})
+}
+
 func testCallFunctionFromFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		func test1(retVal1 int, retVal2 int) (int, int) {

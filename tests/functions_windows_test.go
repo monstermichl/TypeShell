@@ -48,6 +48,18 @@ func TestStructPointerReceiverFunctionSuccess(t *testing.T) {
 	testStructPointerReceiverFunctionSuccess(t, transpileBatch)
 }
 
+func TestOptionalParamsFunctionWithParamsSuccess(t *testing.T) {
+	testOptionalParamsFunctionWithParamsSuccess(t, transpileBatch)
+}
+
+func TestOptionalParamsFunctionWithoutParamsSuccess(t *testing.T) {
+	testOptionalParamsFunctionWithoutParamsSuccess(t, transpileBatch)
+}
+
+func TestOptionalParamsFunctionWithWrongTypeFail(t *testing.T) {
+	testOptionalParamsFunctionWithWrongTypeFail(t, transpileBatch)
+}
+
 func TestCallFunctionFromFunctionSuccess(t *testing.T) {
 	testCallFunctionFromFunctionSuccess(t, transpileBatch)
 }

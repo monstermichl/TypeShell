@@ -7,6 +7,7 @@
 - Add struct support (https://github.com/monstermichl/TypeShell/issues/51).
 - Allow passing of structs to functions as pointer (https://github.com/monstermichl/TypeShell/issues/63).
 - Add function receiver support (https://github.com/monstermichl/TypeShell/issues/64).
+- Add support for optional parameters (https://github.com/monstermichl/TypeShell/issues/66).
 - Add support for remote imports (https://github.com/monstermichl/TypeShell/issues/46).
 - Include std and README.md in release (https://github.com/monstermichl/TypeShell/issues/43).
 - Add for-range support for numbers (https://github.com/monstermichl/TypeShell/issues/51).

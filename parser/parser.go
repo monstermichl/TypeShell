@@ -1868,6 +1868,7 @@ func (p *Parser) evaluateVarAssignment(importAlias string, ctx context) (Stateme
 
 func (p *Parser) evaluateParams(ctx context) ([]Param, error) {
 	params := []Param{}
+	optional := false
 
 	for {
 		// If closing bracket has been discovered, all parameters have been parsed.
@@ -1898,6 +1899,25 @@ func (p *Parser) evaluateParams(ctx context) ([]Param, error) {
 			}
 			p.eat() // Eat comma token.
 		}
+		length := len(names)
+		dotToken := p.peek()
+
+		// Find out if the parameter as an optional parameter.
+		if dotToken.Type() == lexer.DOT {
+			if length > 1 {
+				return params, p.atError("only one optional parameter is allowed", dotToken)
+			}
+			p.eat() // Eat dot token.
+			expectedDotError := p.expectedError(`"..."`, dotToken)
+
+			// Consume two more dots.
+			if p.eat().Type() != lexer.DOT {
+				return params, expectedDotError
+			} else if p.eat().Type() != lexer.DOT {
+				return params, expectedDotError
+			}
+			optional = true
+		}
 		pointer := false
 		pointerToken := p.peek()
 
@@ -1924,11 +1944,14 @@ func (p *Parser) evaluateParams(ctx context) ([]Param, error) {
 		if nextTokenType != lexer.COMMA && nextTokenType != lexer.CLOSING_ROUND_BRACKET {
 			return params, p.expectedError(`"," or ")"`, nextToken)
 		} else if nextTokenType == lexer.COMMA {
+			if optional {
+				return params, p.atError("no more parameters allowed after optional parameter", nextToken)
+			}
 			p.eat()
 		}
 
 		for _, name := range names {
-			params = append(params, NewParam(name, valueType, ctx.layer+1, false, pointer))
+			params = append(params, NewParam(name, valueType, ctx.layer+1, false, pointer, optional))
 		}
 	}
 	return params, nil
@@ -2057,6 +2080,9 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 
 	// Add parameters to variables.
 	for _, param := range params {
+		if param.Optional() {
+			param.valueType = NewValueType(param.valueType.Type(), true)
+		}
 		err := ctx.addNamedValues(p.prefix, false, param)
 
 		if err != nil {
@@ -3252,57 +3278,82 @@ func (p *Parser) evaluateLogicalOperation(ctx context, operator LogicalOperator,
 	return leftExpression, nil
 }
 
-func (p *Parser) evaluateArguments(typeName string, name string, params []Param, receiver Expression, ctx context) ([]Expression, error) {
+func (p *Parser) evaluateArguments(typeName string, name string, params []Param, receiver Expression, ctx context) ([]Expression, []Expression, error) {
 	var err error
 	openingBraceToken := p.eat()
 
 	if openingBraceToken.Type() != lexer.OPENING_ROUND_BRACKET {
-		return nil, p.expectedError(`"("`, openingBraceToken)
+		return nil, nil, p.expectedError(`"("`, openingBraceToken)
 	}
 	nextToken := p.peek()
+	firstArgToken := nextToken
 	args := []Expression{}
 	ignoreParams := params == nil // If params is nil, arguments will not be checked for length or type.
 	paramsLength := 0
+	var optionalParamPtr *Param
 
 	if !ignoreParams {
 		paramsLength = len(params)
-	}
-	argsLengthError := func(amount int) error {
-		return fmt.Errorf("%s %s expects %d parameters but got %d", typeName, name, paramsLength, amount)
+
+		if paramsLength > 0 {
+			lastParam := params[paramsLength-1]
+
+			if lastParam.Optional() {
+				optionalParamPtr = &lastParam
+				paramsLength-- // Expect one parameter less because last parameter is optional.
+			}
+		}
 	}
 
 	if receiver != nil {
 		args = append(args, receiver)
 	}
+	optionalArgs := []Expression{}
+	argsLength := len(args)
 
 	// While next-token is not closing brace, evaluate arguments.
 	for nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
 		var expr Expression
-		argToken := nextToken
+		argToken := p.peek()
 		expr, err = p.evaluateExpression(ctx)
 
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		args = append(args, expr)
 
 		if !ignoreParams {
-			argsLength := len(args)
+			if len(args) == paramsLength && optionalParamPtr != nil {
+				// Count only the first optional param.
+				if len(optionalArgs) == 0 {
+					argsLength++
+				}
+				optionalArgs = append(optionalArgs, expr)
+			} else {
+				args = append(args, expr)
+				argsLength++
+			}
+			var param Param
 
 			// Make sure arguments have not been exceeded.
 			if argsLength > paramsLength {
-				return nil, argsLengthError(argsLength)
+				if optionalParamPtr == nil {
+					return nil, nil, p.atError(fmt.Sprintf("%s %s expects %d parameters but got at least %d", typeName, name, paramsLength, argsLength), argToken)
+				} else {
+					param = *optionalParamPtr
+				}
+			} else {
+				param = params[argsLength-1]
 			}
 
 			// Make sure argument type fits parameter type.
-			lastArgsIndex := argsLength - 1
-			param := params[lastArgsIndex]
 			lastParamType := param.ValueType()
 			lastArgType := expr.ValueType()
 
 			if !lastParamType.Equals(lastArgType) {
-				return nil, p.expectedError(fmt.Sprintf("type of parameter %s is %s but got %s", param.Name(), lastParamType.String(), lastArgType.String()), argToken)
+				return nil, nil, p.expectedError(fmt.Sprintf("type of parameter %s is %s but got %s", param.Name(), lastParamType.String(), lastArgType.String()), argToken)
 			}
+		} else {
+			args = append(args, expr)
 		}
 		nextToken = p.peek()
 		tokenType := nextToken.Type()
@@ -3315,25 +3366,26 @@ func (p *Parser) evaluateArguments(typeName string, name string, params []Param,
 		}
 	}
 
+	if len(optionalArgs) > 0 {
+		argsLength--
+	}
+
 	// Check for the appropriate arguments amount.
 	if !ignoreParams {
-		argsLength := len(args)
-
-		if len(args) != paramsLength {
-			return nil, argsLengthError(argsLength)
+		if argsLength != paramsLength {
+			return nil, nil, p.atError(fmt.Sprintf("%s %s expects %d parameters but got %d", typeName, name, paramsLength, argsLength), firstArgToken)
 		}
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-
 	closingBraceToken := p.eat()
 
 	if closingBraceToken.Type() != lexer.CLOSING_ROUND_BRACKET {
-		return nil, p.expectedError(`")"`, closingBraceToken)
+		return nil, nil, p.expectedError(`")"`, closingBraceToken)
 	}
-	return args, nil
+	return args, optionalArgs, nil
 }
 
 func (p *Parser) evaluateFunctionCall(importAlias string, receiver Expression, ctx context) (Call, error) {
@@ -3355,7 +3407,7 @@ func (p *Parser) evaluateFunctionCall(importAlias string, receiver Expression, c
 	if !exists {
 		return nil, p.notDefinedError("function", dotedName, nextToken)
 	}
-	args, err := p.evaluateArguments("function", dotedName, definedFunction.params, receiver, ctx)
+	args, optionalArgs, err := p.evaluateArguments("function", dotedName, definedFunction.params, receiver, ctx)
 
 	if err != nil {
 		return nil, err
@@ -3369,6 +3421,14 @@ func (p *Parser) evaluateFunctionCall(importAlias string, receiver Expression, c
 	}
 	if !slices.Contains(p.usedFuncs[currFunc], name) {
 		p.usedFuncs[currFunc] = append(p.usedFuncs[currFunc], name)
+	}
+
+	// Append optional params as slice.
+	if len(optionalArgs) > 0 {
+		args = append(args, SliceInstantiation{
+			t:      optionalArgs[0].ValueType().Type(),
+			values: optionalArgs,
+		})
 	}
 
 	return FunctionCall{
@@ -3394,7 +3454,7 @@ func (p *Parser) evaluateAppCall(ctx context) (Call, error) {
 	default:
 		return nil, p.expectedError("program identifier or string literal", nextToken)
 	}
-	args, err := p.evaluateArguments("program", name, nil, nil, ctx)
+	args, _, err := p.evaluateArguments("program", name, nil, nil, ctx)
 
 	if err != nil {
 		return nil, err
