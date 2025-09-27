@@ -1,12 +1,10 @@
 package parser
 
 type NamedValue interface {
-	Name() string
+	Importable
 	ValueType() ValueType
 	Layer() int
 	LayerName() string
-	Global() bool
-	Public() bool
 	IsConstant() bool
 }
 

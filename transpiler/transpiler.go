@@ -458,7 +458,7 @@ func (t *transpiler) evaluateConstDefinition(definition parser.ConstDefinition) 
 
 	// Map const definition to var definition since constant check has already been performed by parser.
 	for _, constant := range definition.Constants() {
-		variables = append(variables, parser.NewVariable(constant.LayerName(), constant.ValueType(), constant.Layer(), constant.Public()))
+		variables = append(variables, parser.NewVariable(constant.LayerName(), constant.Prefix(), constant.ValueType(), constant.Layer()))
 	}
 	return t.evaluateVarDefinition(parser.NewVariableDefinition(variables, definition.Values()))
 }
@@ -588,7 +588,7 @@ func (t *transpiler) evaluateStructAssignment(assignment parser.StructAssignment
 
 func (t *transpiler) evaluateConstEvaluation(evaluation parser.ConstEvaluation, valueUsed bool) (expressionResult, error) {
 	// Map const evaluation to var evaluation since constant evaluation works the same.
-	varEvaluation := parser.NewVariableEvaluation(evaluation.LayerName(), evaluation.ValueType(), evaluation.Layer(), evaluation.Public())
+	varEvaluation := parser.NewVariableEvaluation(evaluation.LayerName(), evaluation.Prefix(), evaluation.ValueType(), evaluation.Layer())
 
 	return t.evaluateVarEvaluation(varEvaluation, valueUsed)
 }

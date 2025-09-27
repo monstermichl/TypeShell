@@ -13,7 +13,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/monstermichl/typeshell/lexer"
 )
@@ -413,13 +412,6 @@ func incrementDecrementStatement(variable Variable, increment bool) Statement {
 			},
 		},
 	}
-}
-
-func isPublic(name string) bool {
-	if len(name) > 0 {
-		return unicode.IsUpper([]rune(name)[0]) // https://www.reddit.com/r/golang/comments/11cig0a/comment/ja371qd/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
-	}
-	return false
 }
 
 func buildPrefixedName(prefix string, name string) string {
@@ -1405,7 +1397,6 @@ func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Statement, error) {
 	isShortVarInit := !evalConst && p.isShortVarInit()
 	noun := "variable"
-	global := ctx.global()
 
 	if evalConst {
 		noun = "constant"
@@ -1535,19 +1526,13 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 			if exists && specifiedType.Type().Kind() != TypeKindUnknown && !specifiedType.Equals(variableValueType) {
 				return nil, p.atError(fmt.Sprintf(`%s %s already exists but has type %s`, noun, name, variableValueType.String()), nextToken)
 			}
-			storedName := name
-
-			if global {
-				storedName = buildPrefixedName(prefix, name)
-			}
 			var newNamedValue NamedValue
-			isPublicValue := isPublic(name)
 			layer := ctx.layer
 
 			if evalConst {
-				newNamedValue = NewConst(storedName, specifiedType, layer, isPublicValue)
+				newNamedValue = NewConst(name, prefix, specifiedType, layer)
 			} else {
-				newNamedValue = NewVariable(storedName, specifiedType, layer, isPublicValue)
+				newNamedValue = NewVariable(name, prefix, specifiedType, layer)
 			}
 			namedValuesToken = append(namedValuesToken, nameToken)
 			namedValues = append(namedValues, newNamedValue)
@@ -1630,12 +1615,12 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 
 				if variableValueType.Type().Kind() == TypeKindUnknown {
 					var updatedNamedValue NamedValue
-					name, layer, public := namedValue.Name(), namedValue.Layer(), namedValue.Public()
+					name, layer, prefix := namedValue.Name(), namedValue.Layer(), p.prefix
 
 					if evalConst {
-						updatedNamedValue = NewConst(name, valueValueType, layer, public)
+						updatedNamedValue = NewConst(name, prefix, valueValueType, layer)
 					} else {
-						updatedNamedValue = NewVariable(name, valueValueType, layer, public)
+						updatedNamedValue = NewVariable(name, prefix, valueValueType, layer)
 					}
 					namedValues[i] = updatedNamedValue
 				} else if !variableValueType.Equals(valueValueType) {
@@ -1878,7 +1863,7 @@ func (p *Parser) evaluateVarAssignment(importAlias string, ctx context) (Stateme
 		if !valueType.Equals(expectedValueType) {
 			return nil, p.expectedError(fmt.Sprintf("%s but got %s", expectedValueType.String(), valueType.String()), valuesToken)
 		}
-		variables = append(variables, NewVariable(namedValue.Name(), valueType, namedValue.Layer(), isPublic(name)))
+		variables = append(variables, NewVariable(namedValue.Name(), prefix, valueType, namedValue.Layer()))
 	}
 
 	if isMultiReturnFuncCall {
@@ -1978,7 +1963,7 @@ func (p *Parser) evaluateParams(ctx context) ([]Param, error) {
 		}
 
 		for _, name := range names {
-			params = append(params, NewParam(name, valueType, ctx.layer+1, false, pointer, optional))
+			params = append(params, NewParam(name, valueType, ctx.layer+1, pointer, optional))
 		}
 	}
 	return params, nil
@@ -2481,7 +2466,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		}
 		iterableValueType := iterableExpression.ValueType()
 		layer := ctx.layer + 1
-		indexVar := NewVariable(indexVarName, NewValueType(TypeInt{}, false), layer, false)
+		indexVar := NewVariable(indexVarName, "", NewValueType(TypeInt{}, false), layer)
 		numberIteration := false
 		var iterableEvaluation Expression
 
@@ -2504,16 +2489,17 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		}
 		iterableValueType.isSlice = false // Make sure the value var is not a slice.
 		forRangeStatements := []Statement{}
+		prefix := p.prefix
 
 		// Add count variable.
-		ctx.addNamedValues(p.prefix, false, indexVar)
+		ctx.addNamedValues(prefix, false, indexVar)
 
 		// If no value variable has been provided, there's no need to add it.
 		if hasNamedVar {
 			if numberIteration {
 				return nil, p.atError("only one iteration variable is allowed", namedValueToken)
 			}
-			valueVar := NewVariable(valueVarName, iterableValueType, layer, false)
+			valueVar := NewVariable(valueVarName, prefix, iterableValueType, layer)
 
 			// Add value variable.
 			ctx.addNamedValues(p.prefix, false, valueVar)
@@ -2840,7 +2826,7 @@ func (p *Parser) evaluateNamedValueEvaluation(importAlias string, ctx context) (
 	var variable Variable
 
 	if isParam {
-		variable = NewVariable(param.Name(), param.ValueType(), param.Layer(), param.Public())
+		variable = NewVariable(param.Name(), prefix, param.ValueType(), param.Layer())
 	} else {
 		variable = namedValue.(Variable)
 	}

@@ -4,17 +4,17 @@ import "fmt"
 
 type Variable struct {
 	name      string
+	prefix    string
 	valueType ValueType
 	layer     int
-	public    bool
 }
 
-func NewVariable(name string, valueType ValueType, layer int, public bool) Variable {
+func NewVariable(name string, prefix string, valueType ValueType, layer int) Variable {
 	return Variable{
 		name,
+		prefix,
 		valueType,
 		layer,
-		public,
 	}
 }
 
@@ -22,8 +22,16 @@ func (v Variable) Name() string {
 	return v.name
 }
 
+func (v Variable) Prefix() string {
+	return v.prefix
+}
+
 func (v Variable) ValueType() ValueType {
 	return v.valueType
+}
+
+func (v Variable) ImportableType() ImportableType {
+	return ImportableTypeVariable
 }
 
 func (v Variable) Layer() int {
@@ -47,7 +55,7 @@ func (v Variable) Global() bool {
 }
 
 func (v Variable) Public() bool {
-	return v.public
+	return isPublic(v.Name())
 }
 
 type VariableDefinitionValueAssignment struct {
@@ -161,13 +169,13 @@ type VariableEvaluation struct {
 	Variable
 }
 
-func NewVariableEvaluation(name string, valueType ValueType, layer int, public bool) VariableEvaluation {
+func NewVariableEvaluation(name string, prefix string, valueType ValueType, layer int) VariableEvaluation {
 	return VariableEvaluation{
 		Variable{
 			name,
+			prefix,
 			valueType,
 			layer,
-			public,
 		},
 	}
 }

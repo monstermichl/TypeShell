@@ -4,17 +4,17 @@ import "fmt"
 
 type Const struct {
 	name      string
+	prefix    string
 	valueType ValueType
 	layer     int
-	public    bool
 }
 
-func NewConst(name string, valueType ValueType, layer int, public bool) Const {
+func NewConst(name string, prefix string, valueType ValueType, layer int) Const {
 	return Const{
 		name,
+		prefix,
 		valueType,
 		layer,
-		public,
 	}
 }
 
@@ -22,8 +22,16 @@ func (c Const) Name() string {
 	return c.name
 }
 
+func (c Const) Prefix() string {
+	return c.prefix
+}
+
 func (c Const) ValueType() ValueType {
 	return c.valueType
+}
+
+func (c Const) ImportableType() ImportableType {
+	return ImportableTypeConstant
 }
 
 func (c Const) Layer() int {
@@ -47,7 +55,7 @@ func (c Const) Global() bool {
 }
 
 func (c Const) Public() bool {
-	return c.public
+	return isPublic(c.Name())
 }
 
 type ConstDefinition struct {
