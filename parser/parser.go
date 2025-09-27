@@ -354,7 +354,7 @@ func (p *Parser) parse(path string, imported bool) (Program, error) {
 		return Program{}, err
 	}
 
-	// If this is the original program, removed unused stuff.
+	// If this is the original program, remove unused stuff.
 	if !imported {
 		return p.cleanProgram(program)
 	}
@@ -582,7 +582,7 @@ func (p *Parser) isShortVarInit() bool {
 	return err == nil
 }
 
-func (p *Parser) defaultVarValue(valueType ValueType, ctx context) (Expression, error) {
+func (p *Parser) defaultVarValue(valueType ValueType, token lexer.Token, ctx context) (Expression, error) {
 	foundType, exists := ctx.findType(valueType.Type().Name(), p.prefix)
 
 	if exists {
@@ -603,7 +603,7 @@ func (p *Parser) defaultVarValue(valueType ValueType, ctx context) (Expression, 
 					structValues := []StructValue{}
 
 					for _, field := range structDefinition.Fields() {
-						defaultValue, err := p.defaultVarValue(field.ValueType(), ctx)
+						defaultValue, err := p.defaultVarValue(field.ValueType(), token, ctx)
 
 						if err != nil {
 							return nil, err
@@ -623,7 +623,7 @@ func (p *Parser) defaultVarValue(valueType ValueType, ctx context) (Expression, 
 			return SliceInstantiation{t: elementaryDataType}, nil
 		}
 	}
-	return nil, fmt.Errorf("no default value found for type %s", valueType.String())
+	return nil, p.atError(fmt.Sprintf("no default value found for type %s", valueType.String()), token)
 }
 
 func (p *Parser) checkNewNamedValueNameToken(token lexer.Token, ctx context) error {
@@ -986,7 +986,6 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 						}
 					}
 				}
-
 				nextToken = p.peek()
 				nextTokenType := nextToken.Type()
 
@@ -1476,6 +1475,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 		}
 		specifiedType := NewValueType(TypeUnknown{}, false)
 		namedValues := []NamedValue{}
+		namedValuesToken := []lexer.Token{}
 		reuseIota := false
 
 		if isShortVarInit {
@@ -1549,6 +1549,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 			} else {
 				newNamedValue = NewVariable(storedName, specifiedType, layer, isPublicValue)
 			}
+			namedValuesToken = append(namedValuesToken, nameToken)
 			namedValues = append(namedValues, newNamedValue)
 		}
 		values := []Expression{}
@@ -1678,8 +1679,8 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 
 			// If no value has been specified, define default value.
 			if lenValues == 0 {
-				for _, variable := range namedValues {
-					value, err := p.defaultVarValue(variable.ValueType(), ctx)
+				for i, namedValue := range namedValues {
+					value, err := p.defaultVarValue(namedValue.ValueType(), namedValuesToken[i], ctx)
 
 					if err != nil {
 						return nil, err
@@ -2133,7 +2134,6 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 		if len(returnTypes) > 0 {
 			// If a return value is required, the last statement must be a return statement.
 			if last {
-				// TODO: Add token position to errors to raise clearer error messages.
 				if lastStatement == nil || lastStatement.StatementType() != STATEMENT_TYPE_RETURN {
 					errTemp = p.atError(fmt.Sprintf(`function "%s" requires a return statement at the end of the block`, name), blockStartToken)
 				} else if returnStatement := lastStatement.(Return); len(returnStatement.Values()) != len(returnTypes) {
@@ -3640,7 +3640,7 @@ func (p *Parser) evaluateStructInitialization(importAlias string, ctx context) (
 	if err != nil {
 		return nil, err
 	}
-	intialization, err := p.defaultVarValue(structValueType, ctx)
+	intialization, err := p.defaultVarValue(structValueType, nextToken, ctx)
 
 	if err != nil {
 		return nil, err
