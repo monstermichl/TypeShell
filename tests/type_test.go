@@ -104,7 +104,7 @@ func testTypeDeclaredInFunctionUsedOutsideFail(t *testing.T, transpilerFunc tran
 		}
 		var a testType
 	`, func(output string, err error) {
-		require.EqualError(t, shortenError(err), "expected valid data type")
+		require.EqualError(t, shortenError(err), "expected valid data type but got testType")
 	})
 }
 
@@ -115,7 +115,7 @@ func testTypeDeclaredInIfUsedOutsideFail(t *testing.T, transpilerFunc transpiler
 		}
 		var a testType
 	`, func(output string, err error) {
-		require.EqualError(t, shortenError(err), "expected valid data type")
+		require.EqualError(t, shortenError(err), "expected valid data type but got testType")
 	})
 }
 

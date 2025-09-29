@@ -8,12 +8,7 @@ type Param struct {
 
 func NewParam(name string, valueType ValueType, layer int, pointer bool, optional bool) Param {
 	return Param{
-		Variable: Variable{
-			name,
-			"",
-			valueType,
-			layer,
-		},
+		Variable: NewVariable(name, "", valueType, layer),
 		pointer:  pointer,
 		optional: optional,
 	}

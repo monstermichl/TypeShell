@@ -19,7 +19,7 @@ func (c Comparison) StatementType() StatementType {
 }
 
 func (c Comparison) ValueType() ValueType {
-	return NewValueType(TypeBool{}, false)
+	return NewValueType(NewTypeBool(), false)
 }
 
 func (c Comparison) IsConstant() bool {

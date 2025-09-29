@@ -8,7 +8,7 @@ func (i Iota) StatementType() StatementType {
 }
 
 func (i Iota) ValueType() ValueType {
-	return NewValueType(TypeInt{}, false)
+	return NewValueType(NewTypeInt(), false)
 }
 
 func (i Iota) IsConstant() bool {

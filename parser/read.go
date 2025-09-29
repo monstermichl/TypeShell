@@ -9,7 +9,7 @@ func (r Read) StatementType() StatementType {
 }
 
 func (r Read) ValueType() ValueType {
-	return NewValueType(TypeString{}, false)
+	return NewValueType(NewTypeString(), false)
 }
 
 func (r Read) IsConstant() bool {

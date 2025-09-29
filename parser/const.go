@@ -3,35 +3,21 @@ package parser
 import "fmt"
 
 type Const struct {
-	name      string
-	prefix    string
+	ImportableBase
 	valueType ValueType
 	layer     int
 }
 
 func NewConst(name string, prefix string, valueType ValueType, layer int) Const {
 	return Const{
-		name,
-		prefix,
-		valueType,
-		layer,
+		ImportableBase: NewImportableBase(name, prefix, layer == 0),
+		valueType:      valueType,
+		layer:          layer,
 	}
-}
-
-func (c Const) Name() string {
-	return c.name
-}
-
-func (c Const) Prefix() string {
-	return c.prefix
 }
 
 func (c Const) ValueType() ValueType {
 	return c.valueType
-}
-
-func (c Const) ImportableType() ImportableType {
-	return ImportableTypeConstant
 }
 
 func (c Const) Layer() int {
@@ -48,14 +34,6 @@ func (c Const) IsConstant() bool {
 
 func (c *Const) SetValueType(valueType ValueType) {
 	c.valueType = valueType
-}
-
-func (c Const) Global() bool {
-	return c.layer == 0
-}
-
-func (c Const) Public() bool {
-	return isPublic(c.Name())
 }
 
 type ConstDefinition struct {

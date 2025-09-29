@@ -11,7 +11,7 @@ func (l LogicalOperation) StatementType() StatementType {
 }
 
 func (l LogicalOperation) ValueType() ValueType {
-	return NewValueType(TypeBool{}, false)
+	return NewValueType(NewTypeBool(), false)
 }
 
 func (l LogicalOperation) IsConstant() bool {

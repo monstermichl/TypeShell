@@ -1,25 +1,23 @@
 package parser
 
 type TypeDeclaration struct {
-	name      string
+	ImportableBase
 	valueType ValueType
-	public    bool
+}
+
+func NewTypeDeclaration(name string, prefix string, valueType ValueType, global bool) TypeDeclaration {
+	return TypeDeclaration{
+		ImportableBase: NewImportableBase(name, prefix, global),
+		valueType:      valueType,
+	}
 }
 
 func (t TypeDeclaration) StatementType() StatementType {
 	return STATEMENT_TYPE_TYPE_DECLARATION
 }
 
-func (t TypeDeclaration) Name() string {
-	return t.name
-}
-
 func (t TypeDeclaration) ValueType() ValueType {
 	return t.valueType
-}
-
-func (t TypeDeclaration) Public() bool {
-	return t.public
 }
 
 type TypeDefinition struct {

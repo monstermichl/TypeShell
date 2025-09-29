@@ -3,35 +3,21 @@ package parser
 import "fmt"
 
 type Variable struct {
-	name      string
-	prefix    string
+	ImportableBase
 	valueType ValueType
 	layer     int
 }
 
 func NewVariable(name string, prefix string, valueType ValueType, layer int) Variable {
 	return Variable{
-		name,
-		prefix,
-		valueType,
-		layer,
+		ImportableBase: NewImportableBase(name, prefix, layer == 0),
+		valueType:      valueType,
+		layer:          layer,
 	}
-}
-
-func (v Variable) Name() string {
-	return v.name
-}
-
-func (v Variable) Prefix() string {
-	return v.prefix
 }
 
 func (v Variable) ValueType() ValueType {
 	return v.valueType
-}
-
-func (v Variable) ImportableType() ImportableType {
-	return ImportableTypeVariable
 }
 
 func (v Variable) Layer() int {
@@ -48,14 +34,6 @@ func (v Variable) IsConstant() bool {
 
 func (v *Variable) SetValueType(valueType ValueType) {
 	v.valueType = valueType
-}
-
-func (v Variable) Global() bool {
-	return v.layer == 0
-}
-
-func (v Variable) Public() bool {
-	return isPublic(v.Name())
 }
 
 type VariableDefinitionValueAssignment struct {
@@ -171,12 +149,7 @@ type VariableEvaluation struct {
 
 func NewVariableEvaluation(name string, prefix string, valueType ValueType, layer int) VariableEvaluation {
 	return VariableEvaluation{
-		Variable{
-			name,
-			prefix,
-			valueType,
-			layer,
-		},
+		NewVariable(name, prefix, valueType, layer),
 	}
 }
 

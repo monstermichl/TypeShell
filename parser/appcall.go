@@ -11,7 +11,7 @@ func (a AppCall) StatementType() StatementType {
 }
 
 func (a AppCall) ValueType() ValueType {
-	return NewValueType(TypeMultiple{}, false)
+	return NewValueType(NewTypeMultiple(), false)
 }
 
 func (a AppCall) IsConstant() bool {
@@ -32,8 +32,8 @@ func (a AppCall) Next() *AppCall {
 
 func (a AppCall) ReturnTypes() []ValueType {
 	return []ValueType{
-		NewValueType(TypeString{}, false), // stdout
-		NewValueType(TypeString{}, false), // stderr
-		NewValueType(TypeInt{}, false),    // error code
+		NewValueType(NewTypeString(), false), // stdout
+		NewValueType(NewTypeString(), false), // stderr
+		NewValueType(NewTypeInt(), false),    // error code
 	}
 }

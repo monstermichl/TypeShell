@@ -56,11 +56,11 @@ type initValue struct {
 }
 
 type context struct {
-	imports     map[string]string             // Maps import aliases to file hashes.
-	types       map[string]Type               // Stores the declared types.
-	namedValues map[string][]NamedValue       // Stores the variable/constant name to variable/constant relation.
-	functions   map[string]FunctionDefinition // Stores the function name to function relation.
-	scopeStack  []scope                       // Stores the current scopes.
+	imports     map[string]string               // Maps import aliases to file hashes.
+	types       Importables[Type]               // Stores the declared types.
+	namedValues Importables[NamedValue]         // Stores the variable/constant name to variable/constant relation.
+	functions   Importables[FunctionDefinition] // Stores the function name to function relation.
+	scopeStack  []scope                         // Stores the current scopes.
 	layer       int
 	iotaCounter int
 }
@@ -68,18 +68,15 @@ type context struct {
 func newContext(prefix string) context {
 	c := context{
 		imports:     map[string]string{},
-		types:       map[string]Type{},
-		namedValues: map[string][]NamedValue{},
-		functions:   map[string]FunctionDefinition{},
 		layer:       -1, // Init at -1 since program increases it right away.
 		iotaCounter: 0,
 	}
 
 	// Add elementary types.
-	c.addType(prefix, NewValueType(TypeBool{}, false))
-	c.addType(prefix, NewValueType(TypeInt{}, false))
-	c.addType(prefix, NewValueType(TypeString{}, false))
-	c.addType(prefix, NewValueType(TypeError{}, false))
+	c.addType(NewValueType(NewTypeBool(), false))
+	c.addType(NewValueType(NewTypeInt(), false))
+	c.addType(NewValueType(NewTypeString(), false))
+	c.addType(NewValueType(NewTypeError(), false))
 
 	return c
 }
@@ -121,73 +118,34 @@ func (c *context) incrementIota() {
 	c.iotaCounter++
 }
 
-func (c context) buildPrefixedName(name string, prefix string, global bool, checkExistence bool) (string, error) {
-	name = strings.TrimSpace(name)
-
-	if len(name) == 0 {
-		return "", errors.New("no name provided")
-	}
-	prefix = strings.TrimSpace(prefix)
-
-	if len(prefix) > 0 && global {
-		hash, exists := c.imports[prefix]
-
-		if checkExistence && !exists {
-			return "", fmt.Errorf(`prefix "%s" not found`, prefix)
-		}
-		name = buildPrefixedName(hash, name)
-	}
-	return name, nil
-}
-
 func (c context) addImport(alias string, hash string) error {
 	c.imports[alias] = hash
 	return nil
 }
 
-func (c context) addType(prefix string, valueType ValueType) error {
+func (c *context) addType(valueType ValueType) error {
 	t := valueType.Type()
 	name := t.Name()
-	_, exists := c.findType(name, prefix)
+	_, exists := c.types.find(name, t.Prefix())
 
 	if exists {
-		return fmt.Errorf("type %s has already been defined", name)
+		return fmt.Errorf("type %s has already been defined", name) // TODO: Find out if this should be connected to the layer.
 	}
 	if valueType.IsSlice() {
 		// TODO: Add support.
 		return errors.New("slices are not allowed yet in type declarations")
 	}
-	c.types[buildPrefixedName(prefix, name)] = t
+	c.types.add(t)
 	return nil
 }
 
-func (c context) addNamedValues(prefix string, global bool, namedValues ...NamedValue) error {
-	for _, namedValue := range namedValues {
-		prefixedName, err := c.buildPrefixedName(namedValue.Name(), prefix, global, false)
-
-		if err != nil {
-			return err
-		}
-		_, exists := c.namedValues[prefixedName]
-
-		if !exists {
-			c.namedValues[prefixedName] = []NamedValue{}
-		}
-		c.namedValues[prefixedName] = append(c.namedValues[prefixedName], namedValue)
-	}
+func (c *context) addNamedValues(namedValues ...NamedValue) error {
+	c.namedValues.add(namedValues...)
 	return nil
 }
 
-func (c context) addFunctions(prefix string, global bool, functions ...FunctionDefinition) error {
-	for _, function := range functions {
-		prefixedName, err := c.buildPrefixedName(function.Name(), prefix, global, false)
-
-		if err != nil {
-			return err
-		}
-		c.functions[prefixedName] = function
-	}
-	return nil
+func (c *context) addFunctions(functions ...FunctionDefinition) {
+	c.functions.add(functions...)
 }
 
 func (c context) findImport(alias string) (string, bool) {
@@ -196,61 +154,23 @@ func (c context) findImport(alias string) (string, bool) {
 }
 
 func (c context) findType(typeName string, prefix string) (Type, bool) {
-	prefixedName, err := c.buildPrefixedName(typeName, prefix, true, true)
-
-	if err != nil {
-		return nil, false
-	}
-	t, exists := c.types[prefixedName]
-	return t, exists
-}
-
-func (c context) findNamedValueExt(name string, prefix string, global bool) (NamedValue, bool) {
-	prefixedName, err := c.buildPrefixedName(name, prefix, global, true)
-
-	if err != nil {
-
-		return nil, false
-	}
-	stack, exists := c.namedValues[prefixedName]
-
-	if exists {
-		lastIndex := len(stack) - 1
-
-		if lastIndex >= 0 {
-			return stack[lastIndex], true
-		}
-	}
-	return nil, false
+	return c.types.find(typeName, prefix)
 }
 
 func (c context) findNamedValue(name string, prefix string) (NamedValue, bool) {
-	prefix = strings.TrimSpace(prefix)
-	namedValue, exists := c.findNamedValueExt(name, prefix, false)
-
-	// If named-value has not been found locally, search globally.
-	if !exists && len(prefix) > 0 {
-		namedValue, exists = c.findNamedValueExt(name, prefix, true)
-	}
-	return namedValue, exists
+	return c.namedValues.find(name, prefix)
 }
 
 func (c context) findFunction(name string, prefix string) (FunctionDefinition, bool) {
-	prefixedName, err := c.buildPrefixedName(name, prefix, true, true)
-
-	if err != nil {
-		return FunctionDefinition{}, false
-	}
-	function, exists := c.functions[prefixedName]
-	return function, exists
+	return c.functions.find(name, prefix)
 }
 
 func (c context) clone() context {
 	return context{
 		imports:     maps.Clone(c.imports),
-		types:       maps.Clone(c.types),
-		namedValues: maps.Clone(c.namedValues), // TODO: Make sure this is appropriate cloning because each entry contains a slice.
-		functions:   maps.Clone(c.functions),
+		types:       c.types.clone(),
+		namedValues: c.namedValues.clone(), // TODO: Make sure this is appropriate cloning because each entry contains a slice.
+		functions:   c.functions.clone(),
 		scopeStack:  slices.Clone(c.scopeStack),
 		layer:       c.layer,
 		iotaCounter: c.iotaCounter,
@@ -290,7 +210,7 @@ type Parser struct {
 	index     int
 	path      string
 	prefix    string
-	currFunc  string
+	currFunc  *FunctionDefinition
 	usedFuncs map[string][]string // Stores which function (key) calls which functions (values).
 }
 
@@ -414,20 +334,8 @@ func incrementDecrementStatement(variable Variable, increment bool) Statement {
 	}
 }
 
-func buildPrefixedName(prefix string, name string) string {
-	if len(prefix) > 0 {
-		prefix = fmt.Sprintf("%s_", prefix)
-
-		// Only prefix if it doesn't already have the prefix.
-		if !strings.HasPrefix(name, prefix) {
-			name = fmt.Sprintf("%s%s", prefix, name)
-		}
-	}
-	return name
-}
-
 func buildReceiverFunctionName(receiverValueType ValueType, name string) string {
-	return fmt.Sprintf("%s_%s", receiverValueType.Type().Name(), name)
+	return fmt.Sprintf("%s_%s", receiverValueType.Type().PrefixedName(), name)
 }
 
 func updateExtInfo(infoPath string, remotePath string, localPath string) error {
@@ -575,7 +483,8 @@ func (p *Parser) isShortVarInit() bool {
 }
 
 func (p *Parser) defaultVarValue(valueType ValueType, token lexer.Token, ctx context) (Expression, error) {
-	foundType, exists := ctx.findType(valueType.Type().Name(), p.prefix)
+	t := valueType.Type()
+	foundType, exists := ctx.findType(t.Name(), t.Prefix())
 
 	if exists {
 		elementaryDataType := foundType.ElementaryType()
@@ -667,7 +576,7 @@ func (p *Parser) cleanProgram(program Program) (Program, error) {
 		switch stmt.StatementType() {
 		case STATEMENT_TYPE_FUNCTION_DEFINITION:
 			function := stmt.(FunctionDefinition)
-			return !slices.Contains(usedFuncs, function.Name())
+			return !slices.Contains(usedFuncs, function.PrefixedName())
 		}
 		return false
 	})
@@ -676,16 +585,21 @@ func (p *Parser) cleanProgram(program Program) (Program, error) {
 	}, nil
 }
 
-func (p *Parser) createImportName(importAlias string, name string) (string, string) {
+func (p *Parser) createImportName(importAlias string, name string, ctx context) (string, string, error) {
 	prefix := p.prefix
 	dotedName := name
 
 	// If it's an include-function call, use provided alias.
 	if len(importAlias) > 0 {
-		prefix = importAlias
+		prefixTemp, exists := ctx.findImport(importAlias)
+
+		if !exists {
+			return "", "", p.atError(fmt.Sprintf("import alias %s not found", importAlias), p.peek())
+		}
+		prefix = prefixTemp
 		dotedName = fmt.Sprintf("%s.%s", importAlias, name)
 	}
-	return prefix, dotedName
+	return prefix, dotedName, nil
 }
 
 func (p *Parser) evaluateNames() ([]lexer.Token, error) {
@@ -729,7 +643,7 @@ func (p *Parser) evaluateValues(ctx context) (evaluatedValues, error) {
 		if expr.StatementType() == STATEMENT_TYPE_FUNCTION_CALL {
 			call := expr.(FunctionCall)
 			returnValuesLength = len(call.ReturnTypes())
-			funcName = call.Name()
+			funcName = call.PrefixedName()
 
 			if returnValuesLength == 0 {
 				return evaluatedValues{}, p.expectedError(fmt.Sprintf(`return value from function "%s"`, funcName), exprToken)
@@ -810,7 +724,7 @@ func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword stri
 
 func (p *Parser) evaluateProgram() (Program, error) {
 	ctx := newContext(p.prefix)
-	statements, err := p.evaluateImports(ctx)
+	statements, err := p.evaluateImports(&ctx)
 
 	if err != nil {
 		return Program{}, err
@@ -835,7 +749,7 @@ func (p *Parser) evaluateProgram() (Program, error) {
 	}, nil
 }
 
-func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
+func (p *Parser) evaluateImports(ctx *context) ([]Statement, error) {
 	statementsTemp := []Statement{}
 
 	for {
@@ -1008,43 +922,35 @@ func (p *Parser) evaluateImports(ctx context) ([]Statement, error) {
 				switch t := assignment.(type) {
 				case VariableDefinitionValueAssignment:
 					for _, variable := range t.Variables() {
-						name := variable.Name()
-
-						if _, exists = ctx.namedValues[name]; !exists && variable.Public() {
-							ctx.namedValues[name] = []NamedValue{variable}
+						if _, exists = ctx.findNamedValue(variable.Name(), variable.Prefix()); !exists && variable.Public() {
+							ctx.addNamedValues(variable)
 						}
 					}
 				case VariableDefinitionCallAssignment:
 					for _, variable := range t.Variables() {
-						name := variable.Name()
-
-						if _, exists = ctx.namedValues[name]; !exists && variable.Public() {
-							ctx.namedValues[name] = []NamedValue{variable}
+						if _, exists = ctx.findNamedValue(variable.Name(), variable.Prefix()); !exists && variable.Public() {
+							ctx.addNamedValues(variable)
 						}
 					}
 				case ConstDefinition:
 					for _, constant := range t.Constants() {
-						name := constant.Name()
-
-						if _, exists = ctx.namedValues[name]; !exists && constant.Public() {
-							ctx.namedValues[name] = []NamedValue{constant}
+						if _, exists = ctx.findNamedValue(constant.Name(), constant.Prefix()); !exists && constant.Public() {
+							ctx.addNamedValues(constant)
 						}
 					}
 				}
 			}
 		case STATEMENT_TYPE_FUNCTION_DEFINITION:
-			definedFunction := statement.(FunctionDefinition)
-			name := definedFunction.Name()
-
-			if _, exists = ctx.functions[name]; !exists && definedFunction.Public() {
-				ctx.functions[name] = definedFunction
-			}
+			ctx.addFunctions(statement.(FunctionDefinition))
 		case STATEMENT_TYPE_TYPE_DECLARATION:
 			definedType := statement.(TypeDeclaration)
-			name := definedType.Name()
 
-			if _, exists = ctx.types[name]; !exists && definedType.Public() {
-				ctx.types[name] = definedType.ValueType().Type()
+			if _, exists = ctx.findType(definedType.Name(), definedType.Prefix()); !exists && definedType.Public() {
+				err := ctx.addType(definedType.ValueType())
+
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 
@@ -1128,12 +1034,10 @@ func (p *Parser) evaluateBlockContent(terminationTokenTypes []lexer.TokenType, c
 				// Ignore termination tokens as they are handled after the switch.
 			default:
 				stmt, err = p.evaluateStatement(ctx)
-				prefix := p.prefix
 
 				if err != nil {
 					break
 				}
-				global := ctx.global()
 
 				switch stmt.StatementType() {
 				case STATEMENT_TYPE_NAMED_VALUES_DEFINITION:
@@ -1142,7 +1046,7 @@ func (p *Parser) evaluateBlockContent(terminationTokenTypes []lexer.TokenType, c
 						case VariableDefinitionValueAssignment:
 							// Store new variables.
 							for _, variable := range t.Variables() {
-								err = ctx.addNamedValues(prefix, global, variable)
+								err = ctx.addNamedValues(variable)
 
 								if err != nil {
 									return nil, err
@@ -1151,7 +1055,7 @@ func (p *Parser) evaluateBlockContent(terminationTokenTypes []lexer.TokenType, c
 						case VariableDefinitionCallAssignment:
 							// Store new variables.
 							for _, variable := range t.Variables() {
-								err = ctx.addNamedValues(prefix, global, variable)
+								err = ctx.addNamedValues(variable)
 
 								if err != nil {
 									return nil, err
@@ -1160,7 +1064,7 @@ func (p *Parser) evaluateBlockContent(terminationTokenTypes []lexer.TokenType, c
 						case ConstDefinition:
 							// Store new constants.
 							for _, variable := range t.Constants() {
-								err = ctx.addNamedValues(prefix, global, variable)
+								err = ctx.addNamedValues(variable)
 
 								if err != nil {
 									return nil, err
@@ -1170,14 +1074,10 @@ func (p *Parser) evaluateBlockContent(terminationTokenTypes []lexer.TokenType, c
 					}
 				case STATEMENT_TYPE_FUNCTION_DEFINITION:
 					// Store new function.
-					err = ctx.addFunctions(prefix, global, stmt.(FunctionDefinition))
-
-					if err != nil {
-						return nil, err
-					}
+					ctx.addFunctions(stmt.(FunctionDefinition))
 				case STATEMENT_TYPE_TYPE_DECLARATION:
 					// Store new type.
-					err = ctx.addType(prefix, stmt.(TypeDeclaration).ValueType())
+					err = ctx.addType(stmt.(TypeDeclaration).ValueType())
 
 					if err != nil {
 						return nil, err
@@ -1246,7 +1146,7 @@ func (p *Parser) evaluateBlock(callback blockCallback, ctx context, scope scope)
 
 func (p *Parser) evaluateValueType(ctx context, importAliases ...string) (ValueType, error) {
 	nextToken := p.peek()
-	evaluatedType := NewValueType(TypeUnknown{}, false)
+	evaluatedType := NewValueType(NewTypeUnknown(), false)
 
 	// Evaluate if value type is a slice type.
 	if nextToken.Type() == lexer.OPENING_SQUARE_BRACKET {
@@ -1277,11 +1177,15 @@ func (p *Parser) evaluateValueType(ctx context, importAliases ...string) (ValueT
 	}
 	p.eat() // Eat data type token.
 	name := nextToken.Value()
-	prefix, _ := p.createImportName(importAlias, name)
+	prefix, _, err := p.createImportName(importAlias, name, ctx)
+
+	if err != nil {
+		return evaluatedType, err
+	}
 	foundDefinition, exists := ctx.findType(name, prefix)
 
 	if !exists {
-		return evaluatedType, p.expectedError("valid data type", nextToken)
+		return evaluatedType, p.expectedError(fmt.Sprintf("valid data type but got %s", name), nextToken)
 	}
 	evaluatedType.t = foundDefinition
 	return evaluatedType, nil
@@ -1336,7 +1240,7 @@ func (p *Parser) evaluateStructDefinition(name string, ctx context) (StructDefin
 			break
 		}
 	}
-	return NewStructDefinition(name, fields), nil
+	return NewStructDefinition(name, p.prefix, fields, ctx.global()), nil
 }
 
 func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
@@ -1360,11 +1264,8 @@ func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 		p.eat()
 	}
 	name := nameToken.Value()
-	isPublic := isPublic(name)
-
-	if ctx.global() {
-		name = buildPrefixedName(p.prefix, name)
-	}
+	prefix := p.prefix
+	global := ctx.global()
 	valueTypeToken := p.peek()
 
 	var valueType ValueType
@@ -1389,9 +1290,9 @@ func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
 		t := valueType.Type()
 
 		// Create a wrapper with the same type but different name.
-		valueType = NewValueType(NewTypeCustom(name, isAlias, t.Kind(), t), valueType.IsSlice())
+		valueType = NewValueType(NewTypeCustom(name, prefix, isAlias, t.Kind(), t, global), valueType.IsSlice())
 	}
-	return TypeDeclaration{name, valueType, isPublic}, nil
+	return NewTypeDeclaration(name, prefix, valueType, global), nil
 }
 
 func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Statement, error) {
@@ -1464,7 +1365,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 				return nil, err
 			}
 		}
-		specifiedType := NewValueType(TypeUnknown{}, false)
+		specifiedType := NewValueType(NewTypeUnknown(), false)
 		namedValues := []NamedValue{}
 		namedValuesToken := []lexer.Token{}
 		reuseIota := false
@@ -1615,7 +1516,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 
 				if variableValueType.Type().Kind() == TypeKindUnknown {
 					var updatedNamedValue NamedValue
-					name, layer, prefix := namedValue.Name(), namedValue.Layer(), p.prefix
+					name, layer, prefix := namedValue.Name(), namedValue.Layer(), namedValue.Prefix()
 
 					if evalConst {
 						updatedNamedValue = NewConst(name, prefix, valueValueType, layer)
@@ -1772,7 +1673,11 @@ func (p *Parser) evaluateCompoundAssignment(importAlias string, ctx context) (St
 		return nil, p.expectedError("a single value on the right side", valuesToken)
 	}
 	name := nameToken.Value()
-	prefix, dotedName := p.createImportName(importAlias, name)
+	prefix, dotedName, err := p.createImportName(importAlias, name, ctx)
+
+	if err != nil {
+		return nil, err
+	}
 
 	// Make sure variable has been defined.
 	namedValue, exists := ctx.findNamedValue(name, prefix)
@@ -1847,8 +1752,11 @@ func (p *Parser) evaluateVarAssignment(importAlias string, ctx context) (Stateme
 
 	for i, nameToken := range nameTokens {
 		name := nameToken.Value()
-		prefix, dotedName := p.createImportName(importAlias, name)
+		prefix, dotedName, err := p.createImportName(importAlias, name, ctx)
 
+		if err != nil {
+			return nil, err
+		}
 		// Make sure variable has been defined.
 		namedValue, exists := ctx.findNamedValue(name, prefix)
 
@@ -2095,16 +2003,17 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 		if param.Optional() {
 			param.valueType = NewValueType(param.valueType.Type(), true)
 		}
-		err := ctx.addNamedValues(p.prefix, false, param)
+		err := ctx.addNamedValues(param)
 
 		if err != nil {
 			return nil, err
 		}
 	}
-	prefixedName := buildPrefixedName(p.prefix, name)
+	prefix := p.prefix
+	funcDef := NewFunctionDefinition(name, prefix, returnTypes, params, []Statement{})
 
 	// Make sure sub-statements know in which function they are currently in.
-	p.currFunc = prefixedName
+	p.currFunc = &funcDef
 
 	blockStartToken := p.peek()
 	statements, err := p.evaluateBlock(func(statements []Statement, last bool) error {
@@ -2144,15 +2053,10 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 	if err != nil {
 		return nil, err
 	}
-	p.currFunc = ""
+	funcDef.body = statements
+	p.currFunc = nil
 
-	return FunctionDefinition{
-		name:        prefixedName,
-		returnTypes: returnTypes,
-		params:      params,
-		body:        statements,
-		public:      isPublic(name),
-	}, nil
+	return funcDef, nil
 }
 
 func (p *Parser) evaluateReturn(ctx context) (Statement, error) {
@@ -2466,7 +2370,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		}
 		iterableValueType := iterableExpression.ValueType()
 		layer := ctx.layer + 1
-		indexVar := NewVariable(indexVarName, "", NewValueType(TypeInt{}, false), layer)
+		indexVar := NewVariable(indexVarName, "", NewValueType(NewTypeInt(), false), layer)
 		numberIteration := false
 		var iterableEvaluation Expression
 
@@ -2492,7 +2396,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 		prefix := p.prefix
 
 		// Add count variable.
-		ctx.addNamedValues(prefix, false, indexVar)
+		ctx.addNamedValues(indexVar)
 
 		// If no value variable has been provided, there's no need to add it.
 		if hasNamedVar {
@@ -2502,7 +2406,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 			valueVar := NewVariable(valueVarName, prefix, iterableValueType, layer)
 
 			// Add value variable.
-			ctx.addNamedValues(p.prefix, false, valueVar)
+			ctx.addNamedValues(valueVar)
 
 			forRangeStatements = []Statement{
 				VariableAssignmentValueAssignment{
@@ -2562,7 +2466,6 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 				if err != nil {
 					return nil, err
 				}
-				prefix := p.prefix
 
 				switch init.StatementType() {
 				case STATEMENT_TYPE_NAMED_VALUES_DEFINITION:
@@ -2572,7 +2475,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 					case VariableDefinitionValueAssignment:
 						// Store new variable.
 						for _, variable := range t.Variables() {
-							err = ctx.addNamedValues(prefix, false, variable)
+							err = ctx.addNamedValues(variable)
 
 							if err != nil {
 								return nil, err
@@ -2581,7 +2484,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 					case VariableDefinitionCallAssignment:
 						// Store new variable.
 						for _, variable := range t.Variables() {
-							err = ctx.addNamedValues(prefix, false, variable)
+							err = ctx.addNamedValues(variable)
 
 							if err != nil {
 								return nil, err
@@ -2590,7 +2493,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, error) {
 					case ConstDefinition:
 						// Store new variable.
 						for _, variable := range t.Constants() {
-							err = ctx.addNamedValues(prefix, false, variable)
+							err = ctx.addNamedValues(variable)
 
 							if err != nil {
 								return nil, err
@@ -2676,7 +2579,11 @@ func (p *Parser) evaluateTypeDefinition(importAlias string, ctx context) (Expres
 		return nil, p.expectedIdentifierError(identifierToken)
 	}
 	name := identifierToken.Value()
-	prefix, dotedName := p.createImportName(importAlias, name)
+	prefix, dotedName, err := p.createImportName(importAlias, name, ctx)
+
+	if err != nil {
+		return nil, err
+	}
 	definitionTypeDeclaration, exists := ctx.findType(name, prefix)
 
 	if !exists {
@@ -2810,7 +2717,11 @@ func (p *Parser) evaluateNamedValueEvaluation(importAlias string, ctx context) (
 		return nil, p.expectedIdentifierError(identifierToken)
 	}
 	name := identifierToken.Value()
-	prefix, dotedName := p.createImportName(importAlias, name)
+	prefix, dotedName, err := p.createImportName(importAlias, name, ctx)
+
+	if err != nil {
+		return nil, err
+	}
 	namedValue, exists := ctx.findNamedValue(name, prefix)
 
 	if !exists {
@@ -2963,9 +2874,15 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 		if err != nil {
 			return nil, err
 		}
+		var prefix string
+
 		value = token.Value()
 		nextToken := p.peekAt(1)
-		prefix, _ := p.createImportName(importAlias, value)
+		prefix, _, err = p.createImportName(importAlias, value, ctx)
+
+		if err != nil {
+			return nil, err
+		}
 
 		switch nextToken.Type() {
 		case lexer.OPENING_ROUND_BRACKET:
@@ -3122,8 +3039,14 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 				case lexer.ASSIGN_OPERATOR, lexer.COMMA:
 					stmt, err = p.evaluateVarAssignment(importAlias, ctx)
 				default:
+					var prefix string
+
 					name := token.Value()
-					prefix, _ := p.createImportName(importAlias, name)
+					prefix, _, err = p.createImportName(importAlias, name, ctx)
+
+					if err != nil {
+						return nil, err
+					}
 					variable, exists := ctx.findNamedValue(name, prefix)
 
 					switch nextTokenType {
@@ -3419,8 +3342,11 @@ func (p *Parser) evaluateFunctionCall(importAlias string, receiver Expression, c
 	if receiver != nil {
 		name = buildReceiverFunctionName(receiver.ValueType(), name)
 	}
-	prefix, dotedName := p.createImportName(importAlias, name)
+	prefix, dotedName, err := p.createImportName(importAlias, name, ctx)
 
+	if err != nil {
+		return nil, err
+	}
 	// Make sure function has been defined.
 	definedFunction, exists := ctx.findFunction(name, prefix)
 
@@ -3432,15 +3358,20 @@ func (p *Parser) evaluateFunctionCall(importAlias string, receiver Expression, c
 	if err != nil {
 		return nil, err
 	}
-	name = definedFunction.Name()
 	currFunc := p.currFunc
+	currFuncName := ""
+
+	if currFunc != nil {
+		currFuncName = currFunc.PrefixedName()
+	}
+	name = definedFunction.PrefixedName()
 
 	// Keep track of used functions.
-	if _, exists := p.usedFuncs[currFunc]; !exists {
-		p.usedFuncs[currFunc] = []string{}
+	if _, exists := p.usedFuncs[currFuncName]; !exists {
+		p.usedFuncs[currFuncName] = []string{}
 	}
-	if !slices.Contains(p.usedFuncs[currFunc], name) {
-		p.usedFuncs[currFunc] = append(p.usedFuncs[currFunc], name)
+	if !slices.Contains(p.usedFuncs[currFuncName], name) {
+		p.usedFuncs[currFuncName] = append(p.usedFuncs[currFuncName], name)
 	}
 
 	// Append optional params as slice.
@@ -3452,10 +3383,8 @@ func (p *Parser) evaluateFunctionCall(importAlias string, receiver Expression, c
 	}
 
 	return FunctionCall{
-		name:        name,
-		arguments:   args,
-		params:      definedFunction.Params(),
-		returnTypes: definedFunction.ReturnTypes(),
+		FunctionDefinition: definedFunction,
+		arguments:          args,
 	}, nil
 }
 
@@ -3590,7 +3519,7 @@ func (p *Parser) evaluateSliceInitialization(ctx context) (Expression, error) {
 		sliceElementValueType.isSlice = false
 
 		if !valueDataType.Equals(sliceElementValueType) {
-			return p.atError(fmt.Sprintf("%s cannot not be added to %s", valueDataType.String(), sliceElementValueType.String()), initValue.valueToken)
+			return p.atError(fmt.Sprintf("%s cannot be added to %s", valueDataType.String(), sliceElementValueType.String()), initValue.valueToken)
 		}
 		return nil
 	}, ctx)
@@ -3725,7 +3654,7 @@ func (p *Parser) evaluateSubscriptFromExpression(value Expression, valueToken le
 	isSlice := valueType.IsSlice()
 
 	if !isSlice && valueType.Type().Kind() != TypeKindString {
-		return nil, p.expectedError("slice or string", valueToken)
+		return nil, p.expectedError(fmt.Sprintf("slice or string but got %s", valueType.String()), valueToken)
 	}
 	nextToken := p.eat()
 
@@ -3904,7 +3833,11 @@ func (p *Parser) evaluateIncrementDecrement(importAlias string, ctx context) (St
 		return nil, p.expectedIdentifierError(identifierToken)
 	}
 	name := identifierToken.Value()
-	prefix, dotedName := p.createImportName(importAlias, name)
+	prefix, dotedName, err := p.createImportName(importAlias, name, ctx)
+
+	if err != nil {
+		return nil, err
+	}
 	namedValue, exists := ctx.findNamedValue(name, prefix)
 
 	if !exists {
@@ -3916,7 +3849,7 @@ func (p *Parser) evaluateIncrementDecrement(importAlias string, ctx context) (St
 	valueType := variable.ValueType()
 
 	if !valueType.IsInt() {
-		return nil, p.expectedError(fmt.Sprintf("%s but got %s", NewValueType(TypeInt{}, false).String(), valueType.String()), identifierToken)
+		return nil, p.expectedError(fmt.Sprintf("%s but got %s", NewValueType(NewTypeInt(), false).String(), valueType.String()), identifierToken)
 	}
 	operationToken := p.eat()
 	increment := true
@@ -3938,7 +3871,7 @@ func (p *Parser) evaluateLen(ctx context) (Expression, error) {
 		valueType := expr.ValueType()
 
 		if !valueType.IsSlice() && !valueType.IsString() {
-			return nil, p.expectedError("slice or string", keywordToken)
+			return nil, p.expectedError(fmt.Sprintf("slice or string but got %s", valueType.String()), keywordToken)
 		}
 		return Len{
 			expression: expr,

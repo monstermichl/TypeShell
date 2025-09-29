@@ -1,19 +1,23 @@
 package parser
 
 type FunctionDefinition struct {
-	name        string
+	ImportableBase
 	returnTypes []ValueType
 	params      []Param
 	body        []Statement
-	public      bool
+}
+
+func NewFunctionDefinition(name string, prefix string, returnTypes []ValueType, params []Param, body []Statement) FunctionDefinition {
+	return FunctionDefinition{
+		ImportableBase: NewImportableBase(name, prefix, true),
+		returnTypes:    returnTypes,
+		params:         params,
+		body:           body,
+	}
 }
 
 func (e FunctionDefinition) StatementType() StatementType {
 	return STATEMENT_TYPE_FUNCTION_DEFINITION
-}
-
-func (e FunctionDefinition) Name() string {
-	return e.name
 }
 
 func (e FunctionDefinition) ValueType() ValueType {
@@ -36,14 +40,8 @@ func (e FunctionDefinition) Body() []Statement {
 	return e.body
 }
 
-func (e FunctionDefinition) Public() bool {
-	return e.public
-}
-
 type FunctionCall struct {
-	name        string
-	returnTypes []ValueType
-	params      []Param
+	FunctionDefinition
 	arguments   []Expression
 }
 
@@ -51,24 +49,8 @@ func (e FunctionCall) StatementType() StatementType {
 	return STATEMENT_TYPE_FUNCTION_CALL
 }
 
-func (e FunctionCall) Name() string {
-	return e.name
-}
-
-func (e FunctionCall) ValueType() ValueType {
-	return functionValueType(e.returnTypes)
-}
-
 func (e FunctionCall) IsConstant() bool {
 	return false
-}
-
-func (e FunctionCall) ReturnTypes() []ValueType {
-	return e.returnTypes
-}
-
-func (e FunctionCall) Params() []Param {
-	return e.params
 }
 
 func (e FunctionCall) Args() []Expression {
@@ -80,7 +62,7 @@ func functionValueType(returnTypes []ValueType) ValueType {
 	length := len(returnTypes)
 
 	if length > 1 {
-		valueType = NewValueType(TypeMultiple{}, false)
+		valueType = NewValueType(NewTypeMultiple(), false)
 	} else if length > 0 {
 		valueType = returnTypes[0]
 	}

@@ -16,35 +16,23 @@ func (f StructField) ValueType() ValueType {
 }
 
 type StructDefinition struct {
-	name   string
+	TypeBase
 	fields []StructField
 }
 
-func NewStructDefinition(name string, fields []StructField) StructDefinition {
+func NewStructDefinition(name string, prefix string, fields []StructField, global bool) StructDefinition {
 	return StructDefinition{
-		name,
-		fields,
+		TypeBase: NewTypeBase(name, prefix, false, TypeKindStruct, nil, global),
+		fields:   fields,
 	}
 }
 
+func (d StructDefinition) Base() Type                   { return d.base }
+func (d StructDefinition) ElementaryType() Type         { return elementaryType(d) }
+func (d StructDefinition) AliasedType() Type            { return aliasedType(d) }
+
 func (d StructDefinition) Fields() []StructField {
 	return d.fields
-}
-
-func (d StructDefinition) Name() string {
-	return d.name
-}
-
-func (d StructDefinition) IsAlias() bool {
-	return false
-}
-
-func (d StructDefinition) Kind() TypeKind {
-	return TypeKindStruct
-}
-
-func (d StructDefinition) Base() Type {
-	return nil
 }
 
 func (d StructDefinition) Equals(c Type) bool {
@@ -69,9 +57,6 @@ func (d StructDefinition) Equals(c Type) bool {
 	}
 	return true
 }
-
-func (t StructDefinition) ElementaryType() Type { return elementaryType(t) }
-func (t StructDefinition) AliasedType() Type    { return aliasedType(t) }
 
 func (d StructDefinition) FindField(name string) (StructField, error) {
 	for _, field := range d.Fields() {

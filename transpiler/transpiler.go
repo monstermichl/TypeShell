@@ -705,7 +705,7 @@ func (t *transpiler) evaluateReturn(returnStatement parser.Return) error {
 }
 
 func (t *transpiler) evaluateFunctionDefinition(functionDefinition parser.FunctionDefinition) error {
-	name := functionDefinition.Name()
+	name := functionDefinition.PrefixedName()
 	params := []string{}
 
 	for _, param := range functionDefinition.Params() {
@@ -726,7 +726,7 @@ func (t *transpiler) evaluateFunctionDefinition(functionDefinition parser.Functi
 }
 
 func (t *transpiler) evaluateFunctionCall(functionCall parser.FunctionCall, valueUsed bool) (expressionResult, error) {
-	name := functionCall.Name()
+	name := functionCall.PrefixedName()
 	args := []string{}
 	params := functionCall.Params()
 
