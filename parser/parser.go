@@ -334,8 +334,8 @@ func incrementDecrementStatement(variable Variable, increment bool) Statement {
 	}
 }
 
-func buildReceiverFunctionName(receiverValueType ValueType, name string) string {
-	return fmt.Sprintf("%s_%s", receiverValueType.Type().PrefixedName(), name)
+func buildReceiverFunctionName(receiverName string, name string) string {
+	return fmt.Sprintf("%s_%s", receiverName, name)
 }
 
 func updateExtInfo(infoPath string, remotePath string, localPath string) error {
@@ -585,6 +585,10 @@ func (p *Parser) cleanProgram(program Program) (Program, error) {
 	}, nil
 }
 
+func (p *Parser) createDotedName(prefix string, name string) string {
+	return fmt.Sprintf("%s.%s", prefix, name)
+}
+
 func (p *Parser) createImportName(importAlias string, name string, ctx context) (string, string, error) {
 	prefix := p.prefix
 	dotedName := name
@@ -597,7 +601,7 @@ func (p *Parser) createImportName(importAlias string, name string, ctx context) 
 			return "", "", p.atError(fmt.Sprintf("import alias %s not found", importAlias), p.peek())
 		}
 		prefix = prefixTemp
-		dotedName = fmt.Sprintf("%s.%s", importAlias, name)
+		dotedName = p.createDotedName(importAlias, name)
 	}
 	return prefix, dotedName, nil
 }
@@ -1916,15 +1920,16 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 	if nameToken.Type() != lexer.IDENTIFIER {
 		return nil, p.expectedError("function name", nameToken)
 	}
+	prefix := p.prefix
 	name := nameToken.Value()
 
 	// If a receiver exists, add its type name to the function name.
 	if receiver != nil {
-		name = buildReceiverFunctionName(receiver.ValueType(), name)
+		name = buildReceiverFunctionName(receiver.ValueType().Type().Name(), name)
 	}
 
 	// Make sure no function exists with the same name.
-	_, exists := ctx.findFunction(name, p.prefix)
+	_, exists := ctx.findFunction(name, prefix)
 
 	if exists {
 		return nil, p.expectedError("unique function name", nameToken)
@@ -2009,7 +2014,6 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
 			return nil, err
 		}
 	}
-	prefix := p.prefix
 	funcDef := NewFunctionDefinition(name, prefix, returnTypes, params, []Statement{})
 
 	// Make sure sub-statements know in which function they are currently in.
@@ -3337,15 +3341,22 @@ func (p *Parser) evaluateFunctionCall(importAlias string, receiver Expression, c
 	if nextToken.Type() != lexer.IDENTIFIER {
 		return nil, p.expectedError("function identifier", nextToken)
 	}
+	var prefix, dotedName string
 	name := nextToken.Value()
 
 	if receiver != nil {
-		name = buildReceiverFunctionName(receiver.ValueType(), name)
-	}
-	prefix, dotedName, err := p.createImportName(importAlias, name, ctx)
+		t := receiver.ValueType().Type()
+		typeName := t.Name()
+		name = buildReceiverFunctionName(typeName, name)
+		prefix = t.Prefix()
+		dotedName = p.createDotedName(typeName, name)
+	} else {
+		var err error
+		prefix, dotedName, err = p.createImportName(importAlias, name, ctx)
 
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
 	}
 	// Make sure function has been defined.
 	definedFunction, exists := ctx.findFunction(name, prefix)
