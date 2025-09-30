@@ -1,12 +1,58 @@
-func Shell() string {
-	shell := "unknown"
-	win := "%OS%"
+import "fs"
+import "shell"
+import "strings"
 
-	if win[:3] == "Win" {
-		shell = "batch"
-	} else {
-		stdout, stderr, code := @ps("-p", "$$", "-o", "args=") | @cut("-d", " ", "-f1") | @grep("-o", "-e", `"[0-9a-zA-Z][0-9a-zA-Z]*$"`)
-		shell = stdout
+type FileMode = fs.FileMode
+
+func posixToOctal(i int) string {
+	o, _, _ := @printf("%o", i)
+	return o
+}
+
+func WriteFile(name string, data string, perm FileMode) error {
+	write(name, data)
+
+	if !exists(name) {
+		return error("file write failed")
 	}
-	return shell
+
+	// If not in Batch-shell, set file permissions.
+	if shell.Get() != shell.ShellTypeBatch {
+		stdout, stderr, code := @chmod(posixToOctal(perm), name)
+
+		if code != 0 || stderr != nil {
+			return stderr
+		}
+	}
+	return nil
+}
+
+func ReadFile(name string) (string, error) {
+	if !exists(name) {
+		return "", error("file not found")
+	}
+	return read(name), nil
+}
+
+func ReadDir(name string) ([]fs.DirEntry, error) {
+	var stdout, stderr string
+	var code int
+
+	entries := []fs.DirEntry{}
+
+	if shell.Get() == shell.ShellTypeBatch {
+		stdout, stderr, code = @dir("/b")
+	} else {
+		stdout, stderr, code = @ls("-1A")
+	}
+
+	if code != 0 {
+		return entries, stderr
+	}
+	list := strings.Split(stdout, "\n")
+
+	for i, entry := range list {
+		entries[i] = fs.DirEntry{name: entry}
+	}
+	return entries, nil
 }

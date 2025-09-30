@@ -1,0 +1,27 @@
+type FileMode = int
+
+type FileInfo struct {
+	name string
+}
+
+func (fi FileInfo) Name() string {
+	return fi.name
+}
+
+type DirEntry struct {
+	name  string
+	isDir bool
+	info FileInfo
+}
+
+func (de DirEntry) Name() string {
+	return de.name
+}
+
+func (de DirEntry) IsDir() bool {
+	return de.isDir
+}
+
+func (de DirEntry) Info() (FileInfo, error) {
+	return FileInfo{}, nil
+}
