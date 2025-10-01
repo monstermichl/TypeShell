@@ -373,6 +373,17 @@ func (p *Parser) expectedError(what string, token lexer.Token) error {
 	return p.atError(fmt.Sprintf("expected %s", what), token)
 }
 
+func (p *Parser) expectedType(got ValueType, token lexer.Token, expected ValueType, expectedElse ...ValueType) error {
+	expectedAll := []ValueType{expected}
+	expectedAll = append(expectedAll, expectedElse...)
+	expectedStrings := []string{}
+
+	for _, val := range expectedAll {
+		expectedStrings = append(expectedStrings, val.String())
+	}
+	return p.expectedError(fmt.Sprintf("%s but got %s", strings.Join(expectedStrings, " or "), got.String()), token)
+}
+
 func (p *Parser) expectedKeywordError(keyword string, token lexer.Token) error {
 	return p.expectedError(fmt.Sprintf("%s-keyword", keyword), token)
 }
@@ -1508,7 +1519,7 @@ func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Stat
 			if specifiedType.Type().Kind() != TypeKindUnknown {
 				for _, valueType := range valuesTypes {
 					if !valueType.Equals(specifiedType) {
-						return nil, p.expectedError(fmt.Sprintf("%s but got %s", specifiedType.String(), valueType.String()), nextToken)
+						return nil, p.expectedType(valueType, nextToken, specifiedType)
 					}
 				}
 			}
@@ -1696,7 +1707,7 @@ func (p *Parser) evaluateCompoundAssignment(importAlias string, ctx context) (St
 	expectedValueType := namedValue.ValueType()
 
 	if valueType != expectedValueType {
-		return nil, p.expectedError(fmt.Sprintf("%s but got %s", expectedValueType.String(), valueType.String()), valuesToken)
+		return nil, p.expectedType(valueType, valuesToken, expectedValueType)
 	}
 	assignOperator := assignToken.Value()
 	binaryOperator := string(assignOperator[0])
@@ -1773,7 +1784,7 @@ func (p *Parser) evaluateVarAssignment(importAlias string, ctx context) (Stateme
 		expectedValueType := namedValue.ValueType()
 
 		if !valueType.Equals(expectedValueType) {
-			return nil, p.expectedError(fmt.Sprintf("%s but got %s", expectedValueType.String(), valueType.String()), valuesToken)
+			return nil, p.expectedType(valueType, valuesToken, expectedValueType)
 		}
 		variables = append(variables, NewVariable(namedValue.Name(), prefix, valueType, namedValue.Layer()))
 	}
@@ -3021,6 +3032,8 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
 		stmt, err = p.evaluateWrite(ctx)
 	case lexer.PANIC:
 		stmt, err = p.evaluatePanic(ctx)
+	case lexer.UNSAFE:
+		stmt, err = p.evaluateUnsafe(ctx)
 	default:
 		// Variable initialization also starts with identifier but is a statement (e.g. x := 1234).
 		if p.isShortVarInit() {
@@ -3860,7 +3873,7 @@ func (p *Parser) evaluateIncrementDecrement(importAlias string, ctx context) (St
 	valueType := variable.ValueType()
 
 	if !valueType.IsInt() {
-		return nil, p.expectedError(fmt.Sprintf("%s but got %s", NewValueType(NewTypeInt(), false).String(), valueType.String()), identifierToken)
+		return nil, p.expectedType(valueType, identifierToken, NewValueType(NewTypeInt(), false))
 	}
 	operationToken := p.eat()
 	increment := true
@@ -3925,6 +3938,33 @@ func (p *Parser) evaluatePanic(ctx context) (Statement, error) {
 	return p.evaluateBuiltInFunction(lexer.PANIC, "panic", 1, 1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
 		return Panic{
 			expression: expressions[0],
+		}, nil
+	})
+}
+
+func (p *Parser) evaluateUnsafe(ctx context) (Statement, error) {
+	return p.evaluateBuiltInFunction(lexer.UNSAFE, "unsafe", 1, -1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
+		var literal StringLiteral
+
+		if casted, ok := expressions[0].(StringLiteral); !ok {
+			return nil, p.expectedError("string literal", keywordToken)
+		} else {
+			literal = casted
+		}
+		args := []Expression{}
+
+		if len(expressions) > 1 {
+			args = expressions[1:]
+		}
+
+		for _, arg := range args {
+			if t := arg.ValueType(); !t.IsBool() && !t.IsInt() && !t.IsString() {
+				return nil, p.expectedType(t, keywordToken, NewValueType(NewTypeBool(), false), NewValueType(NewTypeInt(), false), NewValueType(NewTypeString(), false))
+			}
+		}
+		return Unsafe{
+			code: literal,
+			args: args,
 		}, nil
 	})
 }

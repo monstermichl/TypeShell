@@ -417,6 +417,22 @@ itoa(str)
 panic(err)
 ```
 
+### ⚠️ Unsafe
+It's possible to add native code directly to the output by using the *unsafe*-builtin. However, this should be avoided if possible as it can introduce unwanted side-effects. The builtin's first argument must be a string literal which contains the executable code. All other arguments can be of type *bool*, *int* or *string*. The transpiler parses the string literal and replaces all placeholders (e.g. {0}) with the corresponding positional argument. Then the code is added to the output. E.g.
+
+```golang
+file := "test.tsh"
+
+unsafe(`for %%U in ({0}) do (@echo %%~tU)`, file)
+```
+
+Results in
+
+```batch
+set "file_0=test.tsh"
+for %%U in (!file_0!) do (@echo %%~tU)
+```
+
 ## Caveats
 ### Condition evaluation
 In contrast to many other programming languages, TypeShell evaluates all conditions before the actual statement. This is done to handle the limitations of Batch/Bash. HINT: This is also true for switch-evaluations since switchs are internally converted to ifs.

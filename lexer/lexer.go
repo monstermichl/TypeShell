@@ -82,6 +82,7 @@ const (
 	READ
 	WRITE
 	PANIC
+	UNSAFE
 
 	// App operators.
 	AT
@@ -202,6 +203,7 @@ var keywords = map[string]TokenType{
 	"read":   READ,
 	"write":  WRITE,
 	"panic":  PANIC,
+	"unsafe": UNSAFE,
 }
 
 func newToken(value string, tokenType TokenType, row int, column int) Token {

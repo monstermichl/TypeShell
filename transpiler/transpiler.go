@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/monstermichl/typeshell/parser"
 )
@@ -228,6 +229,20 @@ func (t *transpiler) evaluatePanic(panic parser.Panic) error {
 		return err
 	}
 	return t.converter.Panic(fmt.Sprintf("panic: %s", result.firstValue()))
+}
+
+func (t *transpiler) evaluateUnsafe(unsafe parser.Unsafe) error {
+	literal := unsafe.Code().Value()
+
+	for i, arg := range unsafe.Args() {
+		result, err := t.evaluateExpression(arg, true)
+
+		if err != nil {
+			return err
+		}
+		literal = strings.ReplaceAll(literal, fmt.Sprintf("{%d}", i), result.firstValue())
+	}
+	return t.converter.Unsafe(literal)
 }
 
 func (t *transpiler) evaluateWrite(write parser.Write) error {
@@ -970,6 +985,8 @@ func (t *transpiler) evaluate(statement parser.Statement) error {
 		return t.evaluatePrint(statement.(parser.Print))
 	case parser.STATEMENT_TYPE_PANIC:
 		return t.evaluatePanic(statement.(parser.Panic))
+	case parser.STATEMENT_TYPE_UNSAFE:
+		return t.evaluateUnsafe(statement.(parser.Unsafe))
 	case parser.STATEMENT_TYPE_WRITE:
 		return t.evaluateWrite(statement.(parser.Write))
 	default:

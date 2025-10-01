@@ -90,6 +90,7 @@ type Converter interface {
 	Continue() error
 	Print(value []string) error
 	Panic(value string) error
+	Unsafe(code string) error
 	WriteFile(path string, content string, append string) error
 	Nop() error
 

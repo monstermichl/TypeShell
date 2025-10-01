@@ -431,6 +431,11 @@ func (c *converter) Panic(value string) error {
 	return nil
 }
 
+func (c *converter) Unsafe(code string) error {
+	c.addLine(code)
+	return nil
+}
+
 func (c *converter) WriteFile(path string, content string, append string) error {
 	c.fileWriteHelperRequired = true
 
