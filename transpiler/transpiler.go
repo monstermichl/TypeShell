@@ -235,12 +235,30 @@ func (t *transpiler) evaluateUnsafe(unsafe parser.Unsafe) error {
 	literal := unsafe.Code().Value()
 
 	for i, arg := range unsafe.Args() {
-		result, err := t.evaluateExpression(arg, true)
+		inputPlaceholder := fmt.Sprintf("{%d}", i)
+		outputPlaceholder := fmt.Sprintf("{o:%d}", i)
 
-		if err != nil {
-			return err
+		// Replace all input-placeholders with regular placeholders as they are equivalent.
+		literal = strings.ReplaceAll(literal, fmt.Sprintf("{i:%d}", i), fmt.Sprintf("{%d}", i))
+
+		// Count input- and output-placeholders to only evaluate what's really needed.
+		inputsCount := strings.Count(literal, inputPlaceholder)
+		outputsCount := strings.Count(literal, outputPlaceholder)
+
+		if outputsCount > 0 {
+			variableEvaluation := arg.(parser.VariableEvaluation)
+
+			literal = strings.ReplaceAll(literal, outputPlaceholder, variableEvaluation.LayerName())
 		}
-		literal = strings.ReplaceAll(literal, fmt.Sprintf("{%d}", i), result.firstValue())
+
+		if inputsCount > 0 {
+			result, err := t.evaluateExpression(arg, true)
+
+			if err != nil {
+				return err
+			}
+			literal = strings.ReplaceAll(literal, inputPlaceholder, result.firstValue())
+		}
 	}
 	return t.converter.Unsafe(literal)
 }

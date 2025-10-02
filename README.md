@@ -418,19 +418,27 @@ panic(err)
 ```
 
 ### ⚠️ Unsafe
-It's possible to add native code directly to the output by using the *unsafe*-builtin. However, this should be avoided if possible as it can introduce unwanted side-effects. The builtin's first argument must be a string literal which contains the executable code. All other arguments can be of type *bool*, *int* or *string*. The transpiler parses the string literal and replaces all placeholders (e.g. {0}) with the corresponding positional argument. Then the code is added to the output. E.g.
+It's possible to add native code directly to the output by using the *unsafe*-builtin. However, this should be avoided if possible as it can introduce unwanted side-effects. The builtin's first argument must be a string literal which contains the executable code. All other arguments can be of type *bool*, *int* or *string*. The transpiler parses the string literal and replaces all placeholders (e.g. {0}) with the corresponding positional argument at transpile time.
+
+To pass data into the native code, placeholders with either only the positional number (e.g. "{0}") or "i:" followed by the positional number (e.g. "{i:0}") should be used.
+
+To get data out of the native code, placeholders with "o:" followed by the positional number must be used. **IMPORTANT**: The passed expression must be a variable.
+
+In the following example, the variable *file* is passed as input to the native Batch code, while the variable *date* is passed as output argument. After the execution, *date* holds the value evaluated by the native code.
 
 ```golang
 file := "test.tsh"
+var date string
 
-unsafe(`for %%U in ({0}) do (@echo %%~tU)`, file)
+unsafe(`for %%U in ({i:0}) do (set "{o:1}=%%~tU")`, file, date)
 ```
 
 Results in
 
 ```batch
 set "file_0=test.tsh"
-for %%U in (!file_0!) do (@echo %%~tU)
+set "date_0="
+for %%U in (!file_0!) do (set "date_0=%%~tU")
 ```
 
 ## Caveats

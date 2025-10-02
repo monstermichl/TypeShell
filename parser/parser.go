@@ -689,14 +689,14 @@ func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword stri
 	}
 	nextToken := p.eat()
 
-	// Make sure after the print call comes a  opening round bracket.
+	// Make sure after the builtin call comes a  opening round bracket.
 	if nextToken.Type() != lexer.OPENING_ROUND_BRACKET {
 		return nil, p.expectedError(`"("`, nextToken)
 	}
 	expressions := []Expression{}
 	nextToken = p.peek()
 
-	// Evaluate arguments if it's a print call with arguments.
+	// Evaluate arguments if it's a builtin call with arguments.
 	if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
 		for {
 			expr, err := p.evaluateExpression(ctx)
@@ -730,7 +730,7 @@ func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword stri
 	}
 	nextToken = p.eat()
 
-	// Make sure print call is terminated with a closing round bracket.
+	// Make sure builtin call is terminated with a closing round bracket.
 	if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
 		return nil, p.expectedError(`")"`, nextToken)
 	}
@@ -3956,10 +3956,20 @@ func (p *Parser) evaluateUnsafe(ctx context) (Statement, error) {
 		if len(expressions) > 1 {
 			args = expressions[1:]
 		}
+		literalValue := literal.Value()
 
-		for _, arg := range args {
+		for i, arg := range args {
 			if t := arg.ValueType(); !t.IsBool() && !t.IsInt() && !t.IsString() {
 				return nil, p.expectedType(t, keywordToken, NewValueType(NewTypeBool(), false), NewValueType(NewTypeInt(), false), NewValueType(NewTypeString(), false))
+			}
+
+			// If output-placeholders exist, the provided expression must be a variable evaluation.
+			if strings.Count(literalValue, fmt.Sprintf("{o:%d}", i)) > 0 {
+				_, ok := arg.(VariableEvaluation)
+
+				if !ok {
+					return nil, p.atError(fmt.Sprintf("argument %d must be a variable", i+1), keywordToken)
+				}
 			}
 		}
 		return Unsafe{
