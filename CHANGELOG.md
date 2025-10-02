@@ -14,6 +14,7 @@
 - Make subscript available on string literals (https://github.com/monstermichl/TypeShell/issues/15).
 - Add support for one type specification for consecutive parameters with same type (https://github.com/monstermichl/TypeShell/issues/38).
 - Add support for different number bases (https://github.com/monstermichl/TypeShell/issues/65).
+- Add support for unsafe/native code (https://github.com/monstermichl/TypeShell/issues/70).
 - Add os std library.
 
 ### Improvements
@@ -26,6 +27,8 @@
 - Subtraction is not considered subtraction if number comes directly after minus (https://github.com/monstermichl/TypeShell/issues/62).
 - Using imported variables/constants doesn't work (https://github.com/monstermichl/TypeShell/issues/49).
 - Globally defined variables/constants not found if used in imported function (https://github.com/monstermichl/TypeShell/issues/67).
+- Imported functions evaluated wrongly if not used as an expression (https://github.com/monstermichl/TypeShell/issues/68).
+- Bash variables must not start with a number (https://github.com/monstermichl/TypeShell/issues/69).
   
 ## v0.1.1 - 2025-07-05
 ### New
