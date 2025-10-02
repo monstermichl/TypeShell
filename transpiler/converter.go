@@ -62,6 +62,7 @@ func (sv StructValue) Value() string {
 type Converter interface {
 	// Common methods
 	StringToString(value string) string
+	VarName(name string, global bool) string
 	Dump() (string, error)
 	Extension() string
 

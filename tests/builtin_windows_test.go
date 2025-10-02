@@ -83,8 +83,14 @@ func TestPanicInFunctionSuccess(t *testing.T) {
 	testPanicInFunctionSuccess(t, transpileBatch)
 }
 
+const nativeCode = `for /F \"delims=/\" %%I in ('echo {0} {i:1}') do set \"{o:2}=%%I\"`
+
 func TestUnsafeSuccess(t *testing.T) {
-	testUnsafeSuccess(t, `for /F \"delims=/\" %%I in ('echo {0} {i:1}') do set \"{o:2}=%%I\"` , transpileBatch)
+	testUnsafeSuccess(t, nativeCode, transpileBatch)
+}
+
+func TestUnsafeInFunctionSuccess(t *testing.T) {
+	testUnsafeInFunctionSuccess(t, nativeCode, transpileBatch)
 }
 
 func TestUnsafeInvalidOutputFail(t *testing.T) {

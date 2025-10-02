@@ -96,6 +96,13 @@ func (c *converter) StringToString(value string) string {
 	return value
 }
 
+func (c *converter) VarName(name string, global bool) string {
+	if c.inFunction() && !global {
+		name = fmt.Sprintf("f%d_%s", c.funcCounter, name)
+	}
+	return name
+}
+
 func (c *converter) Dump() (string, error) {
 	functionsCode := []string{}
 
@@ -259,7 +266,7 @@ func (c *converter) ProgramEnd() error {
 			// is execute ("!str: =!") the resulting string would be " ="... Yeah, that's Batch... So if the
 			// string is already empty, no replacement needs to take place and the helper-variable must be
 			// checked directly.
-			fmt.Sprintf(`if "%s" neq "" %s`, v, c.varAssignmentString(helper, fmt.Sprintf("!%s: =!", c.varName(arg, true)), true)),
+			fmt.Sprintf(`if "%s" neq "" %s`, v, c.varAssignmentString(helper, fmt.Sprintf("!%s: =!", c.VarName(arg, true)), true)),
 			fmt.Sprintf(`if "%s" neq "" (echo %s) else echo.`, c.varEvaluationString(helper, true), v), // echo. could be problematic (see discussion: https://stackoverflow.com/a/20691061).
 		)
 	}
@@ -493,7 +500,7 @@ func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator,
 		default:
 			return notAllowedError()
 		}
-		c.addLine(fmt.Sprintf(`set /A "%s=%s%s%s"`, c.varName(helper, false), left, operator, right))
+		c.addLine(fmt.Sprintf(`set /A "%s=%s%s%s"`, c.VarName(helper, false), left, operator, right))
 	case parser.TypeKindString:
 		switch operator {
 		case parser.BINARY_OPERATOR_ADDITION:
@@ -643,7 +650,7 @@ func (c *converter) SliceEvaluation(name string, index string, valueUsed bool) (
 		fmt.Sprintf(`for /f "delims=" %%%%i in ("%s_%s") do set "%s=!%%%%i!"`,
 			name,
 			index,
-			c.varName(helper, false),
+			c.VarName(helper, false),
 		),
 	)
 	return c.VarEvaluation(helper, valueUsed, false)
@@ -675,7 +682,7 @@ func (c *converter) StructEvaluation(name string, field string, valueUsed bool) 
 		fmt.Sprintf(`for /f "delims=" %%%%i in ("%s_%s") do set "%s=!%%%%i!"`,
 			c.varEvaluationString(name, false),
 			field,
-			c.varName(helper, false),
+			c.VarName(helper, false),
 		),
 	)
 	return c.VarEvaluation(helper, valueUsed, false)
@@ -820,21 +827,14 @@ func (c *converter) callEchoFunc(values ...string) {
 	c.addLine(c.callFuncString(echoHelper, []string{strings.Join(values, " ")}))
 }
 
-func (c *converter) varName(name string, global bool) string {
-	if c.inFunction() && !global {
-		name = fmt.Sprintf("f%d_%s", c.funcCounter, name)
-	}
-	return name
-}
-
 func (c *converter) varAssignmentString(name string, value string, global bool) string {
-	return fmt.Sprintf(`set "%s=%s"`, c.varName(name, global), value)
+	return fmt.Sprintf(`set "%s=%s"`, c.VarName(name, global), value)
 }
 
 func (c *converter) varEvaluationString(name string, global bool) string {
 	// Only evaluate if it's not already evaluated.
 	if !strings.HasPrefix(name, "!") && !strings.HasSuffix(name, "!") {
-		return fmt.Sprintf("!%s!", c.varName(name, global))
+		return fmt.Sprintf("!%s!", c.VarName(name, global))
 	}
 	return name
 }

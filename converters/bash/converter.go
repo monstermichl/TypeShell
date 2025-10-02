@@ -57,6 +57,13 @@ func (c *converter) Dump() (string, error) {
 	return strings.Join(allCode, "\n"), nil
 }
 
+func (c *converter) VarName(name string, global bool) string {
+	if c.inFunction() && !global {
+		name = fmt.Sprintf("f%d_%s", c.funcCounter, name)
+	}
+	return name
+}
+
 func (c *converter) Extension() string {
 	return "sh"
 }
@@ -470,7 +477,7 @@ func (c *converter) StringLen(value string, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
 	c.VarAssignment(helper, value, false)
-	c.VarAssignment(helper, fmt.Sprintf("${#%s}", c.varName(helper, false)), false)
+	c.VarAssignment(helper, fmt.Sprintf("${#%s}", c.VarName(helper, false)), false)
 
 	return c.VarEvaluation(helper, valueUsed, false)
 }
@@ -557,7 +564,7 @@ func (c *converter) Input(prompt string, valueUsed bool) (string, error) {
 }
 
 func (c *converter) Copy(destination string, source string, valueUsed bool, global bool) (string, error) {
-	destination = c.varName(destination, global)
+	destination = c.VarName(destination, global)
 
 	c.callFunc(sliceCopyHelper, destination, source)
 	c.sliceAssignmentHelperRequired = true
@@ -597,13 +604,6 @@ func (c *converter) mustCurrentForVar() string {
 	return fmt.Sprintf("_fv%d", c.forCounter)
 }
 
-func (c *converter) varName(name string, global bool) string {
-	if c.inFunction() && !global {
-		name = fmt.Sprintf("f%d_%s", c.funcCounter, name)
-	}
-	return name
-}
-
 func (c *converter) varAssignmentString(name string, value string, global bool) string {
 	length := len(value)
 
@@ -615,13 +615,13 @@ func (c *converter) varAssignmentString(name string, value string, global bool) 
 			value = fmt.Sprintf(`"%s`, value)
 		}
 	}
-	return fmt.Sprintf("%s=%s", c.varName(name, global), value)
+	return fmt.Sprintf("%s=%s", c.VarName(name, global), value)
 }
 
 func (c *converter) varEvaluationString(name string, global bool) string {
 	// Only evaluate if it's not already evaluated.
 	if !strings.HasPrefix(name, "${") && !strings.HasSuffix(name, "}") {
-		return fmt.Sprintf("${%s}", c.varName(name, global))
+		return fmt.Sprintf("${%s}", c.VarName(name, global))
 	}
 	return name
 }

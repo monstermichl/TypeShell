@@ -219,6 +219,22 @@ func testUnsafeSuccess(t *testing.T, nativeCode string, transpilerFunc transpile
 	})
 }
 
+func testUnsafeInFunctionSuccess(t *testing.T, nativeCode string, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		func test() {
+			input1 := "Hello"
+			input2 := "World"
+			var output string
+
+			unsafe("`+nativeCode+`", input1, input2, output)
+			print(output)
+		}
+		test()
+	`, func(output string, err error) {
+		require.Equal(t, "Hello World", output)
+	})
+}
+
 func testUnsafeInvalidOutputFail(t *testing.T, transpilerFunc transpilerFunc) {
 	transpilerFunc(t, `
 		unsafe("{o:0}", "not a variable")

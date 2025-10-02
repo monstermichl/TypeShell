@@ -82,8 +82,14 @@ func TestPanicInFunctionSuccess(t *testing.T) {
 	testPanicInFunctionSuccess(t, transpileBash)
 }
 
+const nativeCode = `{o:2}=$(echo \"{0} {i:1}\")`
+
 func TestUnsafeSuccess(t *testing.T) {
-	testUnsafeSuccess(t, `{o:2}=$(echo \"{0} {i:1}\")` , transpileBash)
+	testUnsafeSuccess(t, nativeCode, transpileBash)
+}
+
+func TestUnsafeInFunctionSuccess(t *testing.T) {
+	testUnsafeInFunctionSuccess(t, nativeCode, transpileBash)
 }
 
 func TestUnsafeInvalidOutputFail(t *testing.T) {

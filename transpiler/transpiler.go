@@ -248,7 +248,7 @@ func (t *transpiler) evaluateUnsafe(unsafe parser.Unsafe) error {
 		if outputsCount > 0 {
 			variableEvaluation := arg.(parser.VariableEvaluation)
 
-			literal = strings.ReplaceAll(literal, outputPlaceholder, variableEvaluation.LayerName())
+			literal = strings.ReplaceAll(literal, outputPlaceholder, t.converter.VarName(variableEvaluation.LayerName(), variableEvaluation.Global()))
 		}
 
 		if inputsCount > 0 {
