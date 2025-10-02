@@ -422,7 +422,7 @@ It's possible to add native code directly to the output by using the *unsafe*-bu
 
 To pass data into the native code, placeholders with either only the positional number (e.g. "{0}") or "i:" followed by the positional number (e.g. "{i:0}") should be used.
 
-To get data out of the native code, placeholders with "o:" followed by the positional number must be used. **IMPORTANT**: The passed expression must be a variable.
+To get data out of the native code, placeholders with "o:" followed by the positional number (e.g. "{o:0}") must be used. **IMPORTANT**: The passed expression must be a variable.
 
 In the following example, the variable *file* is passed as input to the native Batch code, while the variable *date* is passed as output argument. After the execution, *date* holds the value evaluated by the native code.
 
