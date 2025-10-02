@@ -81,3 +81,11 @@ func TestWriteInFunctionSuccess(t *testing.T) {
 func TestPanicInFunctionSuccess(t *testing.T) {
 	testPanicInFunctionSuccess(t, transpileBash)
 }
+
+func TestUnsafeSuccess(t *testing.T) {
+	testUnsafeSuccess(t, `{o:2}=$(echo \"{0} {i:1}\")` , transpileBash)
+}
+
+func TestUnsafeInvalidOutputFail(t *testing.T) {
+	testUnsafeInvalidOutputFail(t, transpileBatch)
+}

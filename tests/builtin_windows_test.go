@@ -82,3 +82,11 @@ func TestWriteInFunctionSuccess(t *testing.T) {
 func TestPanicInFunctionSuccess(t *testing.T) {
 	testPanicInFunctionSuccess(t, transpileBatch)
 }
+
+func TestUnsafeSuccess(t *testing.T) {
+	testUnsafeSuccess(t, `for /F \"delims=/\" %%I in ('echo {0} {i:1}') do set \"{o:2}=%%I\"` , transpileBatch)
+}
+
+func TestUnsafeInvalidOutputFail(t *testing.T) {
+	testUnsafeInvalidOutputFail(t, transpileBatch)
+}

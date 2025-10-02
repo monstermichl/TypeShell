@@ -205,3 +205,24 @@ func testPanicInFunctionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 		require.Equal(t, "panic: panic", output)
 	})
 }
+
+func testUnsafeSuccess(t *testing.T, nativeCode string, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		input1 := "Hello"
+		input2 := "World"
+		var output string
+
+		unsafe("`+nativeCode+`", input1, input2, output)
+		print(output)
+	`, func(output string, err error) {
+		require.Equal(t, "Hello World", output)
+	})
+}
+
+func testUnsafeInvalidOutputFail(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+		unsafe("{o:0}", "not a variable")
+	`, func(output string, err error) {
+		require.EqualError(t, shortenError(err), "argument 1 must be a variable")
+	})
+}
