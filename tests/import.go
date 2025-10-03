@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -166,6 +167,41 @@ func testImportStructTypeSuccess(t *testing.T, transpilerFunc transpilerCalloutF
 	transpilerFunc(t, func(dir string) (string, error) {
 		importFile := "import.tsh"
 		t := "MyType"
+		f := fmt.Sprintf("New%s", t)
+
+		err := os.WriteFile(filepath.Join(dir, importFile), []byte(`
+			type `+t+` struct {
+				field string
+			}
+			func (t `+t+`) Field() string {
+				return t.field
+			}
+			func `+f+`(field string) `+t+` {
+				return `+t+`{
+					field: field,
+				}
+			}`,
+		), 0700)
+
+		if err != nil {
+			return "", err
+		}
+		return `
+			import imp "` + importFile + `"
+			s := imp.` + f + `("Hello")
+			print(s.Field())
+		`, nil
+	}, func(output string, err error) {
+		require.Nil(t, err)
+		require.Equal(t, "Hello", output)
+	})
+}
+
+func testImportStructTypePrivateFieldInitFail(t *testing.T, transpilerFunc transpilerCalloutFunc) {
+	transpilerFunc(t, func(dir string) (string, error) {
+		importFile := "import.tsh"
+		t := "MyType"
+
 		err := os.WriteFile(filepath.Join(dir, importFile), []byte(`
 			type `+t+` struct {
 				field string
@@ -178,11 +214,33 @@ func testImportStructTypeSuccess(t *testing.T, transpilerFunc transpilerCalloutF
 		return `
 			import imp "` + importFile + `"
 			s := imp.` + t + `{field: "Hello"}
+		`, nil
+	}, func(output string, err error) {
+		require.EqualError(t, shortenError(err), "struct field field doesn't exist")
+	})
+}
+
+func testImportStructTypePrivateFieldEvaluationFail(t *testing.T, transpilerFunc transpilerCalloutFunc) {
+	transpilerFunc(t, func(dir string) (string, error) {
+		importFile := "import.tsh"
+		t := "MyType"
+
+		err := os.WriteFile(filepath.Join(dir, importFile), []byte(`
+			type `+t+` struct {
+				field string
+			}`,
+		), 0700)
+
+		if err != nil {
+			return "", err
+		}
+		return `
+			import imp "` + importFile + `"
+			s := imp.` + t + `{}
 			print(s.field)
 		`, nil
 	}, func(output string, err error) {
-		require.Nil(t, err)
-		require.Equal(t, "Hello", output)
+		require.EqualError(t, shortenError(err), "struct field field doesn't exist")
 	})
 }
 

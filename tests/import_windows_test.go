@@ -44,6 +44,14 @@ func TestImportStructTypeSuccess(t *testing.T) {
 	testImportStructTypeSuccess(t, transpileBatchFunc)
 }
 
+func TestImportStructTypePrivateFieldInitFail(t *testing.T) {
+	testImportStructTypePrivateFieldInitFail(t, transpileBatchFunc)
+}
+
+func TestImportStructTypePrivateFieldEvaluationFail(t *testing.T) {
+	testImportStructTypePrivateFieldEvaluationFail(t, transpileBatchFunc)
+}
+
 func TestImportConstAssignmentFail(t *testing.T) {
 	testImportConstAssignmentFail(t, transpileBatchFunc)
 }

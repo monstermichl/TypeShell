@@ -15,6 +15,10 @@ func (f StructField) ValueType() ValueType {
 	return f.valueType
 }
 
+func (f StructField) Public() bool {
+	return isPublic(f.Name())
+}
+
 type StructDefinition struct {
 	TypeBase
 	fields []StructField
@@ -27,9 +31,9 @@ func NewStructDefinition(name string, prefix string, fields []StructField, globa
 	}
 }
 
-func (d StructDefinition) Base() Type                   { return d.base }
-func (d StructDefinition) ElementaryType() Type         { return elementaryType(d) }
-func (d StructDefinition) AliasedType() Type            { return aliasedType(d) }
+func (d StructDefinition) Base() Type           { return d.base }
+func (d StructDefinition) ElementaryType() Type { return elementaryType(d) }
+func (d StructDefinition) AliasedType() Type    { return aliasedType(d) }
 
 func (d StructDefinition) Fields() []StructField {
 	return d.fields
@@ -58,9 +62,9 @@ func (d StructDefinition) Equals(c Type) bool {
 	return true
 }
 
-func (d StructDefinition) FindField(name string) (StructField, error) {
+func (d StructDefinition) FindField(name string, currentPrefix string) (StructField, error) {
 	for _, field := range d.Fields() {
-		if field.Name() == name {
+		if field.Name() == name && (field.Public() || d.Prefix() == currentPrefix) {
 			return field, nil
 		}
 	}

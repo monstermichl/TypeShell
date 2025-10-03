@@ -2691,7 +2691,7 @@ func (p *Parser) evaluateStructFieldsFromExpression(importAlias string, structEx
 		return expr, StructField{}, nil
 	} else {
 		p.eat() // Eat field name token.
-		foundField, err := structDefinition.FindField(fieldName)
+		foundField, err := structDefinition.FindField(fieldName, p.prefix)
 
 		if err != nil {
 			return nil, StructField{}, p.atError(err.Error(), fieldToken)
@@ -3590,14 +3590,15 @@ func (p *Parser) evaluateStructInitialization(importAlias string, ctx context) (
 	}
 	_, err = p.evaluateInitializationValues(func(initValue initValue) error {
 		fieldName := initValue.name
+		fieldToken := initValue.nameToken
 
 		if len(fieldName) == 0 {
-			return p.expectedError("field name", initValue.nameToken)
+			return p.expectedError("field name", fieldToken)
 		}
-		structField, err := structDefinition.FindField(fieldName)
+		structField, err := structDefinition.FindField(fieldName, p.prefix)
 
 		if err != nil {
-			return err
+			return p.atError(err.Error(), fieldToken)
 		}
 		value := initValue.value
 		valueDataType := value.ValueType()

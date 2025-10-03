@@ -44,6 +44,14 @@ func TestImportStructTypeSuccess(t *testing.T) {
 	testImportStructTypeSuccess(t, transpileBashFunc)
 }
 
+func TestImportStructTypePrivateFieldInitFail(t *testing.T) {
+	testImportStructTypePrivateFieldInitFail(t, transpileBashFunc)
+}
+
+func TestImportStructTypePrivateFieldEvaluationFail(t *testing.T) {
+	testImportStructTypePrivateFieldEvaluationFail(t, transpileBashFunc)
+}
+
 func TestImportConstAssignmentFail(t *testing.T) {
 	testImportConstAssignmentFail(t, transpileBashFunc)
 }
