@@ -37,17 +37,6 @@ func scopesToString(scopes []scope) []string {
 	return strings
 }
 
-type typeDefinition struct {
-	valueType    ValueType
-	isAlias      bool
-	isElementary bool
-}
-
-type foundTypeDefinition struct {
-	typeDefinition
-	name string
-}
-
 type initValue struct {
 	nameToken  lexer.Token
 	name       string
