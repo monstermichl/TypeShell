@@ -29,6 +29,7 @@
 - Globally defined variables/constants not found if used in imported function (https://github.com/monstermichl/TypeShell/issues/67).
 - Imported functions evaluated wrongly if not used as an expression (https://github.com/monstermichl/TypeShell/issues/68).
 - Bash variables must not start with a number (https://github.com/monstermichl/TypeShell/issues/69).
+- Multiline strings lead to wrong line numbers (https://github.com/monstermichl/TypeShell/issues/72).
   
 ## v0.1.1 - 2025-07-05
 ### New
