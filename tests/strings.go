@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -133,6 +134,23 @@ func testMultilineStringSuccess(t *testing.T, transpilerFunc transpilerFunc) {
 			multiline
 			world
 		`), output)
+	})
+}
+
+func testMultilineStringErrorPositionSuccess(t *testing.T, transpilerFunc transpilerFunc) {
+	transpilerFunc(t, `
+func test() {
+   var x = 3
+   s := `+"`"+`
+       hello
+       multiline
+       world
+    `+"`"+`
+
+    print(len(x))
+}
+test()`, func(output string, err error) {
+		require.Equal(t, "row 10, column 15", regexp.MustCompile(`row \d+, column \d+`).FindString(err.Error()))
 	})
 }
 

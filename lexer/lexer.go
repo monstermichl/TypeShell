@@ -269,6 +269,10 @@ func Tokenize(source string) ([]Token, error) {
 				}
 
 				if !appended {
+					if c0 == "\n" {
+						row++
+						ogColumn = startIndex
+					}
 					str += c0
 					i++
 				}

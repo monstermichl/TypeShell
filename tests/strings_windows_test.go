@@ -48,6 +48,10 @@ func TestMultilineStringSuccess(t *testing.T) {
 	testMultilineStringSuccess(t, transpileBatch)
 }
 
+func TestMultilineStringErrorPositionSuccess(t *testing.T) {
+	testMultilineStringErrorPositionSuccess(t, transpileBatch)
+}
+
 func TestItoaSuccess(t *testing.T) {
 	testItoaSuccess(t, transpileBatch)
 }
