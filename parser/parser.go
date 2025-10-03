@@ -55,6 +55,11 @@ type initValue struct {
 	value      Expression
 }
 
+type builtinArg struct {
+	token lexer.Token
+	expr  Expression
+}
+
 type context struct {
 	imports     map[string]string               // Maps import aliases to file hashes.
 	types       Importables[Type]               // Stores the declared types.
@@ -681,7 +686,7 @@ func (p *Parser) evaluateValues(ctx context) (evaluatedValues, error) {
 	}, nil
 }
 
-func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword string, minArgs int, maxArg int, ctx context, stmtCallout func(keywordToken lexer.Token, expressions []Expression) (Statement, error)) (Statement, error) {
+func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword string, minArgs int, maxArg int, ctx context, stmtCallout func(keywordToken lexer.Token, args []builtinArg) (Statement, error)) (Statement, error) {
 	keywordToken := p.eat()
 
 	if keywordToken.Type() != tokenType {
@@ -693,18 +698,22 @@ func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword stri
 	if nextToken.Type() != lexer.OPENING_ROUND_BRACKET {
 		return nil, p.expectedError(`"("`, nextToken)
 	}
-	expressions := []Expression{}
+	args := []builtinArg{}
 	nextToken = p.peek()
 
 	// Evaluate arguments if it's a builtin call with arguments.
 	if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
 		for {
+			nextToken = p.peek()
 			expr, err := p.evaluateExpression(ctx)
 
 			if err != nil {
 				return nil, err
 			}
-			expressions = append(expressions, expr)
+			args = append(args, builtinArg{
+				token: nextToken,
+				expr:  expr,
+			})
 			nextToken = p.peek()
 			nextTokenType := nextToken.Type()
 
@@ -717,15 +726,15 @@ func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword stri
 			}
 		}
 	}
-	expressionsLength := len(expressions)
+	argsLength := len(args)
 
 	if minArgs < 0 {
 		minArgs = 0
 	}
-	if expressionsLength < minArgs {
+	if argsLength < minArgs {
 		return nil, p.expectedError(fmt.Sprintf("at least %d arguments for %s", minArgs, keyword), keywordToken)
 	}
-	if maxArg >= 0 && expressionsLength > maxArg {
+	if maxArg >= 0 && argsLength > maxArg {
 		return nil, p.expectedError(fmt.Sprintf("a maximum of %d arguments for %s", minArgs, keyword), keywordToken)
 	}
 	nextToken = p.eat()
@@ -734,7 +743,7 @@ func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword stri
 	if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
 		return nil, p.expectedError(`")"`, nextToken)
 	}
-	return stmtCallout(keywordToken, expressions)
+	return stmtCallout(keywordToken, args)
 }
 
 func (p *Parser) evaluateProgram() (Program, error) {
@@ -3890,12 +3899,12 @@ func (p *Parser) evaluateIncrementDecrement(importAlias string, ctx context) (St
 }
 
 func (p *Parser) evaluateLen(ctx context) (Expression, error) {
-	expr, err := p.evaluateBuiltInFunction(lexer.LEN, "len", 1, 1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
-		expr := expressions[0]
+	expr, err := p.evaluateBuiltInFunction(lexer.LEN, "len", 1, 1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
+		expr := args[0].expr
 		valueType := expr.ValueType()
 
 		if !valueType.IsSlice() && !valueType.IsString() {
-			return nil, p.expectedError(fmt.Sprintf("slice or string but got %s", valueType.String()), keywordToken)
+			return nil, p.expectedError(fmt.Sprintf("slice or string but got %s", valueType.String()), args[0].token)
 		}
 		return Len{
 			expression: expr,
@@ -3909,11 +3918,11 @@ func (p *Parser) evaluateLen(ctx context) (Expression, error) {
 }
 
 func (p *Parser) evaluateInput(ctx context) (Expression, error) {
-	expr, err := p.evaluateBuiltInFunction(lexer.INPUT, "input", 0, 1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
+	expr, err := p.evaluateBuiltInFunction(lexer.INPUT, "input", 0, 1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
 		var expr Expression
 
-		if len(expressions) > 0 {
-			expr = expressions[0]
+		if len(args) > 0 {
+			expr = args[0].expr
 		}
 		return Input{
 			prompt: expr,
@@ -3927,40 +3936,48 @@ func (p *Parser) evaluateInput(ctx context) (Expression, error) {
 }
 
 func (p *Parser) evaluatePrint(ctx context) (Statement, error) {
-	return p.evaluateBuiltInFunction(lexer.PRINT, "print", 0, -1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
+	return p.evaluateBuiltInFunction(lexer.PRINT, "print", 0, -1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
+		expressions := []Expression{}
+
+		for _, arg := range args {
+			expressions = append(expressions, arg.expr)
+		}
 		return Print{
-			expressions: expressions,
+			expressions,
 		}, nil
 	})
 }
 
 func (p *Parser) evaluatePanic(ctx context) (Statement, error) {
-	return p.evaluateBuiltInFunction(lexer.PANIC, "panic", 1, 1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
+	return p.evaluateBuiltInFunction(lexer.PANIC, "panic", 1, 1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
 		return Panic{
-			expression: expressions[0],
+			expression: args[0].expr,
 		}, nil
 	})
 }
 
 func (p *Parser) evaluateUnsafe(ctx context) (Statement, error) {
-	return p.evaluateBuiltInFunction(lexer.UNSAFE, "unsafe", 1, -1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
+	return p.evaluateBuiltInFunction(lexer.UNSAFE, "unsafe", 1, -1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
 		var literal StringLiteral
+		firstArg := args[0]
 
-		if casted, ok := expressions[0].(StringLiteral); !ok {
-			return nil, p.expectedError("string literal", keywordToken)
+		if casted, ok := firstArg.expr.(StringLiteral); !ok {
+			return nil, p.expectedError("string literal", firstArg.token)
 		} else {
 			literal = casted
 		}
-		args := []Expression{}
+		expressions := []Expression{}
 
-		if len(expressions) > 1 {
-			args = expressions[1:]
+		for i := 1; i < len(args); i++ {
+			expressions = append(expressions, args[i].expr)
 		}
 		literalValue := literal.Value()
 
-		for i, arg := range args {
+		for i, arg := range expressions {
+			argToken := args[i+1].token
+
 			if t := arg.ValueType(); !t.IsBool() && !t.IsInt() && !t.IsString() {
-				return nil, p.expectedType(t, keywordToken, NewValueType(NewTypeBool(), false), NewValueType(NewTypeInt(), false), NewValueType(NewTypeString(), false))
+				return nil, p.expectedType(t, argToken, NewValueType(NewTypeBool(), false), NewValueType(NewTypeInt(), false), NewValueType(NewTypeString(), false))
 			}
 
 			// If output-placeholders exist, the provided expression must be a variable evaluation.
@@ -3968,35 +3985,37 @@ func (p *Parser) evaluateUnsafe(ctx context) (Statement, error) {
 				_, ok := arg.(VariableEvaluation)
 
 				if !ok {
-					return nil, p.atError(fmt.Sprintf("argument %d must be a variable", i+1), keywordToken)
+					return nil, p.atError(fmt.Sprintf("argument %d must be a variable", i+1), argToken)
 				}
 			}
 		}
 		return Unsafe{
 			code: literal,
-			args: args,
+			args: expressions,
 		}, nil
 	})
 }
 
 func (p *Parser) evaluateCopy(ctx context) (Expression, error) {
-	expr, err := p.evaluateBuiltInFunction(lexer.COPY, "copy", 2, 2, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
-		expressionsLen := len(expressions)
+	expr, err := p.evaluateBuiltInFunction(lexer.COPY, "copy", 2, 2, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
+		expressionsLen := len(args)
 
 		if expressionsLen < 1 {
 			return nil, p.expectedError("destination slice as first argument", keywordToken)
 		} else if expressionsLen < 2 {
 			return nil, p.expectedError("source slice as second argument", keywordToken)
 		}
-		dst := expressions[0]
-		src := expressions[1]
+		dstArg := args[0]
+		srcArg := args[1]
+		dst := dstArg.expr
+		src := srcArg.expr
 		dstType := dst.ValueType()
 		srcType := src.ValueType()
 
 		if !dstType.IsSlice() || dst.StatementType() != STATEMENT_TYPE_VAR_EVALUATION {
-			return nil, p.expectedError("slice variable as first argument", keywordToken)
+			return nil, p.expectedError("slice variable as first argument", dstArg.token)
 		} else if !srcType.IsSlice() {
-			return nil, p.expectedError("slice as second argument", keywordToken)
+			return nil, p.expectedError("slice as second argument", srcArg.token)
 		} else if !dstType.Equals(srcType) {
 			return nil, p.atError(fmt.Sprintf("got %s as destination but %s as source", dstType.String(), srcType.String()), keywordToken)
 		}
@@ -4016,11 +4035,12 @@ func (p *Parser) evaluateCopy(ctx context) (Expression, error) {
 }
 
 func (p *Parser) evaluateItoa(ctx context) (Expression, error) {
-	expr, err := p.evaluateBuiltInFunction(lexer.ITOA, "itoa", 1, 1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
-		value := expressions[0]
+	expr, err := p.evaluateBuiltInFunction(lexer.ITOA, "itoa", 1, 1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
+		firstArg := args[0]
+		value := firstArg.expr
 
 		if !value.ValueType().IsInt() {
-			return nil, p.expectedError("integer", keywordToken)
+			return nil, p.expectedError("integer", firstArg.token)
 		}
 		return Itoa{
 			value: value,
@@ -4034,11 +4054,12 @@ func (p *Parser) evaluateItoa(ctx context) (Expression, error) {
 }
 
 func (p *Parser) evaluateExists(ctx context) (Expression, error) {
-	expr, err := p.evaluateBuiltInFunction(lexer.EXISTS, "exists", 1, 1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
-		path := expressions[0]
+	expr, err := p.evaluateBuiltInFunction(lexer.EXISTS, "exists", 1, 1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
+		firstArg := args[0]
+		path := firstArg.expr
 
 		if !path.ValueType().IsString() {
-			return nil, p.expectedError("path string", keywordToken)
+			return nil, p.expectedError("path string", firstArg.token)
 		}
 		return Exists{
 			path: path,
@@ -4052,11 +4073,12 @@ func (p *Parser) evaluateExists(ctx context) (Expression, error) {
 }
 
 func (p *Parser) evaluateRead(ctx context) (Expression, error) {
-	expr, err := p.evaluateBuiltInFunction(lexer.READ, "read", 1, 1, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
-		path := expressions[0]
+	expr, err := p.evaluateBuiltInFunction(lexer.READ, "read", 1, 1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
+		firstArg := args[0]
+		path := firstArg.expr
 
 		if !path.ValueType().IsString() {
-			return nil, p.expectedError("file path string as first parameter", keywordToken)
+			return nil, p.expectedError("file path string as first parameter", firstArg.token)
 		}
 		return Read{
 			path: path,
@@ -4070,24 +4092,27 @@ func (p *Parser) evaluateRead(ctx context) (Expression, error) {
 }
 
 func (p *Parser) evaluateWrite(ctx context) (Expression, error) {
-	expr, err := p.evaluateBuiltInFunction(lexer.WRITE, "write", 2, 3, ctx, func(keywordToken lexer.Token, expressions []Expression) (Statement, error) {
-		path := expressions[0]
+	expr, err := p.evaluateBuiltInFunction(lexer.WRITE, "write", 2, 3, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
+		pathArg := args[0]
+		path := pathArg.expr
 
 		if !path.ValueType().IsString() {
-			return nil, p.expectedError("file path string as first parameter", keywordToken)
+			return nil, p.expectedError("file path string as first parameter", pathArg.token)
 		}
-		data := expressions[1]
+		dataArg := args[1]
+		data := dataArg.expr
 
-		if !path.ValueType().IsString() {
-			return nil, p.expectedError("data string as second parameter", keywordToken)
+		if !data.ValueType().IsString() {
+			return nil, p.expectedError("data string as second parameter", dataArg.token)
 		}
 		var append Expression = BooleanLiteral{false}
 
-		if len(expressions) > 2 {
-			append = expressions[2]
+		if len(args) > 2 {
+			appendArg := args[2]
+			append = appendArg.expr
 
 			if !append.ValueType().IsBool() {
-				return nil, p.expectedError("append boolean as third parameter", keywordToken)
+				return nil, p.expectedError("append boolean as third parameter", appendArg.token)
 			}
 		}
 		return Write{
