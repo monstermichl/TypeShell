@@ -1,9 +1,14 @@
 package parser
 
+import "github.com/monstermichl/typeshell/lexer"
+
 type UnaryOperation struct {
-	expr      Expression
-	operator  UnaryOperator
-	valueType ValueType
+	X             Expression
+	OperatorToken lexer.Token
+}
+
+func NewUnaryOperation(x Expression, operatorToken lexer.Token) UnaryOperation {
+	return UnaryOperation{x, operatorToken}
 }
 
 func (b UnaryOperation) StatementType() StatementType {
@@ -11,17 +16,9 @@ func (b UnaryOperation) StatementType() StatementType {
 }
 
 func (b UnaryOperation) ValueType() ValueType {
-	return b.valueType
+	return NewValueType(NewTypeUnknown(), false) // TODO: Remove. Type is not relevant in parser.
 }
 
 func (b UnaryOperation) IsConstant() bool {
-	return b.Expression().IsConstant()
-}
-
-func (b UnaryOperation) Expression() Expression {
-	return b.expr
-}
-
-func (b UnaryOperation) Operator() UnaryOperator {
-	return b.operator
+	return b.X.IsConstant()
 }

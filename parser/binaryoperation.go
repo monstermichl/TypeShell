@@ -1,9 +1,15 @@
 package parser
 
+import "github.com/monstermichl/typeshell/lexer"
+
 type BinaryOperation struct {
-	left     Expression
-	operator BinaryOperator
-	right    Expression
+	Left          Expression
+	OperatorToken lexer.Token
+	Right         Expression
+}
+
+func NewBinaryOperation(left Expression, operatorToken lexer.Token, right Expression) BinaryOperation {
+	return BinaryOperation{left, operatorToken, right}
 }
 
 func (b BinaryOperation) StatementType() StatementType {
@@ -11,21 +17,9 @@ func (b BinaryOperation) StatementType() StatementType {
 }
 
 func (b BinaryOperation) ValueType() ValueType {
-	return b.left.ValueType()
+	return NewValueType(NewTypeUnknown(), false) // TODO: Remove. Type is not relevant in parser.
 }
 
 func (b BinaryOperation) IsConstant() bool {
-	return b.Left().IsConstant() && b.Right().IsConstant()
-}
-
-func (b BinaryOperation) Left() Expression {
-	return b.left
-}
-
-func (b BinaryOperation) Right() Expression {
-	return b.right
-}
-
-func (b BinaryOperation) Operator() BinaryOperator {
-	return b.operator
+	return b.Left.IsConstant() && b.Right.IsConstant()
 }

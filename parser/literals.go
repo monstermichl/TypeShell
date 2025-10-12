@@ -1,7 +1,14 @@
 package parser
 
+import "github.com/monstermichl/typeshell/lexer"
+
 type BooleanLiteral struct {
-	value bool
+	Value bool
+	Token lexer.Token
+}
+
+func NewBooleanLiteral(value bool, token lexer.Token) BooleanLiteral {
+	return BooleanLiteral{value, token}
 }
 
 func (l BooleanLiteral) StatementType() StatementType {
@@ -16,12 +23,13 @@ func (l BooleanLiteral) IsConstant() bool {
 	return true
 }
 
-func (l BooleanLiteral) Value() bool {
-	return l.value
+type IntegerLiteral struct {
+	Value int
+	Token lexer.Token
 }
 
-type IntegerLiteral struct {
-	value int
+func NewIntegerLiteral(value int, token lexer.Token) IntegerLiteral {
+	return IntegerLiteral{value, token}
 }
 
 func (l IntegerLiteral) StatementType() StatementType {
@@ -36,16 +44,13 @@ func (l IntegerLiteral) IsConstant() bool {
 	return true
 }
 
-func (l IntegerLiteral) Value() int {
-	return l.value
-}
-
 type StringLiteral struct {
-	value string
+	Value string
+	Token lexer.Token
 }
 
-func NewStringLiteral(value string) StringLiteral {
-	return StringLiteral{value}
+func NewStringLiteral(value string, token lexer.Token) StringLiteral {
+	return StringLiteral{value, token}
 }
 
 func (l StringLiteral) StatementType() StatementType {
@@ -58,8 +63,4 @@ func (l StringLiteral) ValueType() ValueType {
 
 func (l StringLiteral) IsConstant() bool {
 	return true
-}
-
-func (l StringLiteral) Value() string {
-	return l.value
 }

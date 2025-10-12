@@ -1,5 +1,9 @@
 package parser
 
-type Block interface {
-	Body() []Statement
+import "github.com/monstermichl/typeshell/lexer"
+
+type Block struct {
+	Statements     []Statement
+	OpeningBracket *lexer.Token
+	ClosingBracket *lexer.Token
 }

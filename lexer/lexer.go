@@ -30,11 +30,6 @@ const (
 	COMPOUND_ASSIGN_OPERATOR
 	UNARY_OPERATOR
 	BINARY_OPERATOR
-	COMPARE_OPERATOR
-	LOGICAL_OPERATOR
-	SHORT_INIT_OPERATOR
-	INCREMENT_OPERATOR
-	DECREMENT_OPERATOR
 
 	// Literals.
 	BOOL_LITERAL
@@ -54,35 +49,8 @@ const (
 	IDENTIFIER
 
 	// Keywords.
-	IMPORT
-	TYPE_DECLARATION
-	STRUCT
-	CONST_DEFINITION
-	VAR_DEFINITION
-	FUNCTION_DEFINITION
-	RETURN
-	IF
-	ELSE
-	SWITCH
-	CASE
-	DEFAULT
-	FOR
-	RANGE
-	BREAK
-	CONTINUE
-	IOTA
-
-	// Builtin functions.
-	LEN
-	PRINT
-	INPUT
-	COPY
-	ITOA
-	EXISTS
-	READ
-	WRITE
-	PANIC
-	UNSAFE
+	SECTION_KEYWORD
+	KEYWORD
 
 	// App operators.
 	AT
@@ -120,7 +88,43 @@ type tokenMapping struct {
 	tokenType TokenType
 }
 
-var nonAlphabeticTokens = []tokenMapping{
+type tokenMappings []tokenMapping
+
+func (m tokenMappings) find(value string) (TokenType, bool) {
+	for _, entry := range m {
+		if entry.value == value {
+			return entry.tokenType, true
+		}
+	}
+	return UNKNOWN, false
+}
+
+type nonAlphabeticToken = string
+
+const (
+	// Operators highest to lowest priority (top to bottom).
+	UnaryOperatorNegate nonAlphabeticToken = "!"
+
+	OperatorMultiplication nonAlphabeticToken = "*"
+	OperatorDivision       nonAlphabeticToken = "/"
+	OperatorModulo         nonAlphabeticToken = "%"
+
+	OperatorAddition    nonAlphabeticToken = "+"
+	OperatorSubtraction nonAlphabeticToken = "-"
+
+	ComparisonLessOrEqual    nonAlphabeticToken = "<="
+	ComparisonGreaterOrEqual nonAlphabeticToken = ">="
+	ComparisonLess           nonAlphabeticToken = "<"
+	ComparisonGreater        nonAlphabeticToken = ">"
+
+	ComparisonEqual    nonAlphabeticToken = "=="
+	ComparisonNotEqual nonAlphabeticToken = "!="
+
+	OperatorAnd nonAlphabeticToken = "&&"
+	OperatorOr  nonAlphabeticToken = "||"
+)
+
+var nonAlphabeticTokens = tokenMappings{
 	{"(", OPENING_ROUND_BRACKET},
 	{")", CLOSING_ROUND_BRACKET},
 	{"[", OPENING_SQUARE_BRACKET},
@@ -128,15 +132,15 @@ var nonAlphabeticTokens = []tokenMapping{
 	{"{", OPENING_CURLY_BRACKET},
 	{"}", CLOSING_CURLY_BRACKET},
 
-	{"==", COMPARE_OPERATOR},
-	{"!=", COMPARE_OPERATOR},
-	{"<=", COMPARE_OPERATOR},
-	{">=", COMPARE_OPERATOR},
-	{"<", COMPARE_OPERATOR},
-	{">", COMPARE_OPERATOR},
+	{ComparisonEqual, BINARY_OPERATOR},
+	{ComparisonNotEqual, BINARY_OPERATOR},
+	{ComparisonLessOrEqual, BINARY_OPERATOR},
+	{ComparisonGreaterOrEqual, BINARY_OPERATOR},
+	{ComparisonLess, BINARY_OPERATOR},
+	{ComparisonGreater, BINARY_OPERATOR},
 
-	{"&&", LOGICAL_OPERATOR},
-	{"||", LOGICAL_OPERATOR},
+	{OperatorAnd, BINARY_OPERATOR},
+	{OperatorOr, BINARY_OPERATOR},
 
 	{"+=", COMPOUND_ASSIGN_OPERATOR},
 	{"-=", COMPOUND_ASSIGN_OPERATOR},
@@ -144,20 +148,19 @@ var nonAlphabeticTokens = []tokenMapping{
 	{"/=", COMPOUND_ASSIGN_OPERATOR},
 	{"%=", COMPOUND_ASSIGN_OPERATOR},
 
+	{":=", ASSIGN_OPERATOR},
 	{"=", ASSIGN_OPERATOR},
 
-	{":=", SHORT_INIT_OPERATOR},
+	{UnaryOperatorNegate, UNARY_OPERATOR},
 
-	{"++", INCREMENT_OPERATOR},
-	{"--", DECREMENT_OPERATOR},
+	{"++", UNARY_OPERATOR},
+	{"--", UNARY_OPERATOR},
 
-	{"!", UNARY_OPERATOR},
-
-	{"+", BINARY_OPERATOR},
-	{"-", BINARY_OPERATOR},
-	{"*", BINARY_OPERATOR},
-	{"/", BINARY_OPERATOR},
-	{"%", BINARY_OPERATOR},
+	{OperatorAddition, BINARY_OPERATOR},
+	{OperatorSubtraction, BINARY_OPERATOR},
+	{OperatorMultiplication, BINARY_OPERATOR},
+	{OperatorDivision, BINARY_OPERATOR},
+	{OperatorModulo, BINARY_OPERATOR},
 
 	{",", COMMA},
 	{":", COLON},
@@ -172,38 +175,74 @@ var nonAlphabeticTokens = []tokenMapping{
 	{"\n", NEWLINE},
 }
 
-var keywords = map[string]TokenType{
+type Keyword = string
+
+const (
 	// Common keywords.
-	"import":   IMPORT,
-	"type":     TYPE_DECLARATION,
-	"struct":   STRUCT,
-	"const":    CONST_DEFINITION,
-	"var":      VAR_DEFINITION,
-	"func":     FUNCTION_DEFINITION,
-	"return":   RETURN,
-	"if":       IF,
-	"else":     ELSE,
-	"switch":   SWITCH,
-	"case":     CASE,
-	"default":  DEFAULT,
-	"for":      FOR,
-	"range":    RANGE,
-	"break":    BREAK,
-	"continue": CONTINUE,
-	"iota":     IOTA,
-	"nil":      NIL_LITERAL,
+	KeywordImport   Keyword = "import"
+	KeywordType     Keyword = "type"
+	KeywordStruct   Keyword = "struct"
+	KeywordConst    Keyword = "const"
+	KeywordVar      Keyword = "var"
+	KeywordFunc     Keyword = "func"
+	KeywordReturn   Keyword = "return"
+	KeywordIf       Keyword = "if"
+	KeywordElse     Keyword = "else"
+	KeywordSwitch   Keyword = "switch"
+	KeywordCase     Keyword = "case"
+	KeywordDefault  Keyword = "default"
+	KeywordFor      Keyword = "for"
+	KeywordRange    Keyword = "range"
+	KeywordBreak    Keyword = "break"
+	KeywordContinue Keyword = "continue"
+	KeywordIota     Keyword = "iota"
+	KeywordNil      Keyword = "nil"
 
 	// Builtin functions.
-	"len":    LEN,
-	"print":  PRINT,
-	"input":  INPUT,
-	"copy":   COPY,
-	"itoa":   ITOA,
-	"exists": EXISTS,
-	"read":   READ,
-	"write":  WRITE,
-	"panic":  PANIC,
-	"unsafe": UNSAFE,
+	KeywordLen    Keyword = "len"
+	KeywordPrint  Keyword = "print"
+	KeywordInput  Keyword = "input"
+	KeywordCopy   Keyword = "copy"
+	KeywordItoa   Keyword = "itoa"
+	KeywordExists Keyword = "exists"
+	KeywordRead   Keyword = "read"
+	KeywordWrite  Keyword = "write"
+	KeywordPanic  Keyword = "panic"
+	KeywordUnsafe Keyword = "unsafe"
+)
+
+var keywords = tokenMappings{
+	// Common keywords.
+	{KeywordImport, SECTION_KEYWORD},
+	{KeywordType, SECTION_KEYWORD},
+	{KeywordStruct, KEYWORD},
+	{KeywordConst, SECTION_KEYWORD},
+	{KeywordVar, SECTION_KEYWORD},
+	{KeywordFunc, SECTION_KEYWORD},
+	{KeywordReturn, KEYWORD},
+	{KeywordIf, SECTION_KEYWORD},
+	{KeywordElse, SECTION_KEYWORD},
+	{KeywordSwitch, SECTION_KEYWORD},
+	{KeywordCase, KEYWORD},
+	{KeywordDefault, KEYWORD},
+	{KeywordFor, SECTION_KEYWORD},
+	{KeywordRange, KEYWORD},
+	{KeywordBreak, KEYWORD},
+	{KeywordContinue, KEYWORD},
+	{KeywordIota, KEYWORD},
+	{KeywordNil, KEYWORD},
+
+	// Builtin functions.
+	{KeywordLen, KEYWORD},
+	{KeywordPrint, KEYWORD},
+	{KeywordInput, KEYWORD},
+	{KeywordCopy, KEYWORD},
+	{KeywordItoa, KEYWORD},
+	{KeywordExists, KEYWORD},
+	{KeywordRead, KEYWORD},
+	{KeywordWrite, KEYWORD},
+	{KeywordPanic, KEYWORD},
+	{KeywordUnsafe, KEYWORD},
 }
 
 func newToken(value string, tokenType TokenType, row int, column int) Token {
@@ -322,7 +361,7 @@ func Tokenize(source string) ([]Token, error) {
 			}
 
 			// Check if identifier is a keyword.
-			tokenType, hasKey := keywords[identifier]
+			tokenType, hasKey := keywords.find(identifier)
 
 			// If it's not a keyword, it's an identifier.
 			if !hasKey {
@@ -333,6 +372,7 @@ func Tokenize(source string) ([]Token, error) {
 
 		// If no complex token has been found, try to find simple tokens.
 		if token.tokenType == UNKNOWN {
+
 			// Try to find non-alphabetic token.
 			for _, mapping := range nonAlphabeticTokens {
 				key := mapping.value

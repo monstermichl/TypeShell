@@ -4,15 +4,12 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"io"
 	"maps"
-	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/monstermichl/typeshell/lexer"
 )
@@ -199,8 +196,14 @@ func (ev evaluatedValues) isMultiReturnCall() (bool, Call) {
 
 type blockCallback func(statements []Statement, last bool) error
 
+type parserError struct {
+	Err   error
+	Token lexer.Token
+}
+
 type Parser struct {
 	tokens    []lexer.Token
+	errors    []parserError
 	index     int
 	path      string
 	prefix    string
@@ -216,6 +219,10 @@ func New() Parser {
 
 func (p *Parser) Parse(path string) (Program, error) {
 	return p.parse(path, false)
+}
+
+func (p Parser) Errors() []parserError {
+	return p.errors
 }
 
 func (p *Parser) parse(path string, imported bool) (Program, error) {
@@ -261,121 +268,43 @@ func (p *Parser) parse(path string, imported bool) (Program, error) {
 		}
 		p.prefix = prefix
 	}
-	program, err := p.evaluateProgram()
+	program, _ := p.evaluateProgram()
 
-	if err != nil {
-		return Program{}, err
+	if len(p.errors) > 0 {
+		err = p.errors[0].Err
 	}
-
-	// If this is the original program, remove unused stuff.
-	if !imported {
-		return p.cleanProgram(program)
-	}
-	return program, nil
+	return program, err
 }
 
-func allowedBinaryOperators(t ValueType) []BinaryOperator {
-	operators := []BinaryOperator{}
+// func incrementDecrementStatement(variable Variable, increment bool) Statement {
+// 	operation := BINARY_OPERATOR_ADDITION
 
-	if !t.IsSlice() {
-		switch t.Type().ElementaryType().Kind() {
-		case TypeKindInt:
-			operators = []BinaryOperator{BINARY_OPERATOR_MULTIPLICATION, BINARY_OPERATOR_DIVISION, BINARY_OPERATOR_MODULO, BINARY_OPERATOR_ADDITION, BINARY_OPERATOR_SUBTRACTION}
-		case TypeKindString:
-			operators = []BinaryOperator{BINARY_OPERATOR_ADDITION}
-		default:
-		}
-		// For other types no operations are permitted.
-	}
-	return operators
-}
-
-func allowedCompareOperators(t ValueType) []CompareOperator {
-	operators := []CompareOperator{}
-
-	if !t.IsSlice() {
-		switch t.Type().ElementaryType().Kind() {
-		case TypeKindBool:
-			operators = []CompareOperator{COMPARE_OPERATOR_EQUAL, COMPARE_OPERATOR_NOT_EQUAL}
-		case TypeKindInt:
-			operators = []CompareOperator{COMPARE_OPERATOR_EQUAL, COMPARE_OPERATOR_NOT_EQUAL, COMPARE_OPERATOR_LESS, COMPARE_OPERATOR_LESS_OR_EQUAL, COMPARE_OPERATOR_GREATER, COMPARE_OPERATOR_GREATER_OR_EQUAL}
-		case TypeKindString:
-			operators = []CompareOperator{COMPARE_OPERATOR_EQUAL, COMPARE_OPERATOR_NOT_EQUAL, COMPARE_OPERATOR_LESS, COMPARE_OPERATOR_LESS_OR_EQUAL, COMPARE_OPERATOR_GREATER, COMPARE_OPERATOR_GREATER_OR_EQUAL}
-		default:
-			// For other types no operations are permitted.
-		}
-	}
-	return operators
-}
-
-func incrementDecrementStatement(variable Variable, increment bool) Statement {
-	operation := BINARY_OPERATOR_ADDITION
-
-	if !increment {
-		operation = BINARY_OPERATOR_SUBTRACTION
-	}
-	return VariableAssignmentValueAssignment{
-		variables: []Variable{variable},
-		values: []Expression{
-			BinaryOperation{
-				left: VariableEvaluation{
-					Variable: variable,
-				},
-				operator: operation,
-				right:    IntegerLiteral{value: 1},
-			},
-		},
-	}
-}
-
-func buildReceiverFunctionName(receiverName string, name string) string {
-	return fmt.Sprintf("%s_%s", receiverName, name)
-}
-
-func updateExtInfo(infoPath string, remotePath string, localPath string) error {
-	var lines = []string{}
-
-	// If info file doesn't exist yet, create it.
-	if _, err := os.Stat(infoPath); err != nil {
-		lines = append(lines, "| Remote | Local |", "|-|-|")
-	} else {
-		contentBytes, err := os.ReadFile(infoPath)
-
-		if err != nil {
-			return err
-		}
-		content := string(contentBytes)
-		lines = strings.Split(content, "\n")
-	}
-
-	i := slices.IndexFunc(lines, func(line string) bool {
-		return strings.Contains(line, remotePath)
-	})
-
-	// If entry is new, add it.
-	if i < 0 {
-		lines = append(lines, fmt.Sprintf("| %s | %s |", remotePath, localPath))
-	}
-	return os.WriteFile(infoPath, []byte(strings.Join(lines, "\n")), 0700)
-}
+// 	if !increment {
+// 		operation = BINARY_OPERATOR_SUBTRACTION
+// 	}
+// 	return VariableAssignmentValueAssignment{
+// 		variables: []Variable{variable},
+// 		values: []Expression{
+// 			BinaryOperation{
+// 				left: VariableEvaluation{
+// 					Variable: variable,
+// 				},
+// 				operator: operation,
+// 				right:    IntegerLiteral{value: 1},
+// 			},
+// 		},
+// 	}
+// }
 
 func (p *Parser) atError(what string, token lexer.Token) error {
-	return fmt.Errorf("%s at row %d, column %d: %s", what, token.Row(), token.Column(), p.path)
+	err := fmt.Errorf("%s at row %d, column %d: %s", what, token.Row(), token.Column(), p.path)
+	p.errors = append(p.errors, parserError{err, token})
+
+	return err
 }
 
 func (p *Parser) expectedError(what string, token lexer.Token) error {
 	return p.atError(fmt.Sprintf("expected %s", what), token)
-}
-
-func (p *Parser) expectedType(got ValueType, token lexer.Token, expected ValueType, expectedElse ...ValueType) error {
-	expectedAll := []ValueType{expected}
-	expectedAll = append(expectedAll, expectedElse...)
-	expectedStrings := []string{}
-
-	for _, val := range expectedAll {
-		expectedStrings = append(expectedStrings, val.String())
-	}
-	return p.expectedError(fmt.Sprintf("%s but got %s", strings.Join(expectedStrings, " or "), got.String()), token)
 }
 
 func (p *Parser) expectedKeywordError(keyword string, token lexer.Token) error {
@@ -421,10 +350,26 @@ func (p Parser) peekAt(add uint) lexer.Token {
 	return token
 }
 
-func (p *Parser) skipNewlines() {
-	for p.peek().Type() == lexer.NEWLINE {
+func (p *Parser) skipUntil(t ...lexer.TokenType) {
+	t = append(t, lexer.EOF) // Make sure skipping stops eventually.
+
+	for !slices.Contains(t, p.peek().Type()) {
 		p.eat()
 	}
+}
+
+func (p *Parser) skipUntilNewline() {
+	p.skipUntil(lexer.NEWLINE)
+}
+
+func (p *Parser) skipWhile(t ...lexer.TokenType) {
+	for slices.Contains(t, p.peek().Type()) {
+		p.eat()
+	}
+}
+
+func (p *Parser) skipNewlines() {
+	p.skipWhile(lexer.NEWLINE)
 }
 
 func (p Parser) findAllowed(searchTokenType lexer.TokenType, allowed ...lexer.TokenType) (lexer.Token, error) {
@@ -472,2471 +417,259 @@ func (p *Parser) eat() lexer.Token {
 	return token
 }
 
-func (p *Parser) vomit(amount uint) lexer.Token {
-	for amount > 0 && p.index > 0 {
-		p.index--
-		amount--
-	}
-	return p.peek()
-}
+// func (p *Parser) evaluateNames() ([]lexer.Token, error) {
+// }
 
-func (p *Parser) isShortVarInit() bool {
-	_, err := p.findAllowed(lexer.SHORT_INIT_OPERATOR, lexer.IDENTIFIER, lexer.COMMA)
+// func (p *Parser) evaluateValues(ctx context) (evaluatedValues, error) {
+// }
 
-	// Short initialization is an arbitrary number of identifiers and commas plus the short init operator (e.g. x, y := ...).
-	return err == nil
-}
-
-func (p *Parser) defaultVarValue(valueType ValueType, token lexer.Token, ctx context) (Expression, error) {
-	t := valueType.Type()
-	foundType, exists := ctx.findType(t.Name(), t.Prefix())
-
-	if exists {
-		elementaryDataType := foundType.ElementaryType()
-
-		if !valueType.IsSlice() {
-			switch elementaryDataType.Kind() {
-			case TypeKindBool:
-				return BooleanLiteral{}, nil
-			case TypeKindInt:
-				return IntegerLiteral{}, nil
-			case TypeKindString:
-				return StringLiteral{}, nil
-			case TypeKindStruct:
-				structDefinition, exists := elementaryDataType.(StructDefinition)
-
-				if exists {
-					structValues := []StructValue{}
-
-					for _, field := range structDefinition.Fields() {
-						defaultValue, err := p.defaultVarValue(field.ValueType(), token, ctx)
-
-						if err != nil {
-							return nil, err
-						}
-						structValues = append(structValues, StructValue{
-							StructField: StructField{
-								name:      field.Name(),
-								valueType: field.ValueType(),
-							},
-							value: defaultValue,
-						})
-					}
-					return NewStructInitialization(valueType.Type(), structValues...), nil
-				}
-			}
-		} else {
-			return SliceInstantiation{t: elementaryDataType}, nil
-		}
-	}
-	return nil, p.atError(fmt.Sprintf("no default value found for type %s", valueType.String()), token)
-}
-
-func (p *Parser) checkNewNamedValueNameToken(token lexer.Token, ctx context) error {
-	name := token.Value()
-	foundNamedValue, exists := ctx.findNamedValue(name, p.prefix)
-
-	if exists && foundNamedValue.Layer() == ctx.layer {
-		namedValueType := "variable"
-
-		if foundNamedValue.IsConstant() {
-			namedValueType = "constant"
-		}
-		return p.atError(fmt.Sprintf("%s %s has already been defined", namedValueType, name), token)
-	}
-	return nil
-}
-
-func (p *Parser) getUsedFuncs(startFunc string) []string {
-	usedFuncs := []string{}
-	startFunc = strings.TrimSpace(startFunc)
-
-	if usedFuncsTemp, exists := p.usedFuncs[startFunc]; exists {
-		if len(startFunc) > 0 && !slices.Contains(usedFuncs, startFunc) {
-			usedFuncs = append(usedFuncs, startFunc)
-		}
-
-		for _, usedFuncTemp := range usedFuncsTemp {
-			if !slices.Contains(usedFuncs, usedFuncTemp) {
-				usedFuncs = append(usedFuncs, usedFuncTemp)
-			}
-			usedSubFuncs := p.getUsedFuncs(usedFuncTemp)
-
-			for _, usedSubFunc := range usedSubFuncs {
-				if !slices.Contains(usedFuncs, usedSubFunc) {
-					usedFuncs = append(usedFuncs, usedSubFunc)
-				}
-			}
-		}
-	}
-	return usedFuncs
-}
-
-func (p *Parser) cleanProgram(program Program) (Program, error) {
-	statements := program.Body()
-	usedFuncs := p.getUsedFuncs("")
-
-	// Remove all functions that are not being used.
-	statements = slices.DeleteFunc(statements, func(stmt Statement) bool {
-		switch stmt.StatementType() {
-		case STATEMENT_TYPE_FUNCTION_DEFINITION:
-			function := stmt.(FunctionDefinition)
-			return !slices.Contains(usedFuncs, function.PrefixedName())
-		}
-		return false
-	})
-	return Program{
-		body: statements,
-	}, nil
-}
-
-func (p *Parser) createDotedName(prefix string, name string) string {
-	return fmt.Sprintf("%s.%s", prefix, name)
-}
-
-func (p *Parser) createImportName(importAlias string, name string, ctx context) (string, string, error) {
-	prefix := p.prefix
-	dotedName := name
-
-	// If it's an include-function call, use provided alias.
-	if len(importAlias) > 0 {
-		prefixTemp, exists := ctx.findImport(importAlias)
-
-		if !exists {
-			return "", "", p.atError(fmt.Sprintf("import alias %s not found", importAlias), p.peek())
-		}
-		prefix = prefixTemp
-		dotedName = p.createDotedName(importAlias, name)
-	}
-	return prefix, dotedName, nil
-}
-
-func (p *Parser) evaluateNames() ([]lexer.Token, error) {
-	nameTokens := []lexer.Token{}
-
-	for {
-		nextToken := p.eat()
-
-		if nextToken.Type() != lexer.IDENTIFIER {
-			return nil, p.expectedError("variable name", nextToken)
-		}
-		nameTokens = append(nameTokens, nextToken)
-		nextToken = p.peek()
-
-		if nextToken.Type() != lexer.COMMA {
-			break
-		}
-		p.eat() // Eat comma token.
-	}
-	return nameTokens, nil
-}
-
-func (p *Parser) evaluateValues(ctx context) (evaluatedValues, error) {
-	expressions := []Expression{}
-	tokens := []lexer.Token{}
-
-	for {
-		exprToken := p.peek()
-		expr, err := p.evaluateExpression(ctx)
-
-		if err != nil {
-			return evaluatedValues{}, err
-		}
-		expressions = append(expressions, expr)
-		tokens = append(tokens, exprToken)
-		nextToken := p.peek()
-		returnValuesLength := -1
-		funcName := ""
-
-		// If expression is a function, check if it returns a value.
-		if expr.StatementType() == STATEMENT_TYPE_FUNCTION_CALL {
-			call := expr.(FunctionCall)
-			returnValuesLength = len(call.ReturnTypes())
-			funcName = call.PrefixedName()
-
-			if returnValuesLength == 0 {
-				return evaluatedValues{}, p.expectedError(fmt.Sprintf(`return value from function "%s"`, funcName), exprToken)
-			}
-		}
-		// Check if other values follow.
-		if nextToken.Type() != lexer.COMMA {
-			break
-		}
-		p.eat() // Eat comma token.
-
-		// If other values follow, function must only return one value.
-		if returnValuesLength > 1 {
-			return evaluatedValues{}, p.expectedError(fmt.Sprintf(`only one return value from function "%s"`, funcName), exprToken)
-		}
-	}
-	return evaluatedValues{
-		values: expressions,
-		tokens: tokens,
-	}, nil
-}
-
-func (p *Parser) evaluateBuiltInFunction(tokenType lexer.TokenType, keyword string, minArgs int, maxArg int, ctx context, stmtCallout func(keywordToken lexer.Token, args []builtinArg) (Statement, error)) (Statement, error) {
-	keywordToken := p.eat()
-
-	if keywordToken.Type() != tokenType {
-		return nil, p.expectedKeywordError(keyword, keywordToken)
-	}
-	nextToken := p.eat()
-
-	// Make sure after the builtin call comes a  opening round bracket.
-	if nextToken.Type() != lexer.OPENING_ROUND_BRACKET {
-		return nil, p.expectedError(`"("`, nextToken)
-	}
-	args := []builtinArg{}
-	nextToken = p.peek()
-
-	// Evaluate arguments if it's a builtin call with arguments.
-	if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
-		for {
-			nextToken = p.peek()
-			expr, err := p.evaluateExpression(ctx)
-
-			if err != nil {
-				return nil, err
-			}
-			args = append(args, builtinArg{
-				token: nextToken,
-				expr:  expr,
-			})
-			nextToken = p.peek()
-			nextTokenType := nextToken.Type()
-
-			if nextTokenType == lexer.COMMA {
-				p.eat()
-			} else if nextTokenType == lexer.CLOSING_ROUND_BRACKET {
-				break
-			} else {
-				return nil, p.expectedError(`"," or ")"`, nextToken)
-			}
-		}
-	}
-	argsLength := len(args)
-
-	if minArgs < 0 {
-		minArgs = 0
-	}
-	if argsLength < minArgs {
-		return nil, p.expectedError(fmt.Sprintf("at least %d arguments for %s", minArgs, keyword), keywordToken)
-	}
-	if maxArg >= 0 && argsLength > maxArg {
-		return nil, p.expectedError(fmt.Sprintf("a maximum of %d arguments for %s", minArgs, keyword), keywordToken)
-	}
-	nextToken = p.eat()
-
-	// Make sure builtin call is terminated with a closing round bracket.
-	if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
-		return nil, p.expectedError(`")"`, nextToken)
-	}
-	return stmtCallout(keywordToken, args)
-}
-
-func (p *Parser) evaluateProgram() (Program, error) {
+func (p *Parser) evaluateProgram() (Program, bool) {
 	ctx := newContext(p.prefix)
-	statements, err := p.evaluateImports(&ctx)
+	statements, ok := p.evaluateBlockContent(ctx, SCOPE_PROGRAM)
 
-	if err != nil {
-		return Program{}, err
-	}
-
-	// Add own hash to imports for easier mapping handling.
-	prefix := p.prefix
-	err = ctx.addImport(prefix, prefix)
-
-	if err != nil {
-		return Program{}, err
-	}
-	statementsTemp, err := p.evaluateBlockContent([]lexer.TokenType{lexer.EOF}, nil, ctx, SCOPE_PROGRAM)
-
-	if err != nil {
-		return Program{}, err
-	}
-	statements = append(statements, statementsTemp...)
-
-	return Program{
-		body: statements,
-	}, nil
+	return Program{statements}, ok
 }
 
-func (p *Parser) evaluateImports(ctx *context) ([]Statement, error) {
-	statementsTemp := []Statement{}
+// func (p *Parser) evaluateImports(ctx *context) ([]Statement, error) {
 
-	for {
-		// Skip newlines.
-		p.skipNewlines()
+// }
 
-		nextToken := p.peek()
+// func (p *Parser) evaluateImport() (evaluatedImport, error) {
 
-		if nextToken.Type() == lexer.IMPORT {
-			p.eat()
-			nextToken := p.peek()
-			multiple := nextToken.Type() == lexer.OPENING_ROUND_BRACKET
+// }
 
-			if multiple {
-				p.eat()
-				nextToken = p.eat()
-
-				if nextToken.Type() != lexer.NEWLINE {
-					return nil, p.expectedNewlineError(nextToken)
-				}
-			}
-
-			for {
-				imp, err := p.evaluateImport()
-
-				if err != nil {
-					return nil, err
-				}
-				ex, err := os.Executable()
-
-				if err != nil {
-					return nil, err
-				}
-				path := imp.path
-				alias := imp.alias
-				absPath := path
-				sourceLocation := "local"
-
-				// If path is a remote address, download file to executable path and
-				// change path to the loaded path.
-				if strings.Contains(path, "://") {
-					sourceLocation = "remote"
-					externalPath := filepath.Join(filepath.Dir(ex), "ext")
-					err = os.MkdirAll(externalPath, 0700)
-
-					if err != nil {
-						return nil, err
-					}
-					hash := sha256.New()
-					_, err = hash.Write([]byte(path))
-
-					if err != nil {
-						return nil, err
-					}
-					hashString := ""
-
-					for _, b := range hash.Sum(nil) {
-						hashString = fmt.Sprintf("%s%02x", hashString, b)
-					}
-					absPath = filepath.Join(externalPath, fmt.Sprintf("%s.tsh", hashString))
-
-					// If file doesn't exist, download it.
-					if _, err = os.Stat(absPath); err != nil {
-						resp, err := http.Get(path)
-
-						if err != nil {
-							return nil, err
-						}
-						defer resp.Body.Close() // Make sure stream gets closed.
-						bodyBytes, err := io.ReadAll(resp.Body)
-
-						if err != nil {
-							return nil, err
-						}
-						regexp := regexp.MustCompile(`package \w+`)
-						bodyBytes = regexp.ReplaceAll(bodyBytes, []byte("")) // Remove package statemnt.
-
-						err = os.WriteFile(absPath, bodyBytes, 0400)
-
-						if err != nil {
-							return nil, err
-						}
-						err = updateExtInfo(filepath.Join(externalPath, "info.md"), path, absPath)
-
-						if err != nil {
-							return nil, err
-						}
-					}
-				}
-
-				// If path is relative, create an absolute path by combining the loaded path with the import path.
-				if !filepath.IsAbs(absPath) {
-					absPath = filepath.Join(filepath.Dir(p.path), absPath)
-				}
-				aliasLen := len(alias)
-
-				// If path doesn't exist, try to find it in the standard library.
-				if _, err := os.Stat(absPath); err != nil {
-					pathWithoutExt := strings.TrimSuffix(path, filepath.Ext(path))
-					absPathTemp := filepath.Join(filepath.Dir(ex), "std", fmt.Sprintf("%s.tsh", pathWithoutExt)) // Standart library is at <executable-path>/std.
-
-					// If path exists, use it.
-					if _, err := os.Stat(absPath); err != nil {
-						absPath = absPathTemp
-
-						if aliasLen == 0 {
-							alias = filepath.Base(pathWithoutExt)
-						}
-					}
-				} else if aliasLen == 0 {
-					// If it's not a standard library path, an alias must be provided.
-					return nil, fmt.Errorf(`an alias must be provided for the %s import "%s" in %s`, sourceLocation, path, p.path)
-				}
-				importParser := New()
-				importedProg, err := importParser.parse(absPath, true)
-
-				if err != nil {
-					return nil, err
-				}
-
-				if _, exists := ctx.findImport(alias); exists {
-					return nil, fmt.Errorf(`import alias "%s" already exists`, alias)
-				}
-				err = ctx.addImport(alias, importParser.prefix)
-
-				if err != nil {
-					return nil, err
-				}
-				statementsTemp = append(statementsTemp, importedProg.Body()...)
-
-				// Import-parser funcs with current parser funcs.
-				for funcName, usedFuncs := range importParser.usedFuncs {
-					if foundUsedFuncs, exists := p.usedFuncs[funcName]; !exists {
-						p.usedFuncs[funcName] = usedFuncs
-					} else {
-						for _, usedFunc := range foundUsedFuncs {
-							if !slices.Contains(foundUsedFuncs, usedFunc) {
-								p.usedFuncs[funcName] = append(p.usedFuncs[funcName], usedFunc)
-							}
-						}
-					}
-				}
-				nextToken = p.peek()
-				nextTokenType := nextToken.Type()
-
-				if !multiple {
-					break
-				} else if nextTokenType == lexer.CLOSING_ROUND_BRACKET {
-					p.eat()
-					break
-				} else if slices.Contains([]lexer.TokenType{lexer.IDENTIFIER, lexer.STRING_LITERAL}, nextTokenType) {
-					// Nothing to do, parse next import in the next cycle.
-				} else {
-					return nil, p.expectedError(`")"`, nextToken)
-				}
-			}
-		} else {
-			break
-		}
-	}
+func (p *Parser) evaluateBlockContent(ctx context, scope scope) ([]Statement, bool) {
 	statements := []Statement{}
+	ok := true
 
-	// Add functions, variables and constants.
-	for _, statement := range statementsTemp {
-		exists := false
+	p.skipNewlines()
 
-		switch statement.StatementType() {
-		case STATEMENT_TYPE_NAMED_VALUES_DEFINITION:
-			for _, assignment := range statement.(NamedValuesDefinition).Assignments() {
-				switch t := assignment.(type) {
-				case VariableDefinitionValueAssignment:
-					for _, variable := range t.Variables() {
-						if _, exists = ctx.findNamedValue(variable.Name(), variable.Prefix()); !exists && variable.Public() {
-							ctx.addNamedValues(variable)
-						}
-					}
-				case VariableDefinitionCallAssignment:
-					for _, variable := range t.Variables() {
-						if _, exists = ctx.findNamedValue(variable.Name(), variable.Prefix()); !exists && variable.Public() {
-							ctx.addNamedValues(variable)
-						}
-					}
-				case ConstDefinition:
-					for _, constant := range t.Constants() {
-						if _, exists = ctx.findNamedValue(constant.Name(), constant.Prefix()); !exists && constant.Public() {
-							ctx.addNamedValues(constant)
-						}
-					}
-				}
-			}
-		case STATEMENT_TYPE_FUNCTION_DEFINITION:
-			ctx.addFunctions(statement.(FunctionDefinition))
-		case STATEMENT_TYPE_TYPE_DECLARATION:
-			definedType := statement.(TypeDeclaration)
+	for !slices.Contains([]lexer.TokenType{lexer.EOF, lexer.CLOSING_CURLY_BRACKET}, p.peek().Type()) {
+		stmt, okTemp := p.evaluateStatement(ctx)
+		ok = ok && okTemp
 
-			if _, exists = ctx.findType(definedType.Name(), definedType.Prefix()); !exists && definedType.Public() {
-				err := ctx.addType(definedType.ValueType())
-
-				if err != nil {
-					return nil, err
-				}
-			}
+		if !okTemp {
+			p.skipUntilNewline() // RECOVER: Move to end of line.
 		}
-
-		// Prevent code duplication.
-		if !exists {
-			statements = append(statements, statement)
-		}
-	}
-	return statements, nil
-}
-
-func (p *Parser) evaluateImport() (evaluatedImport, error) {
-	nextToken := p.eat()
-	var alias string
-
-	if nextToken.Type() == lexer.IDENTIFIER {
-		alias = nextToken.Value()
-		nextToken = p.eat()
-	}
-
-	if nextToken.Type() != lexer.STRING_LITERAL {
-		return evaluatedImport{}, p.expectedError("import path", nextToken)
-	}
-	path := nextToken.Value()
-	nextToken = p.eat()
-
-	if !slices.Contains([]lexer.TokenType{lexer.NEWLINE, lexer.EOF}, nextToken.Type()) {
-		return evaluatedImport{}, p.expectedError("newline or end-of-file", nextToken)
-	}
-	return evaluatedImport{
-		alias,
-		path,
-	}, nil
-}
-
-func (p *Parser) evaluateBlockBegin() error {
-	beginToken := p.eat()
-
-	if beginToken.Type() != lexer.OPENING_CURLY_BRACKET {
-		return p.expectedError("block begin", beginToken)
-	}
-	newlineToken := p.eat()
-
-	if newlineToken.Type() != lexer.NEWLINE {
-		return p.expectedNewlineError(newlineToken)
-	}
-	return nil
-}
-
-func (p *Parser) evaluateBlockContent(terminationTokenTypes []lexer.TokenType, callback blockCallback, ctx context, scope scope) ([]Statement, error) {
-	var err error
-
-	statements := []Statement{}
-	loop := true
-	callCallback := func() error {
-		errTemp := err
-
-		if errTemp == nil && callback != nil {
-			errTemp = callback(statements, !loop)
-		}
-		return errTemp
-	}
-
-	// Clone context to avoid modification of the original.
-	ctx = ctx.clone()
-
-	// Add scope to context and increase layer.
-	ctx.pushScope(scope)
-	ctx.layer++
-
-	for loop {
-		token := p.peek()
-		tokenType := token.Type()
-		var stmt Statement
-
-		if slices.Contains(terminationTokenTypes, tokenType) {
-			loop = false // Just break on termination token.
-		} else {
-			switch tokenType {
-			case lexer.NEWLINE:
-				// Ignore termination tokens as they are handled after the switch.
-			default:
-				stmt, err = p.evaluateStatement(ctx)
-
-				if err != nil {
-					break
-				}
-
-				switch stmt.StatementType() {
-				case STATEMENT_TYPE_NAMED_VALUES_DEFINITION:
-					for _, assignment := range stmt.(NamedValuesDefinition).Assignments() {
-						switch t := assignment.(type) {
-						case VariableDefinitionValueAssignment:
-							// Store new variables.
-							for _, variable := range t.Variables() {
-								err = ctx.addNamedValues(variable)
-
-								if err != nil {
-									return nil, err
-								}
-							}
-						case VariableDefinitionCallAssignment:
-							// Store new variables.
-							for _, variable := range t.Variables() {
-								err = ctx.addNamedValues(variable)
-
-								if err != nil {
-									return nil, err
-								}
-							}
-						case ConstDefinition:
-							// Store new constants.
-							for _, variable := range t.Constants() {
-								err = ctx.addNamedValues(variable)
-
-								if err != nil {
-									return nil, err
-								}
-							}
-						}
-					}
-				case STATEMENT_TYPE_FUNCTION_DEFINITION:
-					// Store new function.
-					ctx.addFunctions(stmt.(FunctionDefinition))
-				case STATEMENT_TYPE_TYPE_DECLARATION:
-					// Store new type.
-					err = ctx.addType(stmt.(TypeDeclaration).ValueType())
-
-					if err != nil {
-						return nil, err
-					}
-				}
-			}
-		}
-
-		if err != nil {
-			break
-		}
-
-		if !loop {
-			err = callCallback()
-			break
-		}
-
 		if stmt != nil {
 			statements = append(statements, stmt)
-			err = callCallback()
-
-			if err != nil {
-				break
-			}
 		}
-		terminationToken := p.peek()
+		p.skipNewlines()
+	}
+	return statements, ok
+}
 
-		// Expect newline or termination token.
-		if terminationToken.Type() == lexer.NEWLINE {
+func (p *Parser) evaluateBlock(callback blockCallback, ctx context, scope scope) (Block, bool) {
+	openingBracketToken := p.peek()
+	block := Block{}
+
+	defer (func() {
+		// RECOVER: Skip to closing curly bracket or next section keyword.
+		p.skipUntil(lexer.CLOSING_CURLY_BRACKET, lexer.SECTION_KEYWORD)
+
+		if p.peek().Type() == lexer.CLOSING_CURLY_BRACKET {
 			p.eat()
-		} else if !slices.Contains(terminationTokenTypes, terminationToken.Type()) {
-			err = p.expectedError("termination token", terminationToken)
-			break
 		}
-	}
-	return statements, err
-}
+	})()
 
-func (p *Parser) evaluateBlockEnd() error {
-	endToken := p.eat()
-
-	if endToken.Type() != lexer.CLOSING_CURLY_BRACKET {
-		return p.expectedError("block end", endToken)
-	}
-	return nil
-}
-
-func (p *Parser) evaluateBlock(callback blockCallback, ctx context, scope scope) ([]Statement, error) {
-	err := p.evaluateBlockBegin()
-
-	if err != nil {
-		return nil, err
-	}
-	statements, err := p.evaluateBlockContent([]lexer.TokenType{lexer.CLOSING_CURLY_BRACKET}, callback, ctx, scope)
-
-	if err != nil {
-		return nil, err
-	}
-	err = p.evaluateBlockEnd()
-
-	if err != nil {
-		return nil, err
-	}
-	return statements, nil
-}
-
-func (p *Parser) evaluateValueType(ctx context, importAliases ...string) (ValueType, error) {
-	nextToken := p.peek()
-	evaluatedType := NewValueType(NewTypeUnknown(), false)
-
-	// Evaluate if value type is a slice type.
-	if nextToken.Type() == lexer.OPENING_SQUARE_BRACKET {
-		p.eat()             // Eat opening square bracket.
-		nextToken = p.eat() // Eat closing square bracket.
-
-		if nextToken.Type() != lexer.CLOSING_SQUARE_BRACKET {
-			return evaluatedType, p.expectedError(`"]"`, nextToken)
-		}
-		evaluatedType.isSlice = true
-	}
-	var importAlias string
-
-	if len(importAliases) > 0 {
-		importAlias = strings.Join(importAliases, "")
+	if openingBracketToken.Type() != lexer.OPENING_CURLY_BRACKET {
+		p.expectedError(`"{"`, openingBracketToken)
+		return block, false
 	} else {
-		var err error
-		importAlias, nextToken, err = p.evaluateImportAlias(ctx)
-
-		if err != nil {
-			return evaluatedType, err
-		}
-	}
-
-	// Evaluate data type.
-	if nextToken.Type() != lexer.IDENTIFIER {
-		return evaluatedType, p.expectedError("data type", nextToken)
-	}
-	p.eat() // Eat data type token.
-	name := nextToken.Value()
-	prefix, _, err := p.createImportName(importAlias, name, ctx)
-
-	if err != nil {
-		return evaluatedType, err
-	}
-	foundDefinition, exists := ctx.findType(name, prefix)
-
-	if !exists {
-		return evaluatedType, p.expectedError(fmt.Sprintf("valid data type but got %s", name), nextToken)
-	}
-	evaluatedType.t = foundDefinition
-	return evaluatedType, nil
-}
-
-func (p *Parser) evaluateStructDefinition(name string, ctx context) (StructDefinition, error) {
-	structToken := p.eat()
-
-	if structToken.Type() != lexer.STRUCT {
-		return StructDefinition{}, p.expectedKeywordError("struct", structToken)
-	}
-	nextToken := p.eat()
-
-	if nextToken.Type() != lexer.OPENING_CURLY_BRACKET {
-		return StructDefinition{}, p.expectedError(`"{"`, nextToken)
-	}
-	nextToken = p.eat()
-
-	if nextToken.Type() != lexer.NEWLINE {
-		return StructDefinition{}, p.expectedNewlineError(nextToken)
-	}
-	fields := []StructField{}
-
-	// Evaluate fields.
-	for {
-		nameTokens, err := p.evaluateNames()
-
-		if err != nil {
-			return StructDefinition{}, err
-		}
-		valueType, err := p.evaluateValueType(ctx)
-
-		if err != nil {
-			return StructDefinition{}, err
-		}
-
-		for _, nameToken := range nameTokens {
-			fields = append(fields, StructField{
-				name:      nameToken.Value(),
-				valueType: valueType,
-			})
-		}
-		nextToken = p.eat()
-
-		if nextToken.Type() != lexer.NEWLINE {
-			return StructDefinition{}, p.expectedNewlineError(nextToken)
-		}
-		nextToken = p.peek()
-
-		if nextToken.Type() == lexer.CLOSING_CURLY_BRACKET {
-			p.eat() // Eat closing curly bracket and break.
-			break
-		}
-	}
-	return NewStructDefinition(name, p.prefix, fields, ctx.global()), nil
-}
-
-func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, error) {
-	typeToken := p.eat()
-
-	if typeToken.Type() != lexer.TYPE_DECLARATION {
-		return nil, p.expectedKeywordError("type", typeToken)
-	}
-	nameToken := p.eat()
-
-	if nameToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedIdentifierError(nameToken)
-	}
-	isAlias := false
-	assignToken := p.peek()
-
-	// If a type is assigned to the new type with an assign-operator,
-	// then it's just an alias.
-	if assignToken.Type() == lexer.ASSIGN_OPERATOR {
-		isAlias = true
 		p.eat()
+		block.OpeningBracket = &openingBracketToken
 	}
-	name := nameToken.Value()
-	prefix := p.prefix
-	global := ctx.global()
-	valueTypeToken := p.peek()
+	statements, ok := p.evaluateBlockContent(ctx, scope)
+	block.Statements = statements
+	closingBracketToken := p.peek()
 
-	var valueType ValueType
-	var err error
-
-	if valueTypeToken.Type() == lexer.STRUCT {
-		if isAlias {
-			return nil, p.atError("struct alias is not supported", assignToken)
-		}
-		structDefinition, err := p.evaluateStructDefinition(name, ctx)
-
-		if err != nil {
-			return nil, err
-		}
-		valueType = NewValueType(structDefinition, false)
+	if closingBracketToken.Type() != lexer.CLOSING_CURLY_BRACKET {
+		p.expectedError(`"}"`, closingBracketToken)
+		ok = false
 	} else {
-		valueType, err = p.evaluateValueType(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-		t := valueType.Type()
-
-		// Create a wrapper with the same type but different name.
-		valueType = NewValueType(NewTypeCustom(name, prefix, isAlias, t.Kind(), t, global), valueType.IsSlice())
+		// Don't eat token as it's eaten by the defered function.
+		block.ClosingBracket = &closingBracketToken
 	}
-	return NewTypeDeclaration(name, prefix, valueType, global), nil
+	return block, ok
 }
 
-func (p *Parser) evaluateNamedValueDefinition(evalConst bool, ctx context) (Statement, error) {
-	isShortVarInit := !evalConst && p.isShortVarInit()
-	noun := "variable"
-
-	if evalConst {
-		noun = "constant"
-		ctx.pushScope(SCOPE_CONST)
-	}
-
-	// Eat "var" token only, if the variable is not defined using the short init operator (:=).
-	if !isShortVarInit {
-		keywordToken := p.eat()
-		varTokenType := keywordToken.Type()
-
-		if !evalConst {
-			if varTokenType != lexer.VAR_DEFINITION {
-				return nil, p.expectedKeywordError("var", keywordToken)
-			}
-		} else if varTokenType != lexer.CONST_DEFINITION {
-			return nil, p.expectedKeywordError("const", keywordToken)
-		}
-	}
-	grouped := p.peek().Type() == lexer.OPENING_ROUND_BRACKET
-
-	if grouped {
-		p.eat() // Eat round bracket.
-		nextToken := p.eat()
-
-		if nextToken.Type() != lexer.NEWLINE {
-			return nil, p.expectedNewlineError(nextToken)
-		}
-	}
-	namedValuesDefinition := NamedValuesDefinition{}
-	useIota := false
-
-	for {
-		nameTokens, err := p.evaluateNames()
-
-		if err != nil {
-			return nil, err
-		}
-		nameTokensLength := len(nameTokens)
-		firstNameToken := nameTokens[0]
-
-		// Check if all named values are already defined.
-		if nameTokensLength > 1 {
-			alreadyDefined := 0
-
-			for _, nameToken := range nameTokens {
-				err := p.checkNewNamedValueNameToken(nameToken, ctx)
-
-				if err != nil {
-					// Only allow "re-definition" of variable via the short init operator.
-					if !isShortVarInit {
-						return nil, err
-					}
-					alreadyDefined++
-				}
-			}
-
-			if alreadyDefined == nameTokensLength {
-				return nil, p.atError(fmt.Sprintf("no new %ss", noun), firstNameToken)
-			}
-		} else {
-			err := p.checkNewNamedValueNameToken(firstNameToken, ctx)
-
-			if err != nil {
-				return nil, err
-			}
-		}
-		specifiedType := NewValueType(NewTypeUnknown(), false)
-		namedValues := []NamedValue{}
-		namedValuesToken := []lexer.Token{}
-		reuseIota := false
-
-		if isShortVarInit {
-			nextToken := p.eat() // Eat short init operator.
-
-			if nextToken.Type() != lexer.SHORT_INIT_OPERATOR {
-				return nil, p.expectedError("short initialization operator", nextToken)
-			}
-		} else {
-			nextToken := p.peek()
-
-			// If next token starts a type definition, evaluate value type.
-			if slices.Contains([]lexer.TokenType{lexer.IDENTIFIER, lexer.OPENING_SQUARE_BRACKET}, nextToken.Type()) {
-				specifiedTypeTemp, err := p.evaluateValueType(ctx)
-
-				if err != nil {
-					return nil, err
-				}
-				specifiedType = specifiedTypeTemp
-				nextToken = p.peek()
-			}
-			nextTokenType := nextToken.Type()
-			dataType := specifiedType.Type()
-
-			// If no data type has been specified and no value is being assigned, return an error.
-			if dataType.Kind() == TypeKindUnknown && nextTokenType != lexer.ASSIGN_OPERATOR {
-				// If iota has already been used in constant definition and only one value
-				// needs to be assigned, the iota value gets used automatically.
-				if evalConst && useIota && nameTokensLength == 1 {
-					reuseIota = true
-				} else {
-					return nil, p.expectedError("data type or value assignment", nextToken)
-				}
-			} else if nextTokenType == lexer.ASSIGN_OPERATOR {
-				p.eat()
-			}
-		}
-		nextToken := p.peek()
-		nextTokenType := nextToken.Type()
-
-		// Fill variables slice (might not contain the final type after this step).
-		for _, nameToken := range nameTokens {
-			prefix := p.prefix
-			name := nameToken.Value()
-			namedValue, exists := ctx.findNamedValue(name, prefix)
-
-			if !exists {
-				if evalConst {
-					namedValue = Const{}
-				} else {
-					namedValue = Variable{}
-				}
-			}
-			variableValueType := namedValue.ValueType()
-
-			// If the variable already exists, make sure it has the same type as the specified type.
-			if exists && specifiedType.Type().Kind() != TypeKindUnknown && !specifiedType.Equals(variableValueType) {
-				return nil, p.atError(fmt.Sprintf(`%s %s already exists but has type %s`, noun, name, variableValueType.String()), nextToken)
-			}
-			var newNamedValue NamedValue
-			layer := ctx.layer
-
-			if evalConst {
-				newNamedValue = NewConst(name, prefix, specifiedType, layer)
-			} else {
-				newNamedValue = NewVariable(name, prefix, specifiedType, layer)
-			}
-			namedValuesToken = append(namedValuesToken, nameToken)
-			namedValues = append(namedValues, newNamedValue)
-		}
-		values := []Expression{}
-		firstValueToken := p.peek()
-		var assignment Assignment
-
-		// TODO: Improve check (avoid NEWLINE and EOF check).
-		if nextTokenType != lexer.NEWLINE && nextTokenType != lexer.EOF {
-			evaluatedVals, err := p.evaluateValues(ctx)
-
-			// Check if iota is used.
-			if slices.ContainsFunc(evaluatedVals.values, func(value Expression) bool {
-				return value.StatementType() == STATEMENT_TYPE_IOTA
-			}) {
-				useIota = true
-				reuseIota = true
-			}
-
-			if err != nil {
-				return nil, err
-			} else if evalConst {
-				for i, evaluatedVal := range evaluatedVals.values {
-					if !evaluatedVal.IsConstant() {
-						return nil, p.expectedError("constant value", evaluatedVals.tokens[i])
-					}
-				}
-			}
-			values = evaluatedVals.values
-			valuesTypes := []ValueType{}
-			isMultiReturnFuncCall, call := evaluatedVals.isMultiReturnCall()
-
-			// If multi-return function, get function return types, else get value types.
-			if isMultiReturnFuncCall {
-				valuesTypes = call.ReturnTypes()
-			} else {
-				for _, valueTemp := range values {
-					valuesTypes = append(valuesTypes, valueTemp.ValueType())
-				}
-			}
-			valuesTypesLen := len(valuesTypes)
-			variablesLen := len(namedValues)
-
-			// Check if the amount of values is equal to the amount of variable names.
-			if valuesTypesLen != variablesLen {
-				// If only one constant needs to be initialized and iota can be used, use it.
-				if evalConst && variablesLen == 1 && reuseIota {
-					iotaExpr := IntegerLiteral{ctx.iotaCounter}
-
-					values = append(values, iotaExpr)
-					valuesTypes = append(valuesTypes, iotaExpr.ValueType())
-				} else {
-					pluralInit := ""
-					pluralValues := ""
-
-					if valuesTypesLen != 1 {
-						pluralInit = "s"
-					}
-					if variablesLen != 1 {
-						pluralValues = "s"
-					}
-					return nil, p.atError(fmt.Sprintf("got %d initialisation value%s but %d %s%s", valuesTypesLen, pluralInit, variablesLen, noun, pluralValues), nextToken)
-				}
-			}
-
-			// If a type has been specified, make sure the returned types fit this type.
-			if specifiedType.Type().Kind() != TypeKindUnknown {
-				for _, valueType := range valuesTypes {
-					if !valueType.Equals(specifiedType) {
-						return nil, p.expectedType(valueType, nextToken, specifiedType)
-					}
-				}
-			}
-
-			// Check if variables exist and if, check if the types match.
-			for i, namedValue := range namedValues {
-				valueValueType := valuesTypes[i]
-				variableValueType := namedValue.ValueType()
-
-				if variableValueType.Type().Kind() == TypeKindUnknown {
-					var updatedNamedValue NamedValue
-					name, layer, prefix := namedValue.Name(), namedValue.Layer(), namedValue.Prefix()
-
-					if evalConst {
-						updatedNamedValue = NewConst(name, prefix, valueValueType, layer)
-					} else {
-						updatedNamedValue = NewVariable(name, prefix, valueValueType, layer)
-					}
-					namedValues[i] = updatedNamedValue
-				} else if !variableValueType.Equals(valueValueType) {
-					return nil, p.expectedError(fmt.Sprintf("%s but got %s for %s %s", variableValueType.String(), valueValueType.String(), noun, namedValue.Name()), nextToken)
-				}
-			}
-
-			// If it's a function call multi assignment, build return value here.
-			if isMultiReturnFuncCall {
-				variables := []Variable{}
-
-				for _, namedValue := range namedValues {
-					variables = append(variables, namedValue.(Variable))
-				}
-				assignment = VariableDefinitionCallAssignment{
-					variables,
-					call,
-				}
-			}
-		}
-
-		if assignment == nil {
-			// If only one value needs to be initialized and iota has been assigned previously, use iota.
-			if evalConst && useIota && nameTokensLength == 1 && len(values) < nameTokensLength {
-				values = append(values, Iota{})
-			}
-			lenValues := len(values)
-
-			if evalConst && lenValues != nameTokensLength {
-				return nil, p.atError("all constants must be initialized", firstValueToken)
-			}
-
-			// Increase iota counter.
-			for i, value := range values {
-				// Replace iota by actual values.
-				if value.StatementType() == STATEMENT_TYPE_IOTA {
-					values[i] = IntegerLiteral{ctx.iotaCounter}
-				}
-				ctx.incrementIota()
-			}
-
-			// If no value has been specified, define default value.
-			if lenValues == 0 {
-				for i, namedValue := range namedValues {
-					value, err := p.defaultVarValue(namedValue.ValueType(), namedValuesToken[i], ctx)
-
-					if err != nil {
-						return nil, err
-					}
-					values = append(values, value)
-				}
-			}
-
-			if evalConst {
-				constants := []Const{}
-
-				for _, namedValue := range namedValues {
-					constants = append(constants, namedValue.(Const))
-				}
-				assignment = ConstDefinition{
-					constants,
-					values,
-				}
-			} else {
-				variables := []Variable{}
-
-				for _, namedValue := range namedValues {
-					variables = append(variables, namedValue.(Variable))
-				}
-				assignment = VariableDefinitionValueAssignment{
-					variables,
-					values,
-				}
-			}
-		}
-		namedValuesDefinition.AddAssignment(assignment)
-
-		// If it's not a grouped definition, no looping is required.
-		if !grouped {
-			break
-		}
-		nextToken = p.eat()
-
-		if nextToken.Type() != lexer.NEWLINE {
-			return nil, p.expectedNewlineError(nextToken)
-		}
-		nextToken = p.peek()
-
-		if nextToken.Type() == lexer.CLOSING_ROUND_BRACKET {
-			p.eat() // Eat closing round bracket and break.
-			break
-		}
-	}
-
-	// Pop SCOPE_CONST.
-	if evalConst {
-		ctx.popScope()
-	}
-	return namedValuesDefinition, nil
-}
-
-func (p *Parser) evaluateConstDefinition(ctx context) (Statement, error) {
-	return p.evaluateNamedValueDefinition(true, ctx)
-}
-
-func (p *Parser) evaluateVarDefinition(ctx context) (Statement, error) {
-	return p.evaluateNamedValueDefinition(false, ctx)
-}
-
-func (p *Parser) evaluateCompoundAssignment(importAlias string, ctx context) (Statement, error) {
-	nameTokens, err := p.evaluateNames()
-
-	if err != nil {
-		return nil, err
-	}
-	nameToken := nameTokens[0]
-	namesLen := len(nameTokens)
-
-	if namesLen > 1 {
-		return nil, p.expectedError("a single variable on the left side", nameToken)
-	}
-	assignToken := p.eat()
-
-	// Check assign token.
-	if assignToken.Type() != lexer.COMPOUND_ASSIGN_OPERATOR {
-		return nil, p.expectedError(`"+=", "-=", "*=", "/=" or "%="`, assignToken)
-	}
-	valuesToken := p.peek()
-	evaluatedVals, err := p.evaluateValues(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	isMultiReturnFuncCall, call := evaluatedVals.isMultiReturnCall()
-	values := evaluatedVals.values
-	valuesTypes := []ValueType{}
-
-	// If it's a multi return function call evaluate how many values are returned by the function.
-	if isMultiReturnFuncCall {
-		valuesTypes = call.ReturnTypes()
-	} else {
-		for _, value := range values {
-			valuesTypes = append(valuesTypes, value.ValueType())
-		}
-	}
-	valuesTypesLen := len(valuesTypes)
-
-	if valuesTypesLen > 1 {
-		return nil, p.expectedError("a single value on the right side", valuesToken)
-	}
-	name := nameToken.Value()
-	prefix, dotedName, err := p.createImportName(importAlias, name, ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	// Make sure variable has been defined.
-	namedValue, exists := ctx.findNamedValue(name, prefix)
-
-	if !exists {
-		return nil, p.variableNotDefinedError(dotedName, nameToken)
-	} else if namedValue.IsConstant() {
-		return nil, p.constantError(dotedName, nameToken)
-	}
-	definedVariable := namedValue.(Variable)
-	valueType := valuesTypes[0]
-	expectedValueType := namedValue.ValueType()
-
-	if valueType != expectedValueType {
-		return nil, p.expectedType(valueType, valuesToken, expectedValueType)
-	}
-	assignOperator := assignToken.Value()
-	binaryOperator := string(assignOperator[0])
-
-	if !slices.Contains(allowedBinaryOperators(valueType), binaryOperator) {
-		return nil, p.expectedError(fmt.Sprintf(`valid %s compound assign operator but got "%s"`, valueType.String(), assignOperator), assignToken)
-	}
-	return VariableAssignmentValueAssignment{
-		variables: []Variable{definedVariable},
-		values: []Expression{
-			BinaryOperation{
-				left:     VariableEvaluation{definedVariable},
-				operator: binaryOperator,
-				right:    values[0],
-			},
-		},
-	}, nil
-}
-
-func (p *Parser) evaluateVarAssignment(importAlias string, ctx context) (Statement, error) {
-	nameTokens, err := p.evaluateNames()
-
-	if err != nil {
-		return nil, err
-	}
-	assignToken := p.eat()
-
-	// Check assign token.
-	if assignToken.Type() != lexer.ASSIGN_OPERATOR {
-		return nil, p.expectedError(`"="`, assignToken)
-	}
-	valuesToken := p.peek()
-	evaluatedVals, err := p.evaluateValues(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	isMultiReturnFuncCall, call := evaluatedVals.isMultiReturnCall()
-	valuesTypes := []ValueType{}
-
-	// If it's a multi return function call evaluate how many values are returned by the function.
-	if isMultiReturnFuncCall {
-		valuesTypes = call.ReturnTypes()
-	} else {
-		for _, value := range evaluatedVals.values {
-			valuesTypes = append(valuesTypes, value.ValueType())
-		}
-	}
-	namesLen := len(nameTokens)
-	valuesTypesLen := len(valuesTypes)
-
-	// Make sure variables and values match in length.
-	if namesLen != valuesTypesLen {
-		return nil, p.atError(fmt.Sprintf("got %d values but %d variables", valuesTypesLen, namesLen), valuesToken)
-	}
-	variables := []Variable{}
-
-	for i, nameToken := range nameTokens {
-		name := nameToken.Value()
-		prefix, dotedName, err := p.createImportName(importAlias, name, ctx)
-
-		if err != nil {
-			return nil, err
-		}
-		// Make sure variable has been defined.
-		namedValue, exists := ctx.findNamedValue(name, prefix)
-
-		if !exists {
-			return nil, p.variableNotDefinedError(dotedName, nameToken)
-		} else if namedValue.IsConstant() {
-			return nil, p.constantError(dotedName, nameToken)
-		}
-		valueType := valuesTypes[i]
-		expectedValueType := namedValue.ValueType()
-
-		if !valueType.Equals(expectedValueType) {
-			return nil, p.expectedType(valueType, valuesToken, expectedValueType)
-		}
-		variables = append(variables, NewVariable(namedValue.Name(), prefix, valueType, namedValue.Layer()))
-	}
-
-	if isMultiReturnFuncCall {
-		return VariableAssignmentCallAssignment{
-			variables,
-			call,
-		}, nil
-	}
-	return VariableAssignmentValueAssignment{
-		variables: variables,
-		values:    evaluatedVals.values,
-	}, nil
-}
-
-func (p *Parser) evaluateParams(ctx context) ([]Param, error) {
-	params := []Param{}
-	optional := false
-
-	for {
-		// If closing bracket has been discovered, all parameters have been parsed.
-		if p.peek().Type() == lexer.CLOSING_ROUND_BRACKET {
-			break
-		}
-		names := []string{}
-
-		for {
-			nameToken := p.peek()
-			nameTokenType := nameToken.Type()
-
-			if nameTokenType != lexer.IDENTIFIER {
-				return params, p.expectedError("parameter name", nameToken)
-			}
-			p.eat()
-
-			name := nameToken.Value()
-			_, exists := ctx.findNamedValue(name, p.prefix)
-
-			if exists {
-				return params, fmt.Errorf("scope already contains a variable with the name %s", name)
-			}
-			names = append(names, name)
-
-			if p.peek().Type() != lexer.COMMA {
-				break
-			}
-			p.eat() // Eat comma token.
-		}
-		length := len(names)
-		dotToken := p.peek()
-
-		// Find out if the parameter as an optional parameter.
-		if dotToken.Type() == lexer.DOT {
-			if length > 1 {
-				return params, p.atError("only one optional parameter is allowed", dotToken)
-			}
-			p.eat() // Eat dot token.
-			expectedDotError := p.expectedError(`"..."`, dotToken)
-
-			// Consume two more dots.
-			if p.eat().Type() != lexer.DOT {
-				return params, expectedDotError
-			} else if p.eat().Type() != lexer.DOT {
-				return params, expectedDotError
-			}
-			optional = true
-		}
-		pointer := false
-		pointerToken := p.peek()
-
-		if pointerToken.Type() == lexer.BINARY_OPERATOR {
-			p.eat()
-			pointerValue := pointerToken.Value()
-
-			if pointerValue != "*" {
-				return nil, p.expectedError(fmt.Sprintf(`"*" but got "%s"`, pointerValue), pointerToken)
-			}
-			pointer = true
-		}
-		valueTypeToken := p.peek()
-		valueType, err := p.evaluateValueType(ctx)
-
-		if err != nil {
-			return nil, err
-		} else if pointer && valueType.Type().Kind() != TypeKindStruct {
-			return nil, p.atError(fmt.Sprintf("pointers are only supported for structs but got %s", valueType.String()), valueTypeToken)
-		}
-		nextToken := p.peek()
-		nextTokenType := nextToken.Type()
-
-		if nextTokenType != lexer.COMMA && nextTokenType != lexer.CLOSING_ROUND_BRACKET {
-			return params, p.expectedError(`"," or ")"`, nextToken)
-		} else if nextTokenType == lexer.COMMA {
-			if optional {
-				return params, p.atError("no more parameters allowed after optional parameter", nextToken)
-			}
-			p.eat()
-		}
-
-		for _, name := range names {
-			params = append(params, NewParam(name, valueType, ctx.layer+1, pointer, optional))
-		}
-	}
-	return params, nil
-}
-
-func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, error) {
-	functionToken := p.eat()
-
-	if !ctx.global() {
-		return nil, p.expectedError("function definition at top level", functionToken)
-	}
-	if functionToken.Type() != lexer.FUNCTION_DEFINITION {
-		return nil, p.expectedKeywordError("func", functionToken)
-	}
-	nextToken := p.peek()
-	var receiver *Param
-
-	// Evaluate possible receiver.
-	if nextToken.Type() == lexer.OPENING_ROUND_BRACKET {
-		p.eat()
-		receiverToken := p.peek()
-		receivers, err := p.evaluateParams(ctx)
-
-		if err != nil {
-			return nil, err
-		} else if len(receivers) != 1 {
-			return nil, p.expectedError("exactly one receiver", receiverToken)
-		}
-		receiver = &receivers[0]
-
-		if receiver.ValueType().IsSlice() {
-			return nil, p.atError("slices are not allowed as receivers", receiverToken)
-		}
-		nextToken = p.eat()
-
-		if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
-			return nil, p.expectedError(`")"`, nextToken)
-		}
-	}
-	nameToken := p.eat()
-
-	if nameToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedError("function name", nameToken)
-	}
-	prefix := p.prefix
-	name := nameToken.Value()
-
-	// If a receiver exists, add its type name to the function name.
-	if receiver != nil {
-		name = buildReceiverFunctionName(receiver.ValueType().Type().Name(), name)
-	}
-
-	// Make sure no function exists with the same name.
-	_, exists := ctx.findFunction(name, prefix)
-
-	if exists {
-		return nil, p.expectedError("unique function name", nameToken)
-	}
-	openingBrace := p.peek()
-	params := []Param{}
-
-	// Clone context to avoid modification of the original.
-	ctx = ctx.clone()
-
-	// Remove all named values that are not global.
-	for key := range ctx.namedValues {
-		ctx.namedValues[key] = slices.DeleteFunc(ctx.namedValues[key], func(v NamedValue) bool {
-			return !v.Global()
-		})
-	}
-
-	// If no parameters are given, the brackets are optional.
-	if openingBrace.Type() == lexer.OPENING_ROUND_BRACKET {
-		var err error
-
-		p.eat()
-		params, err = p.evaluateParams(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-		closingBrace := p.eat()
-
-		if closingBrace.Type() != lexer.CLOSING_ROUND_BRACKET {
-			return nil, p.expectedError(`")"`, closingBrace)
-		}
-	}
-	returnTypeToken := p.peek()
-	multiple := false
-	returnTypes := []ValueType{}
-
-	if returnTypeToken.Type() == lexer.OPENING_ROUND_BRACKET {
-		p.eat()
-		returnTypeToken = p.peek()
-		multiple = true
-	}
-
-	for {
-		// Check if a return type has been specified.
-		if slices.Contains([]lexer.TokenType{lexer.IDENTIFIER, lexer.OPENING_SQUARE_BRACKET}, returnTypeToken.Type()) {
-			returnTypeTemp, err := p.evaluateValueType(ctx)
-
-			if err != nil {
-				return nil, err
-			}
-			returnTypes = append(returnTypes, returnTypeTemp)
-		}
-
-		if !multiple {
-			break
-		}
-		nextToken := p.eat()
-		nextTokenType := nextToken.Type()
-
-		if nextTokenType == lexer.CLOSING_ROUND_BRACKET {
-			break
-		} else if nextTokenType != lexer.COMMA {
-			return nil, p.expectedError(`"," or ")"`, nextToken)
-		}
-		returnTypeToken = p.peek()
-	}
-
-	// If a receiver exists, add it as first param.
-	if receiver != nil {
-		params = slices.Insert(params, 0, *receiver)
-	}
-
-	// Add parameters to variables.
-	for _, param := range params {
-		if param.Optional() {
-			param.valueType = NewValueType(param.valueType.Type(), true)
-		}
-		err := ctx.addNamedValues(param)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-	funcDef := NewFunctionDefinition(name, prefix, returnTypes, params, []Statement{})
-
-	// Make sure sub-statements know in which function they are currently in.
-	p.currFunc = &funcDef
-
-	blockStartToken := p.peek()
-	statements, err := p.evaluateBlock(func(statements []Statement, last bool) error {
-		var errTemp error
-		var lastStatement Statement
-		length := len(statements)
-
-		if length > 0 {
-			lastStatement = statements[length-1]
-		}
-
-		if len(returnTypes) > 0 {
-			// If a return value is required, the last statement must be a return statement.
-			if last {
-				if lastStatement == nil || lastStatement.StatementType() != STATEMENT_TYPE_RETURN {
-					errTemp = p.atError(fmt.Sprintf(`function "%s" requires a return statement at the end of the block`, name), blockStartToken)
-				} else if returnStatement := lastStatement.(Return); len(returnStatement.Values()) != len(returnTypes) {
-					errTemp = p.atError(fmt.Sprintf(`function "%s" requires %d return values but returns %d`, name, len(returnTypes), len(returnStatement.Values())), blockStartToken)
-				} else {
-					for i, returnValue := range returnStatement.Values() {
-						returnType := returnTypes[i]
-						returnValueType := returnValue.ValueType()
-
-						if !returnValueType.Equals(returnType) {
-							errTemp = p.atError(fmt.Sprintf(`function "%s" returns %s but expects %s`, name, returnValueType.String(), returnType.String()), blockStartToken)
-							break
-						}
-					}
-				}
-			}
-		} else if lastStatement != nil && lastStatement.StatementType() == STATEMENT_TYPE_RETURN {
-			errTemp = fmt.Errorf("function %s must not have a return statement", name)
-		}
-		return errTemp
-	}, ctx, SCOPE_FUNCTION)
-
-	if err != nil {
-		return nil, err
-	}
-	funcDef.body = statements
-	p.currFunc = nil
-
-	return funcDef, nil
-}
-
-func (p *Parser) evaluateReturn(ctx context) (Statement, error) {
-	returnToken := p.eat()
-
-	if !ctx.findScope(SCOPE_FUNCTION) {
-		return nil, p.expectedError(fmt.Sprintf("return within %s-scope", SCOPE_FUNCTION), returnToken)
-	}
-	if returnToken.Type() != lexer.RETURN {
-		return nil, p.expectedKeywordError("return", returnToken)
-	}
-	evaluatedVals, err := p.evaluateValues(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	return Return{
-		values: evaluatedVals.values,
-	}, nil
-}
-
-func (p *Parser) evaluateBreak(ctx context) (Statement, error) {
-	breakToken := p.eat()
-	breakScopes := []scope{SCOPE_FOR, SCOPE_SWITCH}
-	scopeOk := false
-
-	for _, breakScope := range breakScopes {
-		if ctx.findScope(breakScope) {
-			scopeOk = true
-			break
-		}
-	}
-
-	if !scopeOk {
-		return nil, p.expectedError(fmt.Sprintf("break statement within %s-scope", strings.Join(scopesToString(breakScopes), "- or ")), breakToken)
-	}
-	return Break{}, nil
-}
-
-func (p *Parser) evaluateIota(ctx context) (Expression, error) {
-	iotaToken := p.eat()
-
-	if iotaToken.Type() != lexer.IOTA {
-		return nil, p.expectedKeywordError("iota", iotaToken)
-	} else if ctx.currentScope() != SCOPE_CONST {
-		return nil, p.atError("cannot use iota outside constant declaration", iotaToken)
-	}
-	return Iota{}, nil
-}
-
-func (p *Parser) evaluateContinue(ctx context) (Statement, error) {
-	continueToken := p.eat()
-	breakScopes := []scope{SCOPE_FOR}
-	scopeOk := false
-
-	for _, breakScope := range breakScopes {
-		if ctx.findScope(breakScope) {
-			scopeOk = true
-			break
-		}
-	}
-
-	if !scopeOk {
-		return nil, p.expectedError(fmt.Sprintf("continue statement within %s-scope", strings.Join(scopesToString(breakScopes), "- or ")), continueToken)
-	}
-	return Continue{}, nil
-}
-
-func (p *Parser) evaluateIf(ctx context) (Statement, error) {
-	var ifStatement If
-
-	for i := 0; true; i++ {
-		ifRequired := i == 0
-		nextToken := p.peek()
-		nextTokenType := nextToken.Type()
-		evaluateCondition := true
-		var condition Expression
-
-		// "if" needs to start with if-token.
-		if ifRequired {
-			if nextTokenType != lexer.IF {
-				return nil, p.expectedKeywordError("if", nextToken)
-			}
-			p.eat()
-		} else {
-			if nextTokenType != lexer.ELSE {
-				break
-			}
-			p.eat()
-
-			if p.peek().Type() != lexer.IF {
-				evaluateCondition = false
-			} else {
-				p.eat()
-			}
-		}
-
-		if evaluateCondition {
-			conditionToken := p.peek()
-			expr, err := p.evaluateExpression(ctx)
-
-			if err != nil {
-				return nil, err
-			}
-			if !expr.ValueType().IsBool() {
-				return nil, p.expectedError("boolean expression", conditionToken)
-			}
-			condition = expr
-		}
-		statements, err := p.evaluateBlock(nil, ctx, SCOPE_IF)
-
-		if err != nil {
-			return nil, err
-		}
-
-		// During the first iteration, the initial if statement has to be created.
-		if ifRequired {
-			ifStatement = If{
-				ifBranch: IfBranch{
-					condition: condition,
-					body:      statements,
-				},
-			}
-		} else {
-			// If condition has not been evaluated, it is the else-branch, otherwise it's an else-if-branch.
-			if !evaluateCondition {
-				ifStatement.elseBranch = Else{
-					body: statements,
-				}
-			} else {
-				ifStatement.elifBranches = append(ifStatement.elifBranches, IfBranch{
-					condition: condition,
-					body:      statements,
-				})
-			}
-		}
-	}
-	return ifStatement, nil
-}
-
-func (p *Parser) evaluateSwitch(ctx context) (Statement, error) {
-	switchToken := p.eat()
-
-	if switchToken.Type() != lexer.SWITCH {
-		return nil, p.expectedKeywordError("switch", switchToken)
-	}
-	var switchExpr Expression
-	var err error
-
-	exprToken := p.peek()
-
-	if exprToken.Type() == lexer.OPENING_CURLY_BRACKET {
-		switchExpr = BooleanLiteral{true}
-	} else {
-		switchExpr, err = p.evaluateExpression(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-	switchExprValueType := switchExpr.ValueType()
-
-	if switchExprValueType.IsSlice() {
-		return nil, p.atError("slices are not allowed in switch statements", exprToken)
-	}
-	beginToken := p.eat()
-
-	if beginToken.Type() != lexer.OPENING_CURLY_BRACKET {
-		return nil, p.expectedError(`{`, beginToken)
-	}
-	nextToken := p.eat()
-
-	if nextToken.Type() != lexer.NEWLINE {
-		return nil, p.expectedNewlineError(nextToken)
-	}
-	fakeIf := If{
-		ifBranch: IfBranch{
-			condition: BooleanLiteral{false}, // Use a fake if-branch that isn't entered if only a default branch has been set in switch.
-			body:      []Statement{},
-		},
-	}
-	useMock := true
-	nextToken = p.peek()
-	defaultSet := false
-
-	// While switch has not been terminated, evaluate cases.
-	for nextToken.Type() != lexer.CLOSING_CURLY_BRACKET {
-		var compareExpr Expression
-		var compareExprToken lexer.Token
-
-		switch nextToken.Type() {
-		case lexer.CASE:
-			p.eat() // Eat case-token.
-			compareExprToken = p.peek()
-			exprTemp, err := p.evaluateExpression(ctx)
-
-			if err != nil {
-				return nil, err
-			}
-			compareExpr = exprTemp
-		case lexer.DEFAULT:
-			p.eat() // Eat default-token.
-		default:
-			return nil, p.expectedError(`"case", "default" or "}"`, nextToken)
-		}
-		colonToken := p.eat()
-
-		if colonToken.Type() != lexer.COLON {
-			return nil, p.expectedError(`":"`, colonToken)
-		}
-		statements, err := p.evaluateBlockContent([]lexer.TokenType{lexer.CASE, lexer.DEFAULT, lexer.CLOSING_CURLY_BRACKET}, nil, ctx, SCOPE_SWITCH)
-
-		if err != nil {
-			return nil, err
-		}
-
-		// Check if non-default case.
-		if compareExpr != nil {
-			compareExprValueType := compareExpr.ValueType()
-
-			if !switchExprValueType.Equals(compareExprValueType) {
-				return nil, p.atError(fmt.Sprintf("%s value cannot be compared with switch's %s value", compareExprValueType.String(), switchExprValueType.String()), compareExprToken)
-			}
-			ifBranch := IfBranch{
-				condition: NewComparison(switchExpr, COMPARE_OPERATOR_EQUAL, compareExpr),
-				body:      statements,
-			}
-
-			// If fake-if has not been overwritten, overwrite it now.
-			if useMock {
-				fakeIf.ifBranch = ifBranch
-				useMock = false
-			} else {
-				fakeIf.elifBranches = append(fakeIf.elifBranches, ifBranch)
-			}
-		} else if !defaultSet {
-			fakeIf.elseBranch = Else{
-				body: statements,
-			}
-			defaultSet = true
-		} else {
-			return nil, p.atError("multiple default cases are not allowed", nextToken)
-		}
-		nextToken = p.peek()
-	}
-	p.eat() // Eat "}" token.
-
-	if nextToken.Type() != lexer.CLOSING_CURLY_BRACKET {
-		return nil, p.expectedError(`"}"`, nextToken)
-	}
-	return fakeIf, nil
-}
-
-func (p *Parser) evaluateFor(ctx context) (Statement, error) {
-	forToken := p.eat()
-
-	if forToken.Type() != lexer.FOR {
-		return nil, p.expectedKeywordError("for", forToken)
-	}
-	var stmt Statement
-	nextToken := p.peek()
-	nextTokenType := nextToken.Type()
-	nextAfterNextTokenType := p.peekAt(1).Type()
-
-	// Clone context to avoid modification of the original.
-	ctx = ctx.clone()
-
-	// If next token is an identifier and the one after it a comma or a short-init operator and range keyword, parse a for-range statement.
-	if nextTokenType == lexer.IDENTIFIER && (nextAfterNextTokenType == lexer.COMMA || (nextAfterNextTokenType == lexer.SHORT_INIT_OPERATOR && p.peekAt(2).Type() == lexer.RANGE)) {
-		p.eat()
-		err := p.checkNewNamedValueNameToken(nextToken, ctx)
-
-		if err != nil {
-			return nil, err
-		}
-		indexVarName := nextToken.Value()
-		nextToken = p.peek()
-		namedValueToken := nextToken
-		valueVarName := ""
-
-		if nextToken.Type() == lexer.COMMA {
-			p.eat()
-			nextToken = p.eat()
-
-			if nextToken.Type() != lexer.IDENTIFIER {
-				return nil, p.expectedIdentifierError(nextToken)
-			}
-			err = p.checkNewNamedValueNameToken(nextToken, ctx)
-
-			if err != nil {
-				return nil, err
-			}
-			valueVarName = nextToken.Value()
-		}
-		nextToken = p.eat()
-		hasNamedVar := len(valueVarName) > 0
-
-		if nextToken.Type() != lexer.SHORT_INIT_OPERATOR {
-			return nil, p.expectedError(`":=" or ","`, nextToken)
-		}
-		nextToken = p.eat()
-
-		if nextToken.Type() != lexer.RANGE {
-			return nil, p.expectedKeywordError("range", nextToken)
-		}
-		nextToken := p.peek()
-		iterableExpression, err := p.evaluateExpression(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-		iterableValueType := iterableExpression.ValueType()
-		layer := ctx.layer + 1
-		indexVar := NewVariable(indexVarName, "", NewValueType(NewTypeInt(), false), layer)
-		numberIteration := false
-		var iterableEvaluation Expression
-
-		if iterableValueType.IsSlice() {
-			iterableEvaluation = SliceEvaluation{
-				value:     iterableExpression,
-				index:     VariableEvaluation{indexVar},
-				valueType: iterableValueType,
-			}
-		} else if iterableValueType.IsString() {
-			iterableEvaluation = StringSubscript{
-				value:      iterableExpression,
-				startIndex: VariableEvaluation{indexVar},
-			}
-		} else if iterableValueType.IsInt() {
-			iterableEvaluation = iterableExpression
-			numberIteration = true
-		} else {
-			return nil, p.expectedError("slice, string or integer", nextToken)
-		}
-		iterableValueType.isSlice = false // Make sure the value var is not a slice.
-		forRangeStatements := []Statement{}
-		prefix := p.prefix
-
-		// Add count variable.
-		ctx.addNamedValues(indexVar)
-
-		// If no value variable has been provided, there's no need to add it.
-		if hasNamedVar {
-			if numberIteration {
-				return nil, p.atError("only one iteration variable is allowed", namedValueToken)
-			}
-			valueVar := NewVariable(valueVarName, prefix, iterableValueType, layer)
-
-			// Add value variable.
-			ctx.addNamedValues(valueVar)
-
-			forRangeStatements = []Statement{
-				VariableAssignmentValueAssignment{
-					variables: []Variable{valueVar},
-					values:    []Expression{iterableEvaluation},
-				},
-			}
-		}
-		length := iterableExpression
-
-		if !numberIteration {
-			length = Len{iterableExpression}
-		}
-
-		init := VariableAssignmentValueAssignment{
-			variables: []Variable{indexVar},
-			values:    []Expression{IntegerLiteral{0}},
-		}
-		condition := Comparison{
-			left:     VariableEvaluation{indexVar},
-			operator: COMPARE_OPERATOR_LESS,
-			right:    length,
-		}
-		increment := incrementDecrementStatement(indexVar, true)
-		statements, err := p.evaluateBlock(nil, ctx, SCOPE_FOR)
-
-		if err != nil {
-			return nil, err
-		}
-
-		stmt = For{
-			init:      init,
-			condition: condition,
-			increment: increment,
-			body:      append(forRangeStatements, statements...),
-		}
-	} else {
-		var init Statement
-		var condition Expression
-		var increment Statement
-
-		conditionToken := nextToken
-		trueCondition := BooleanLiteral{value: true}
-
-		// If next token is already a curly brackets, it's an endless loop without a condition.
-		// Therefore create a fake condition.
-		if nextTokenType == lexer.OPENING_CURLY_BRACKET {
-			condition = trueCondition
-		} else if _, err := p.findBefore(lexer.SEMICOLON, lexer.OPENING_CURLY_BRACKET); err == nil {
-			// If a semicolon was found before the curly bracket, consider for as a three-part for-loop.
-			nextToken := p.peek()
-
-			// If the next token is not a semicolon, consider it a statement.
-			if nextToken.Type() != lexer.SEMICOLON {
-				init, err = p.evaluateStatement(ctx)
-
-				if err != nil {
-					return nil, err
-				}
-
-				switch init.StatementType() {
-				case STATEMENT_TYPE_NAMED_VALUES_DEFINITION:
-					assignment := init.(NamedValuesDefinition).Assignments()[0]
-
-					switch t := assignment.(type) {
-					case VariableDefinitionValueAssignment:
-						// Store new variable.
-						for _, variable := range t.Variables() {
-							err = ctx.addNamedValues(variable)
-
-							if err != nil {
-								return nil, err
-							}
-						}
-					case VariableDefinitionCallAssignment:
-						// Store new variable.
-						for _, variable := range t.Variables() {
-							err = ctx.addNamedValues(variable)
-
-							if err != nil {
-								return nil, err
-							}
-						}
-					case ConstDefinition:
-						// Store new variable.
-						for _, variable := range t.Constants() {
-							err = ctx.addNamedValues(variable)
-
-							if err != nil {
-								return nil, err
-							}
-						}
-					}
-				case STATEMENT_TYPE_VAR_ASSIGNMENT_VALUE_ASSIGNMENT:
-				default:
-					return nil, p.expectedError("variable assignment or variable definition", nextToken)
-
-				}
-			}
-			nextToken = p.eat()
-
-			// Next token must be a semicolon.
-			if nextToken.Type() != lexer.SEMICOLON {
-				return nil, p.expectedError(`";"`, nextToken)
-			}
-			nextToken = p.peek()
-			conditionToken = nextToken
-
-			// If the next token is not a semicolon, consider it a condition.
-			if nextToken.Type() != lexer.SEMICOLON {
-				condition, err = p.evaluateExpression(ctx)
-
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				condition = trueCondition
-			}
-			nextToken = p.eat()
-
-			// Next token must be a semicolon.
-			if nextToken.Type() != lexer.SEMICOLON {
-				return nil, p.expectedError(`";"`, nextToken)
-			}
-			nextToken = p.peek()
-
-			if nextToken.Type() != lexer.OPENING_CURLY_BRACKET {
-				increment, err = p.evaluateStatement(ctx)
-
-				if err != nil {
-					return nil, err
-				}
-				switch increment.StatementType() {
-				case STATEMENT_TYPE_VAR_ASSIGNMENT_VALUE_ASSIGNMENT:
-				default:
-					return nil, p.expectedError("variable assignment", nextToken)
-				}
-			}
-		} else {
-			exprTemp, err := p.evaluateExpression(ctx)
-
-			if err != nil {
-				return nil, err
-			}
-			condition = exprTemp
-		}
-
-		if !condition.ValueType().IsBool() {
-			return nil, p.expectedError("boolean expression", conditionToken)
-		}
-		statements, err := p.evaluateBlock(nil, ctx, SCOPE_FOR)
-
-		if err != nil {
-			return nil, err
-		}
-		stmt = For{
-			init:      init,
-			condition: condition,
-			increment: increment,
-			body:      statements,
-		}
-	}
-	return stmt, nil
-}
-
-func (p *Parser) evaluateTypeDefinition(importAlias string, ctx context) (Expression, error) {
-	identifierToken := p.eat() // Eat identifier token.
-
-	if identifierToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedIdentifierError(identifierToken)
-	}
-	name := identifierToken.Value()
-	prefix, dotedName, err := p.createImportName(importAlias, name, ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	definitionTypeDeclaration, exists := ctx.findType(name, prefix)
-
-	if !exists {
-		return nil, p.typeNotDefinedError(dotedName, identifierToken)
-	}
-	nextToken := p.eat()
-
-	if nextToken.Type() != lexer.OPENING_ROUND_BRACKET {
-		return nil, p.expectedError(`"("`, nextToken)
-	}
-	nextToken = p.peek()
-	expr, err := p.evaluateExpression(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	exprValueType := expr.ValueType()
-
-	if !exists {
-		return nil, p.typeNotDefinedError(dotedName, identifierToken)
-	}
-	definitionAliasType := definitionTypeDeclaration.ElementaryType()
-	exprAliasType := exprValueType.Type().ElementaryType()
-
-	if !definitionAliasType.Equals(exprAliasType) {
-		return nil, p.atError(fmt.Sprintf(`%s cannot be converted into %s`, exprValueType.String(), definitionTypeDeclaration.Name()), nextToken)
-	}
-	nextToken = p.eat()
-
-	if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
-		return nil, p.expectedError(`")"`, nextToken)
-	}
-
-	return TypeDefinition{
-		value:     expr,
-		valueType: NewValueType(definitionTypeDeclaration, exprValueType.IsSlice()),
-	}, nil
-}
-
-func (p *Parser) evaluateStructFields(importAlias string, stopOnLastStruct bool, ctx context) (Expression, StructField, error) {
-	identifierToken := p.peek() // Eat identifier token.
-
-	if identifierToken.Type() != lexer.IDENTIFIER {
-		return nil, StructField{}, p.expectedIdentifierError(identifierToken)
-	}
-	value, err := p.evaluateNamedValueEvaluation(importAlias, ctx)
-
-	if err != nil {
-		return nil, StructField{}, err
-	}
-	return p.evaluateStructFieldsFromExpression(importAlias, value, identifierToken, stopOnLastStruct, ctx)
-}
-
-func (p *Parser) evaluateStructFieldsFromExpression(importAlias string, structExpression Expression, structExpressionToken lexer.Token, stopOnLastStruct bool, ctx context) (Expression, StructField, error) {
-	kind := structExpression.ValueType().Type().Kind()
-
-	if kind != TypeKindStruct {
-		return nil, StructField{}, p.atError(fmt.Sprintf("struct type but got %s", kind), structExpressionToken)
-	}
-	expr := structExpression
-	dotToken := p.eat()
-
-	if dotToken.Type() != lexer.DOT {
-		return nil, StructField{}, p.expectedError(`"."`, dotToken)
-	}
-	fieldToken := p.peek()
-
-	if fieldToken.Type() != lexer.IDENTIFIER {
-		return nil, StructField{}, p.expectedError("field name", fieldToken)
-	}
-	typeDeclaration := structExpression.ValueType().Type()
-	typeDeclarationKind := typeDeclaration.Kind()
-
-	if typeDeclarationKind != TypeKindStruct {
-		return nil, StructField{}, p.expectedError(fmt.Sprintf("%s but got %s", TypeKindStruct, typeDeclarationKind), structExpressionToken)
-	}
-	structDefinition := typeDeclaration.(StructDefinition)
-
-	// Check field.
-	fieldName := fieldToken.Value()
-	isCall := p.peekAt(1).Type() == lexer.OPENING_ROUND_BRACKET
-
-	if isCall {
-		if !expr.ValueType().SupportsField() {
-			return nil, StructField{}, p.atError(fmt.Sprintf("%s is not a struct", fieldName), fieldToken)
-		}
-		expr, err := p.evaluateFunctionCall(importAlias, expr, ctx)
-
-		if err != nil {
-			return nil, StructField{}, err
-		}
-		return expr, StructField{}, nil
-	} else {
-		p.eat() // Eat field name token.
-		foundField, err := structDefinition.FindField(fieldName, p.prefix)
-
-		if err != nil {
-			return nil, StructField{}, p.atError(err.Error(), fieldToken)
-		}
-		structField := foundField
-		exprTemp := StructEvaluation{
-			value: structExpression,
-			field: foundField,
-		}
-		exprTempValueType := exprTemp.ValueType()
-		nextToken := p.peek()
-		nextTokenType := nextToken.Type()
-
-		// Allow chaining.
-		if nextTokenType == lexer.OPENING_SQUARE_BRACKET && exprTempValueType.SupportsSubscript() {
-			expr, _, err = p.evaluateChaining(exprTemp, ctx)
-			structField = StructField{}
-		} else if nextTokenType == lexer.DOT && exprTempValueType.SupportsField() {
-			expr, structField, err = p.evaluateStructFieldsFromExpression(importAlias, exprTemp, nextToken, stopOnLastStruct, ctx)
-		} else if !stopOnLastStruct {
-			expr = exprTemp
-		}
-		return expr, structField, err
-	}
-}
-
-func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expression, error) {
-	expr, _, err := p.evaluateStructFields(importAlias, false, ctx)
-	return expr, err
-}
-
-func (p *Parser) evaluateNamedValueEvaluation(importAlias string, ctx context) (Expression, error) {
-	identifierToken := p.eat() // Eat identifier token.
-
-	if identifierToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedIdentifierError(identifierToken)
-	}
-	name := identifierToken.Value()
-	prefix, dotedName, err := p.createImportName(importAlias, name, ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	namedValue, exists := ctx.findNamedValue(name, prefix)
-
-	if !exists {
-		return nil, p.variableNotDefinedError(dotedName, identifierToken)
-	}
-
-	if namedValue.IsConstant() {
-		return ConstEvaluation{
-			Const: namedValue.(Const),
-		}, nil
-	}
-	param, isParam := namedValue.(Param)
-	var variable Variable
-
-	if isParam {
-		variable = NewVariable(param.Name(), prefix, param.ValueType(), param.Layer())
-	} else {
-		variable = namedValue.(Variable)
-	}
-	return VariableEvaluation{
-		Variable: variable,
-	}, nil
-}
-
-func (p *Parser) evaluateImportAlias(ctx context) (string, lexer.Token, error) {
-	nextToken := p.peek()
-
-	// If next token is an identifier, try to find an import for it.
-	if nextToken.Type() == lexer.IDENTIFIER {
-		alias := nextToken.Value()
-		_, exists := ctx.findImport(alias)
-
-		if exists {
-			p.eat()
-			nextToken = p.eat() // Eat dot token.
-
-			if nextToken.Type() != lexer.DOT {
-				return "", nextToken, p.expectedError(`"."`, nextToken)
-			}
-			return alias, p.peek(), nil
-		}
-	}
-	return "", nextToken, nil
-}
-
-func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
-	var err error
+// func (p *Parser) evaluateValueType(ctx context, importAliases ...string) (ValueType, error) {
+
+// }
+
+// func (p *Parser) evaluateStructDefinition(name string, ctx context) (StructDefinition, error) {
+
+// }
+
+// func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, bool) {
+
+// }
+
+// func (p *Parser) evaluateVarDefinition(ctx context) (Statement, bool) {
+
+// }
+
+// func (p *Parser) evaluateCompoundAssignment(importAlias string, ctx context) (Statement, error) {
+
+// }
+
+// func (p *Parser) evaluateVarAssignment(importAlias string, ctx context) (Statement, error) {
+
+// }
+
+// func (p *Parser) evaluateParams(ctx context) ([]Param, error) {
+
+// }
+
+// func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, bool) {
+
+// }
+
+// func (p *Parser) evaluateReturn(ctx context) (Statement, bool) {
+
+// }
+
+// func (p *Parser) evaluateBreak(ctx context) (Statement, bool) {
+
+// }
+
+// func (p *Parser) evaluateIota(ctx context) (Expression, error) {
+
+// }
+
+// func (p *Parser) evaluateContinue(ctx context) (Statement, bool) {
+
+// }
+
+// func (p *Parser) evaluateIf(ctx context) (Statement, bool) {
+
+// }
+
+// func (p *Parser) evaluateSwitch(ctx context) (Statement, bool) {
+
+// }
+
+// func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
+
+// }
+
+// func (p *Parser) evaluateTypeDefinition(importAlias string, ctx context) (Expression, error) {
+
+// }
+
+// func (p *Parser) evaluateStructFields(importAlias string, stopOnLastStruct bool, ctx context) (Expression, StructField, error) {
+
+// }
+
+// func (p *Parser) evaluateStructFieldsFromExpression(importAlias string, structExpression Expression, structExpressionToken lexer.Token, stopOnLastStruct bool, ctx context) (Expression, StructField, error) {
+
+// }
+
+// func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expression, error) {
+
+// }
+
+// func (p *Parser) evaluateVarEvaluation(importAlias string, ctx context) (Expression, error) {
+
+// }
+
+// func (p *Parser) evaluateImportAlias(ctx context) (string, lexer.Token, error) {
+
+// }
+
+func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 	var expr Expression
 
-	token := p.peek()
-	tokenType := token.Type()
-	value := token.Value()
+	nextToken := p.peek()
+	nextTokenType := nextToken.Type()
+	value := nextToken.Value()
 
-	switch tokenType {
-
-	// Handle literals.
+	switch nextTokenType {
+	// String literal.
 	case lexer.BOOL_LITERAL:
-		p.eat() // Eat bool token.
+		p.eat()
 		b, err := strconv.ParseBool(value)
 
 		if err != nil {
-			return nil, err
+			p.atError(err.Error(), nextToken)
+		} else {
+			expr = NewBooleanLiteral(b, nextToken)
 		}
-		expr = BooleanLiteral{
-			value: b,
-		}
+	// Number literal.
 	case lexer.NUMBER_LITERAL:
-		p.eat() // Eat number token.
-		// TODO: Implement float handling.
-		integer, err := strconv.Atoi(value)
+		p.eat()
+		i, err := strconv.Atoi(value)
 
 		if err != nil {
-			return nil, err
+			p.atError(err.Error(), nextToken)
+		} else {
+			expr = NewIntegerLiteral(i, nextToken)
 		}
-		expr = IntegerLiteral{
-			value: integer,
-		}
-	case lexer.NIL_LITERAL:
-		p.eat()                // Eat string token.
-		expr = StringLiteral{} // nil is an empty string literal.
+	// String literal.
 	case lexer.STRING_LITERAL:
-		p.eat() // Eat string token.
-		expr = StringLiteral{
-			value: value,
-		}
-		nextToken := p.peek()
-
-		if nextToken.Type() == lexer.OPENING_SQUARE_BRACKET {
-			expr, err = p.evaluateSubscriptFromExpression(expr, nextToken, ctx)
-		}
-
-	// Handle groups.
-	case lexer.OPENING_ROUND_BRACKET:
-		p.eat() // Eat opening bracket.
-		child, err := p.evaluateExpression(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-		expr = Group{
-			child: child,
-		}
-		closingToken := p.eat()
-
-		if closingToken.Type() != lexer.CLOSING_ROUND_BRACKET {
-			return nil, p.expectedError(`")"`, closingToken)
-		}
-
-	// Handle slice instantiation.
-	case lexer.OPENING_SQUARE_BRACKET:
-		expr, err = p.evaluateSliceInitialization(ctx)
-
-	// Handle iota.
-	case lexer.IOTA:
-		expr, err = p.evaluateIota(ctx)
-
-	// Handle input.
-	case lexer.INPUT:
-		expr, err = p.evaluateInput(ctx)
-
-	// Handle read.
-	case lexer.READ:
-		expr, err = p.evaluateRead(ctx)
-
-	// Handle copy.
-	case lexer.COPY:
-		expr, err = p.evaluateCopy(ctx)
-
-	// Handle itoa.
-	case lexer.ITOA:
-		expr, err = p.evaluateItoa(ctx)
-
-	// Handle exists.
-	case lexer.EXISTS:
-		expr, err = p.evaluateExists(ctx)
-
-	// Handle len.
-	case lexer.LEN:
-		expr, err = p.evaluateLen(ctx)
-
-	// Handle app call.
-	case lexer.AT:
-		expr, err = p.evaluateAppCall(ctx)
-
-	// Handle identifiers.
+		p.eat()
+		expr = NewStringLiteral(value, nextToken)
+	// Identifier.
 	case lexer.IDENTIFIER:
-		importAlias, token, errTemp := p.evaluateImportAlias(ctx)
-		err = errTemp
+		p.eat()
+		expr = NewIdentifier(value, nextToken)
+	// Group.
+	case lexer.OPENING_ROUND_BRACKET:
+		var child Expression
 
-		if err != nil {
-			return nil, err
+		p.eat()
+		openingBracket := nextToken
+		child, okTemp := p.evaluateExpression(ctx)
+
+		if okTemp {
+			var closingBracket *lexer.Token
+			nextToken := p.peek()
+
+			if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
+				p.expectedError(`")"`, nextToken)
+			} else {
+				p.eat()
+				closingBracket = &nextToken
+			}
+			expr = NewGroup(child, &openingBracket, closingBracket)
 		}
-		var prefix string
+	default:
+		p.atError(fmt.Sprintf("unknown token type %d (%s)", nextTokenType, value), nextToken)
+	}
+	ok := expr != nil
 
-		value = token.Value()
-		nextToken := p.peekAt(1)
-		prefix, _, err = p.createImportName(importAlias, value, ctx)
-
-		if err != nil {
-			return nil, err
-		}
+	// If the expression has been evaluated correctly, see if it's followed by something usable.
+	if ok {
+		nextToken = p.peek()
 
 		switch nextToken.Type() {
-		case lexer.OPENING_ROUND_BRACKET:
-			// If a type exists with the provided name, it's a type-cast/-instantiation.
-			_, exists := ctx.findType(value, prefix)
+		case lexer.DOT:
+			p.eat()
+			selectorToken := p.peek()
 
-			if exists {
-				expr, err = p.evaluateTypeDefinition(importAlias, ctx)
+			if selectorToken.Type() != lexer.IDENTIFIER {
+				p.expectedIdentifierError(selectorToken)
+				ok = false
 			} else {
-				expr, err = p.evaluateFunctionCall(importAlias, nil, ctx)
+				p.eat()
+				expr = NewSelector(expr, selectorToken.Value())
 			}
 		case lexer.OPENING_SQUARE_BRACKET:
-			expr, err = p.evaluateSubscript(importAlias, ctx)
-		case lexer.OPENING_CURLY_BRACKET:
-			_, valid := ctx.findType(value, prefix)
+			leftBracket := p.eat()
+			indexExpr, okTemp := p.evaluateExpression(ctx)
+			nextToken = p.peek()
+			ok = ok && okTemp
 
-			if valid {
-				expr, err = p.evaluateStructInitialization(importAlias, ctx)
+			if nextToken.Type() != lexer.CLOSING_SQUARE_BRACKET {
+				p.expectedError(`"]"`, nextToken)
+				ok = false
+			} else {
+				p.eat()
+				expr = NewIndex(expr, indexExpr, &leftBracket, &nextToken)
 			}
-		case lexer.DOT:
-			expr, err = p.evaluateStructEvaluation(importAlias, ctx)
 		}
-
-		// If nothing has been set yet, try to evaluate named value.
-		if expr == nil && err == nil {
-			expr, err = p.evaluateNamedValueEvaluation(importAlias, ctx)
-		}
-
-	default:
-		return nil, p.atError(fmt.Sprintf(`unknown expression type %d "%s"`, tokenType, value), token)
 	}
-
-	if err != nil {
-		return nil, err
-	}
-	expr, _, err = p.evaluateChaining(expr, ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	return expr, nil
+	return expr, ok
 }
 
 // -----------------------------------------------------------------------------------------------
@@ -2944,1176 +677,181 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, error) {
 // in a function because higher precedence means it must be processed further down the chain.
 // Learnt a lot about priority handling from this video https://www.youtube.com/watch?v=aAvL2BTHf60.
 // Precedence is the same as in Go (https://go.dev/ref/spec#Operator_precedence).
-func (p *Parser) evaluateUnaryOperation(ctx context) (Expression, error) {
-	nextToken := p.peek()
+func (p *Parser) evaluateUnaryOperation(ctx context) (Expression, bool) {
+	unaryOperatorToken := p.peek()
 	negate := false
+	ok := true
 
-	if nextToken.Type() == lexer.UNARY_OPERATOR {
-		// Use nested if for possible future unary operators.
-		if nextToken.Value() == UNARY_OPERATOR_NEGATE {
+	if unaryOperatorToken.Type() == lexer.UNARY_OPERATOR {
+		p.eat()
+		value := unaryOperatorToken.Value()
+
+		switch value {
+		case lexer.UnaryOperatorNegate:
 			negate = true
-			p.eat()
+		default:
+			p.atError(fmt.Sprintf("unknown unary operator %s", value), unaryOperatorToken)
+			ok = false
 		}
 	}
-	valueToken := p.peek()
-	expr, err := p.evaluateSingleExpression(ctx)
-
-	if err != nil {
-		return nil, err
-	}
+	expr, okTemp := p.evaluateSingleExpression(ctx)
+	ok = ok && okTemp
 
 	if negate {
-		valueType := expr.ValueType()
-
-		if !valueType.IsBool() {
-			return nil, p.expectedError("boolean value", valueToken)
-		}
-		return UnaryOperation{
-			expr:      expr,
-			operator:  UNARY_OPERATOR_NEGATE,
-			valueType: expr.ValueType(),
-		}, nil
+		expr = NewUnaryOperation(expr, unaryOperatorToken)
 	}
-	return expr, nil
+	return expr, ok
 }
 
-func (p *Parser) evaluateMultiplication(ctx context) (Expression, error) {
-	return p.evaluateBinaryOperation(ctx, []BinaryOperator{BINARY_OPERATOR_MULTIPLICATION, BINARY_OPERATOR_DIVISION, BINARY_OPERATOR_MODULO}, p.evaluateUnaryOperation)
+func (p *Parser) evaluateMultiplication(ctx context) (Expression, bool) {
+	return p.evaluateBinaryOperation(ctx, []BinaryOperator{lexer.OperatorMultiplication}, p.evaluateUnaryOperation)
 }
 
-func (p *Parser) evaluateAddition(ctx context) (Expression, error) {
-	return p.evaluateBinaryOperation(ctx, []BinaryOperator{BINARY_OPERATOR_ADDITION, BINARY_OPERATOR_SUBTRACTION}, p.evaluateMultiplication)
+func (p *Parser) evaluateAddition(ctx context) (Expression, bool) {
+	return p.evaluateBinaryOperation(ctx, []BinaryOperator{lexer.OperatorAddition}, p.evaluateMultiplication)
 }
 
-func (p *Parser) evaluateLogicalAnd(ctx context) (Expression, error) {
-	return p.evaluateLogicalOperation(ctx, LOGICAL_OPERATOR_AND, p.evaluateComparison)
+func (p *Parser) evaluateComparison(ctx context) (Expression, bool) {
+	return p.evaluateBinaryOperation(ctx, []BinaryOperator{lexer.ComparisonLess, lexer.ComparisonLessOrEqual, lexer.ComparisonGreater, lexer.ComparisonGreaterOrEqual}, p.evaluateAddition)
 }
 
-func (p *Parser) evaluateLogicalOr(ctx context) (Expression, error) {
-	return p.evaluateLogicalOperation(ctx, LOGICAL_OPERATOR_OR, p.evaluateLogicalAnd)
+func (p *Parser) evaluateEqualityComparison(ctx context) (Expression, bool) {
+	return p.evaluateBinaryOperation(ctx, []BinaryOperator{lexer.ComparisonEqual, lexer.ComparisonNotEqual}, p.evaluateComparison)
 }
 
-func (p *Parser) evaluateExpression(ctx context) (Expression, error) {
+func (p *Parser) evaluateLogicalAnd(ctx context) (Expression, bool) {
+	return p.evaluateBinaryOperation(ctx, []BinaryOperator{lexer.OperatorAnd}, p.evaluateEqualityComparison)
+}
+
+func (p *Parser) evaluateLogicalOr(ctx context) (Expression, bool) {
+	return p.evaluateBinaryOperation(ctx, []BinaryOperator{lexer.OperatorOr}, p.evaluateLogicalAnd)
+}
+
+func (p *Parser) evaluateExpression(ctx context) (Expression, bool) {
 	return p.evaluateLogicalOr(ctx)
 }
 
-func (p *Parser) evaluateStatement(ctx context) (Statement, error) {
+func (p *Parser) evaluateStatement(ctx context) (Statement, bool) {
 	var stmt Statement
-	var err error
+	var ok bool
 
 	token := p.peek()
 
 	switch token.Type() {
-	case lexer.TYPE_DECLARATION:
-		stmt, err = p.evaluateTypeDeclaration(ctx)
-	case lexer.CONST_DEFINITION:
-		stmt, err = p.evaluateConstDefinition(ctx)
-	case lexer.VAR_DEFINITION:
-		stmt, err = p.evaluateVarDefinition(ctx)
-	case lexer.FUNCTION_DEFINITION:
-		stmt, err = p.evaluateFunctionDefinition(ctx)
-	case lexer.RETURN:
-		stmt, err = p.evaluateReturn(ctx)
-	case lexer.IF:
-		stmt, err = p.evaluateIf(ctx)
-	case lexer.SWITCH:
-		stmt, err = p.evaluateSwitch(ctx)
-	case lexer.FOR:
-		stmt, err = p.evaluateFor(ctx)
-	case lexer.BREAK:
-		stmt, err = p.evaluateBreak(ctx)
-	case lexer.CONTINUE:
-		stmt, err = p.evaluateContinue(ctx)
-	case lexer.PRINT:
-		stmt, err = p.evaluatePrint(ctx)
-	case lexer.WRITE:
-		stmt, err = p.evaluateWrite(ctx)
-	case lexer.PANIC:
-		stmt, err = p.evaluatePanic(ctx)
-	case lexer.UNSAFE:
-		stmt, err = p.evaluateUnsafe(ctx)
-	default:
-		// Variable initialization also starts with identifier but is a statement (e.g. x := 1234).
-		if p.isShortVarInit() {
-			stmt, err = p.evaluateVarDefinition(ctx)
-		} else {
-			var importAlias string
-			importAlias, token, err = p.evaluateImportAlias(ctx)
-
-			if err != nil {
-				return nil, err
-			}
-
-			// If token is identifier it could be a slice assignment, an increment or a decrement.
-			if token.Type() == lexer.IDENTIFIER {
-				switch nextTokenType := p.peekAt(1).Type(); nextTokenType {
-				case lexer.INCREMENT_OPERATOR, lexer.DECREMENT_OPERATOR:
-					stmt, err = p.evaluateIncrementDecrement(importAlias, ctx)
-				case lexer.COMPOUND_ASSIGN_OPERATOR:
-					stmt, err = p.evaluateCompoundAssignment(importAlias, ctx)
-				case lexer.ASSIGN_OPERATOR, lexer.COMMA:
-					stmt, err = p.evaluateVarAssignment(importAlias, ctx)
-				default:
-					var prefix string
-
-					name := token.Value()
-					prefix, _, err = p.createImportName(importAlias, name, ctx)
-
-					if err != nil {
-						return nil, err
-					}
-					variable, exists := ctx.findNamedValue(name, prefix)
-
-					switch nextTokenType {
-					case lexer.DOT:
-						_, errTemp := p.findBefore(lexer.ASSIGN_OPERATOR, lexer.NEWLINE, lexer.EOF)
-
-						if errTemp == nil {
-							stmt, err = p.evaluateStructAssignment(importAlias, ctx)
-						} else {
-							stmt, err = p.evaluateStructEvaluation(importAlias, ctx)
-						}
-					default:
-						// If variable has been defined and is a slice, handles slice assignment.
-						if exists && variable.ValueType().IsSlice() {
-							stmt, err = p.evaluateSliceAssignment(importAlias, ctx)
-						}
-					}
-				}
-			}
-
-			if err == nil && stmt == nil {
-				// If importAlias has already been evaluated, but no case was hit, reset
-				// the token pointer by 2 to set it back to the import-alias token. This
-				// is kinda ugly but the importAlias does not belong into the context
-				// and this way it's not necessary to propagate it from function to
-				// function.
-				if len(importAlias) > 0 {
-					p.vomit(2)
-				}
-				stmt, err = p.evaluateExpression(ctx)
-			}
+	case lexer.KEYWORD, lexer.SECTION_KEYWORD:
+		switch token.Value() {
+		// case lexer.KeywordType:
+		// 	stmt, ok = p.evaluateTypeDeclaration(ctx)
+		// case lexer.KeywordVar, lexer.KeywordConst:
+		// 	stmt, ok = p.evaluateVarDefinition(ctx)
+		// case lexer.KeywordFunc:
+		// 	stmt, ok = p.evaluateFunctionDefinition(ctx)
+		// case lexer.KeywordReturn:
+		// 	stmt, ok = p.evaluateReturn(ctx)
+		// case lexer.KeywordIf:
+		// 	stmt, ok = p.evaluateIf(ctx)
+		// case lexer.KeywordSwitch:
+		// 	stmt, ok = p.evaluateSwitch(ctx)
+		// case lexer.KeywordFor:
+		// 	stmt, ok = p.evaluateFor(ctx)
+		// case lexer.KeywordBreak:
+		// 	stmt, ok = p.evaluateBreak(ctx)
+		// case lexer.KeywordContinue:
+		// 	stmt, ok = p.evaluateContinue(ctx)
+		// TODO: Handle in type checker or somewhere else.
+		// case lexer.KeywordPrint:
+		// 	stmt, err = p.evaluatePrint(ctx)
+		// case lexer.KeywordWrite:
+		// 	stmt, err = p.evaluateWrite(ctx)
+		// case lexer.KeywordPanic:
+		// 	stmt, err = p.evaluatePanic(ctx)
+		// case lexer.KeywordUnsafe:
+		// 	stmt, err = p.evaluateUnsafe(ctx)
 		}
+	default:
+		// Assume it's an expression.
+		stmt, ok = p.evaluateExpression(ctx)
 	}
-	return stmt, err
+	return stmt, ok
 }
 
 // -----------------------------------------------------------------------------------------------
 
-func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperators []BinaryOperator, higherPrioOperation func(ctx context) (Expression, error)) (Expression, error) {
-	if higherPrioOperation == nil {
-		return nil, errors.New("missing higher precedence callout")
-	}
-	// Call higherPrioOperation first as it has higher precedence and higher precedence means it must
-	// be processed further down the chain. Learnt a lot about priority handling from this video
-	// https://www.youtube.com/watch?v=aAvL2BTHf60.
-	leftExpression, err := higherPrioOperation(ctx)
+func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperators []BinaryOperator, higherPrioOperation func(ctx context) (Expression, bool)) (Expression, bool) {
+	leftExpression, ok := higherPrioOperation(ctx)
 
-	if err != nil {
-		return nil, err
+	if !ok {
+		return leftExpression, false
 	}
 
-	// To implement associativity, use for-loop and keep appending same prio-expressions.
 	for {
-		operatorToken := p.peek()
-		operator := ""
 		var rightExpression Expression
 
-		// If next token is a number literal and it's less then 0, automatically
-		// insert an addition operator.
-		if operatorToken.Type() == lexer.NUMBER_LITERAL {
-			rightExpression, err = p.evaluateSingleExpression(ctx)
-
-			if err != nil {
-				return nil, err
-			}
-			numberLiteral := rightExpression.(IntegerLiteral)
-
-			if numberLiteral.Value() < 0 {
-				operator = "+"
-			}
-		}
-
-		if len(operator) == 0 {
-			operator = operatorToken.Value()
-
-			if operatorToken.Type() != lexer.BINARY_OPERATOR || !slices.Contains(allowedOperators, operator) {
-				break
-			}
-			p.eat() // Eat operator token.
-			rightExpression, err = higherPrioOperation(ctx)
-
-			if err != nil {
-				return nil, err
-			}
-		}
-		leftType := leftExpression.ValueType()
-		rightType := rightExpression.ValueType()
-
-		if !leftType.Equals(rightType) {
-			return nil, p.expectedError(fmt.Sprintf("same binary operation types but got %s and %s", leftType.String(), rightType.String()), operatorToken)
-		}
-		allowedTypeOperators := allowedBinaryOperators(leftType)
-
-		if !slices.Contains(allowedTypeOperators, operator) {
-			return nil, p.expectedError(fmt.Sprintf(`valid %s operator but got "%s"`, leftType.String(), operator), operatorToken)
-		}
-		leftExpression = BinaryOperation{
-			left:     leftExpression,
-			operator: operator,
-			right:    rightExpression,
-		}
-	}
-	return leftExpression, nil
-}
-
-func (p *Parser) evaluateComparison(ctx context) (Expression, error) {
-	// Call evaluateAddition first as it has higher precedence and higher precedence means it must
-	// be processed further down the chain. Learnt a lot about priority handling from this video
-	// https://www.youtube.com/watch?v=aAvL2BTHf60.
-	leftExpression, err := p.evaluateAddition(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	operatorToken := p.peek()
-	operator := operatorToken.Value()
-
-	if operatorToken.Type() == lexer.COMPARE_OPERATOR {
-		p.eat() // Eat operator token.
-		rightExpression, err := p.evaluateComparison(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-		leftType := leftExpression.ValueType()
-		rightType := rightExpression.ValueType()
-
-		if !leftType.Equals(rightType) {
-			return nil, p.expectedError(fmt.Sprintf("same comparison types but got %s and %s", leftType.String(), rightType.String()), operatorToken)
-		}
-		allowedOperators := allowedCompareOperators(leftType)
-
-		if !slices.Contains(allowedOperators, operator) {
-			return nil, p.expectedError(fmt.Sprintf(`valid %s operator but got "%s"`, leftType.String(), operator), operatorToken)
-		}
-		return NewComparison(leftExpression, operator, rightExpression), nil
-	}
-	return leftExpression, nil
-}
-
-func (p *Parser) evaluateLogicalOperation(ctx context, operator LogicalOperator, higherPrioOperation func(ctx context) (Expression, error)) (Expression, error) {
-	conditionToken := p.peek()
-	leftExpression, err := higherPrioOperation(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	for {
 		operatorToken := p.peek()
+		operator := ""
 
-		if operatorToken.Type() != lexer.LOGICAL_OPERATOR || operatorToken.Value() != operator {
-			break
+		if operatorToken.Type() == lexer.NUMBER_LITERAL {
+			rightExpression, ok = p.evaluateSingleExpression(ctx)
+
+			if ok {
+				numberLiteral := rightExpression.(IntegerLiteral)
+
+				if numberLiteral.Value < 0 {
+					operator = "+"
+				}
+			}
+		} else {
+			operator = operatorToken.Value()
 		}
 
-		if !leftExpression.ValueType().IsBool() {
-			return nil, p.expectedError("boolean value", conditionToken)
+		// If operator found, process it.
+		if !slices.Contains(allowedOperators, operator) {
+			break
 		}
 		p.eat() // Eat operator token.
-		operatorValue := operatorToken.Value()
-		rightExpression, errTemp := higherPrioOperation(ctx)
 
-		if errTemp != nil {
-			return nil, errTemp
-		}
-		leftExpression = LogicalOperation{
-			left:     leftExpression,
-			operator: operatorValue,
-			right:    rightExpression,
-		}
+		rightExpression, ok = higherPrioOperation(ctx)
+		leftExpression = NewBinaryOperation(leftExpression, operatorToken, rightExpression)
 	}
-	return leftExpression, nil
+	return leftExpression, ok
 }
 
-func (p *Parser) evaluateArguments(typeName string, name string, params []Param, receiver Expression, ctx context) ([]Expression, []Expression, error) {
-	var err error
-	openingBraceToken := p.eat()
+// func (p *Parser) evaluateArguments(typeName string, name string, params []Param, receiver Expression, ctx context) ([]Expression, []Expression, error) {
 
-	if openingBraceToken.Type() != lexer.OPENING_ROUND_BRACKET {
-		return nil, nil, p.expectedError(`"("`, openingBraceToken)
-	}
-	nextToken := p.peek()
-	firstArgToken := nextToken
-	args := []Expression{}
-	ignoreParams := params == nil // If params is nil, arguments will not be checked for length or type.
-	paramsLength := 0
-	var optionalParamPtr *Param
+// }
 
-	if !ignoreParams {
-		paramsLength = len(params)
+// func (p *Parser) evaluateFunctionCall(importAlias string, receiver Expression, ctx context) (Call, error) {
 
-		if paramsLength > 0 {
-			lastParam := params[paramsLength-1]
+// }
 
-			if lastParam.Optional() {
-				optionalParamPtr = &lastParam
-				paramsLength-- // Expect one parameter less because last parameter is optional.
-			}
-		}
-	}
+// func (p *Parser) evaluateAppCall(ctx context) (Call, error) {
 
-	if receiver != nil {
-		args = append(args, receiver)
-	}
-	optionalArgs := []Expression{}
-	argsLength := len(args)
+// }
 
-	// While next-token is not closing brace, evaluate arguments.
-	for nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
-		var expr Expression
-		argToken := p.peek()
-		expr, err = p.evaluateExpression(ctx)
+// func (p *Parser) evaluateInitializationValues(checkCallout func(initValue initValue) error, ctx context) ([]initValue, error) {
+// }
 
-		if err != nil {
-			return nil, nil, err
-		}
+// func (p *Parser) evaluateSliceInitialization(ctx context) (Expression, error) {
+// }
 
-		if !ignoreParams {
-			if len(args) == paramsLength && optionalParamPtr != nil {
-				// Count only the first optional param.
-				if len(optionalArgs) == 0 {
-					argsLength++
-				}
-				optionalArgs = append(optionalArgs, expr)
-			} else {
-				args = append(args, expr)
-				argsLength++
-			}
-			var param Param
+// func (p *Parser) evaluateStructInitialization(importAlias string, ctx context) (Expression, error) {
 
-			// Make sure arguments have not been exceeded.
-			if argsLength > paramsLength {
-				if optionalParamPtr == nil {
-					return nil, nil, p.atError(fmt.Sprintf("%s %s expects %d parameters but got at least %d", typeName, name, paramsLength, argsLength), argToken)
-				} else {
-					param = *optionalParamPtr
-				}
-			} else {
-				param = params[argsLength-1]
-			}
+// }
 
-			// Make sure argument type fits parameter type.
-			lastParamType := param.ValueType()
-			lastArgType := expr.ValueType()
+// func (p *Parser) evaluateChaining(expr Expression, ctx context) (Expression, bool, error) {
+// }
 
-			if !lastParamType.Equals(lastArgType) {
-				return nil, nil, p.expectedError(fmt.Sprintf("type of parameter %s is %s but got %s", param.Name(), lastParamType.String(), lastArgType.String()), argToken)
-			}
-		} else {
-			args = append(args, expr)
-		}
-		nextToken = p.peek()
-		tokenType := nextToken.Type()
+// func (p *Parser) evaluateSubscript(importAlias string, ctx context) (Expression, error) {
+// }
 
-		if !slices.Contains([]lexer.TokenType{lexer.COMMA, lexer.CLOSING_ROUND_BRACKET}, tokenType) {
-			err = p.expectedError(`"," or ")"`, nextToken)
-			break
-		} else if tokenType == lexer.COMMA {
-			p.eat()
-		}
-	}
+// func (p *Parser) evaluateSubscriptFromExpression(value Expression, valueToken lexer.Token, ctx context) (Expression, error) {
+// }
 
-	if len(optionalArgs) > 0 {
-		argsLength--
-	}
+// func (p *Parser) evaluateSliceAssignment(importAlias string, ctx context) (Statement, error) {
+// }
 
-	// Check for the appropriate arguments amount.
-	if !ignoreParams {
-		if argsLength != paramsLength {
-			return nil, nil, p.atError(fmt.Sprintf("%s %s expects %d parameters but got %d", typeName, name, paramsLength, argsLength), firstArgToken)
-		}
-	}
+// func (p *Parser) evaluateStructAssignment(importAlias string, ctx context) (Statement, error) {
+// }
 
-	if err != nil {
-		return nil, nil, err
-	}
-	closingBraceToken := p.eat()
-
-	if closingBraceToken.Type() != lexer.CLOSING_ROUND_BRACKET {
-		return nil, nil, p.expectedError(`")"`, closingBraceToken)
-	}
-	return args, optionalArgs, nil
-}
-
-func (p *Parser) evaluateFunctionCall(importAlias string, receiver Expression, ctx context) (Call, error) {
-	nextToken := p.eat()
-
-	if nextToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedError("function identifier", nextToken)
-	}
-	var prefix, dotedName string
-	name := nextToken.Value()
-
-	if receiver != nil {
-		t := receiver.ValueType().Type()
-		typeName := t.Name()
-		name = buildReceiverFunctionName(typeName, name)
-		prefix = t.Prefix()
-		dotedName = p.createDotedName(typeName, name)
-	} else {
-		var err error
-		prefix, dotedName, err = p.createImportName(importAlias, name, ctx)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-	// Make sure function has been defined.
-	definedFunction, exists := ctx.findFunction(name, prefix)
-
-	if !exists {
-		return nil, p.notDefinedError("function", dotedName, nextToken)
-	}
-	args, optionalArgs, err := p.evaluateArguments("function", dotedName, definedFunction.params, receiver, ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	currFunc := p.currFunc
-	currFuncName := ""
-
-	if currFunc != nil {
-		currFuncName = currFunc.PrefixedName()
-	}
-	name = definedFunction.PrefixedName()
-
-	// Keep track of used functions.
-	if _, exists := p.usedFuncs[currFuncName]; !exists {
-		p.usedFuncs[currFuncName] = []string{}
-	}
-	if !slices.Contains(p.usedFuncs[currFuncName], name) {
-		p.usedFuncs[currFuncName] = append(p.usedFuncs[currFuncName], name)
-	}
-
-	// Append optional params as slice.
-	if len(optionalArgs) > 0 {
-		args = append(args, SliceInstantiation{
-			t:      optionalArgs[0].ValueType().Type(),
-			values: optionalArgs,
-		})
-	}
-
-	return FunctionCall{
-		FunctionDefinition: definedFunction,
-		arguments:          args,
-	}, nil
-}
-
-func (p *Parser) evaluateAppCall(ctx context) (Call, error) {
-	nextToken := p.eat()
-
-	if nextToken.Type() != lexer.AT {
-		return nil, p.expectedError(`"@"`, nextToken)
-	}
-	nextToken = p.eat()
-	name := nextToken.Value()
-
-	switch nextToken.Type() {
-	case lexer.IDENTIFIER, lexer.STRING_LITERAL:
-		// Nothing to do, those cases are valid.
-	default:
-		return nil, p.expectedError("program identifier or string literal", nextToken)
-	}
-	args, _, err := p.evaluateArguments("program", name, nil, nil, ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	call := AppCall{
-		name: name,
-		args: args,
-	}
-
-	if p.peek().Type() == lexer.PIPE {
-		p.eat() // Eat pipe token.
-		nextCall, err := p.evaluateAppCall(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-		nextAppCall := nextCall.(AppCall)
-		call.next = &nextAppCall
-	}
-	return call, nil
-}
-
-func (p *Parser) evaluateInitializationValues(checkCallout func(initValue initValue) error, ctx context) ([]initValue, error) {
-	nextToken := p.eat()
-
-	if nextToken.Type() != lexer.OPENING_CURLY_BRACKET {
-		return nil, p.expectedError(`"{"`, nextToken)
-	}
-	nextToken = p.peek()
-	names := []string{}
-	initValues := []initValue{}
-	rowInit := p.peek().Type() == lexer.NEWLINE // If there's a newline after the bracket, it's a row initialization.
-
-	// Evaluate initialization values.
-	if nextToken.Type() != lexer.CLOSING_CURLY_BRACKET {
-		for {
-			// Get rid of consecutive newlines.
-			p.skipNewlines()
-
-			nameToken := p.peek()
-			initValue := initValue{nameToken: nameToken}
-
-			// Check if a name is defined.
-			if nameToken.Type() == lexer.IDENTIFIER && p.peekAt(1).Type() == lexer.COLON {
-				p.eat() // Eat name token.
-				p.eat() // Eat colon token.
-
-				name := nameToken.Value()
-
-				if slices.Contains(names, name) {
-					return nil, p.atError(fmt.Sprintf("a value has already been assigned to %s", name), nameToken)
-				}
-				names = append(names, name)
-				initValue.name = name
-			}
-			valueToken := p.peek()
-			expr, err := p.evaluateExpression(ctx)
-
-			if err != nil {
-				return nil, err
-			}
-			initValue.valueToken = valueToken
-			initValue.value = expr
-
-			err = checkCallout(initValue)
-
-			if err != nil {
-				return nil, err
-			}
-			initValues = append(initValues, initValue)
-			nextToken = p.peek()
-			nextTokenType := nextToken.Type()
-
-			if rowInit && nextTokenType != lexer.COMMA {
-				return nil, p.expectedError(`","`, nextToken)
-			}
-
-			if nextTokenType == lexer.COMMA {
-				p.eat()
-			}
-			p.skipNewlines()
-
-			if p.peek().Type() == lexer.CLOSING_CURLY_BRACKET {
-				break
-			}
-		}
-	}
-	nextToken = p.eat()
-
-	if nextToken.Type() != lexer.CLOSING_CURLY_BRACKET {
-		return nil, p.expectedError(`"}"`, nextToken)
-	}
-	return initValues, nil
-}
-
-func (p *Parser) evaluateSliceInitialization(ctx context) (Expression, error) {
-	nextToken := p.peek()
-	sliceValueType, err := p.evaluateValueType(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if !sliceValueType.IsSlice() {
-		return nil, p.expectedError(fmt.Sprintf("slice type but got %s", sliceValueType.String()), nextToken)
-	}
-	initValues, err := p.evaluateInitializationValues(func(initValue initValue) error {
-		if len(initValue.name) > 0 {
-			return p.atError("unexpected name", initValue.nameToken)
-		}
-		valueDataType := initValue.value.ValueType()
-		sliceElementValueType := sliceValueType
-		sliceElementValueType.isSlice = false
-
-		if !valueDataType.Equals(sliceElementValueType) {
-			return p.atError(fmt.Sprintf("%s cannot be added to %s", valueDataType.String(), sliceElementValueType.String()), initValue.valueToken)
-		}
-		return nil
-	}, ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	values := []Expression{}
-
-	for _, initValue := range initValues {
-		values = append(values, initValue.value)
-	}
-	var expr Expression = SliceInstantiation{
-		t:      sliceValueType.Type(),
-		values: values,
-	}
-	nextToken = p.peek()
-
-	if nextToken.Type() == lexer.OPENING_SQUARE_BRACKET {
-		expr, err = p.evaluateSubscriptFromExpression(expr, nextToken, ctx)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-	return expr, nil
-}
-
-func (p *Parser) evaluateStructInitialization(importAlias string, ctx context) (Expression, error) {
-	nextToken := p.peek()
-	structValueType, err := p.evaluateValueType(ctx, importAlias)
-
-	if err != nil {
-		return nil, err
-	}
-	intialization, err := p.defaultVarValue(structValueType, nextToken, ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	structInitialization := intialization.(StructInitialization)
-	structDefinition, valid := structValueType.Type().(StructDefinition)
-
-	if !valid || structValueType.IsSlice() {
-		return nil, p.expectedError(fmt.Sprintf("struct type but got %s", structValueType.String()), nextToken)
-	}
-	_, err = p.evaluateInitializationValues(func(initValue initValue) error {
-		fieldName := initValue.name
-		fieldToken := initValue.nameToken
-
-		if len(fieldName) == 0 {
-			return p.expectedError("field name", fieldToken)
-		}
-		structField, err := structDefinition.FindField(fieldName, p.prefix)
-
-		if err != nil {
-			return p.atError(err.Error(), fieldToken)
-		}
-		value := initValue.value
-		valueDataType := value.ValueType()
-		structFieldValueType := structField.ValueType()
-
-		if !valueDataType.Equals(structFieldValueType) {
-			return p.expectedError(fmt.Sprintf("%s value but got %s", structFieldValueType.String(), valueDataType.String()), initValue.valueToken)
-		}
-		structInitialization.values = append(structInitialization.values, NewStructValue(fieldName, value))
-		return nil
-	}, ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	var expr Expression = structInitialization
-	nextToken = p.peek()
-
-	if nextToken.Type() == lexer.DOT {
-		expr, _, err = p.evaluateStructFieldsFromExpression(importAlias, expr, nextToken, false, ctx)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-	return expr, nil
-}
-
-func (p *Parser) evaluateChaining(expr Expression, ctx context) (Expression, bool, error) {
-	var err error
-
-	nextToken := p.peek()
-	nextTokenType := nextToken.Type()
-	valueType := expr.ValueType()
-	chained := true
-
-	if nextTokenType == lexer.OPENING_SQUARE_BRACKET && valueType.SupportsSubscript() {
-		expr, err = p.evaluateSubscriptFromExpression(expr, nextToken, ctx)
-	} else if nextTokenType == lexer.DOT && valueType.SupportsField() {
-		expr, _, err = p.evaluateStructFieldsFromExpression("", expr, nextToken, false, ctx)
-	} else {
-		chained = false
-	}
-
-	if err != nil {
-		return nil, false, err
-	}
-	return expr, chained, err
-}
-
-func (p *Parser) evaluateSubscript(importAlias string, ctx context) (Expression, error) {
-	var value Expression
-	var err error
-
-	valueToken := p.peek()
-
-	switch valueToken.Type() {
-	case lexer.IDENTIFIER:
-		value, err = p.evaluateNamedValueEvaluation(importAlias, ctx)
-	case lexer.STRING_LITERAL:
-		value, err = p.evaluateExpression(ctx)
-	default:
-		return nil, p.expectedError("string or variable", valueToken)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-	return p.evaluateSubscriptFromExpression(value, valueToken, ctx)
-}
-
-func (p *Parser) evaluateSubscriptFromExpression(value Expression, valueToken lexer.Token, ctx context) (Expression, error) {
-	var err error
-
-	valueType := value.ValueType()
-	isSlice := valueType.IsSlice()
-
-	if !isSlice && valueType.Type().Kind() != TypeKindString {
-		return nil, p.expectedError(fmt.Sprintf("slice or string but got %s", valueType.String()), valueToken)
-	}
-	nextToken := p.eat()
-
-	if nextToken.Type() != lexer.OPENING_SQUARE_BRACKET {
-		return nil, p.expectedError(`"["`, nextToken)
-	}
-	nextToken = p.peek()
-	startToken := nextToken
-	gotRange := nextToken.Type() == lexer.COLON
-	var startIndex Expression
-
-	if gotRange {
-		p.eat()
-		startIndex = IntegerLiteral{0}
-		startToken = p.peek()
-	} else {
-		startIndex, err = p.evaluateExpression(ctx)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-	startIndexValueType := startIndex.ValueType()
-
-	if !startIndexValueType.IsInt() {
-		return nil, p.expectedError(fmt.Sprintf("%s as start-index but got %s", TypeKindInt, startIndexValueType.String()), startToken)
-	}
-	nextToken = p.peek()
-
-	if nextToken.Type() == lexer.COLON {
-		if gotRange {
-			return nil, p.expectedError("only one colon", nextToken)
-		}
-		p.eat()
-		gotRange = true
-	}
-
-	if gotRange && isSlice {
-		return nil, p.atError("subscript range is not supported for slices", valueToken)
-	}
-	nextToken = p.peek()
-	endToken := nextToken
-	endIndex := startIndex
-
-	if nextToken.Type() == lexer.CLOSING_SQUARE_BRACKET {
-		// If range but no end-index is provided, create one by using Len-expression.
-		if gotRange {
-			endIndex = BinaryOperation{
-				left:     Len{value},
-				operator: BINARY_OPERATOR_SUBTRACTION,
-				right:    IntegerLiteral{1},
-			}
-		}
-		p.eat() // Eat square bracket.
-	} else {
-		endIndex, err = p.evaluateExpression(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-		nextToken = p.eat()
-
-		if nextToken.Type() != lexer.CLOSING_SQUARE_BRACKET {
-			return nil, p.expectedError(`"]"`, nextToken)
-		}
-
-		// End-index is not included.
-		endIndex = BinaryOperation{
-			left:     endIndex,
-			operator: BINARY_OPERATOR_SUBTRACTION,
-			right:    IntegerLiteral{1},
-		}
-	}
-	endIndexValueType := endIndex.ValueType()
-
-	if !endIndexValueType.IsInt() {
-		return nil, p.expectedError(fmt.Sprintf("%s as stop-index but got %s", TypeKindInt, endIndexValueType.String()), endToken)
-	}
-	var expr Expression
-
-	if !isSlice {
-		expr = StringSubscript{
-			value:      value,
-			startIndex: startIndex,
-			endIndex:   endIndex,
-		}
-	} else {
-		expr = SliceEvaluation{
-			value:     value,
-			index:     startIndex,
-			valueType: NewValueType(valueType.Type(), false),
-		}
-	}
-	expr, _, err = p.evaluateChaining(expr, ctx)
-	return expr, err
-}
-
-func (p *Parser) evaluateSliceAssignment(importAlias string, ctx context) (Statement, error) {
-	identifierToken := p.peek()
-	expr, err := p.evaluateSubscript(importAlias, ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	nextToken := p.eat()
-
-	if nextToken.Type() != lexer.ASSIGN_OPERATOR {
-		return nil, p.expectedError(`"="`, nextToken)
-	}
-	valueToken := p.peek()
-	value, err := p.evaluateExpression(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	sliceType := expr.ValueType().Type()
-	assignedType := value.ValueType().Type()
-
-	if !sliceType.Equals(assignedType) {
-		return nil, p.expectedError(fmt.Sprintf("%s value but got %s", sliceType.Name(), assignedType.Name()), valueToken)
-	}
-
-	switch t := expr.(type) {
-	case SliceEvaluation:
-		return SliceAssignment{
-			value:      t.Value(),
-			index:      t.Index(),
-			assignment: value,
-		}, nil
-	case StructEvaluation:
-		return StructAssignment{
-			value:      t.Value(),
-			assignment: NewStructValue(t.Field().Name(), value),
-		}, nil
-	default:
-		return nil, p.atError(fmt.Sprintf("unsupported type %s", t.ValueType().String()), identifierToken)
-	}
-}
-
-func (p *Parser) evaluateStructAssignment(importAlias string, ctx context) (Statement, error) {
-	expr, field, err := p.evaluateStructFields(importAlias, true, ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	nextToken := p.eat()
-
-	if nextToken.Type() != lexer.ASSIGN_OPERATOR {
-		return nil, p.expectedError(`"="`, nextToken)
-	}
-	assignedValueToken := p.peek()
-	assignedValue, err := p.evaluateExpression(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	fieldValueType := field.ValueType()
-	assignedValueType := assignedValue.ValueType()
-
-	if !fieldValueType.Equals(assignedValueType) {
-		return nil, p.expectedError(fmt.Sprintf("%s value but got %s", fieldValueType.String(), assignedValueType.String()), assignedValueToken)
-	}
-	return StructAssignment{
-		value: expr,
-		assignment: StructValue{
-			StructField: field,
-			value:       assignedValue,
-		},
-	}, nil
-}
-
-func (p *Parser) evaluateIncrementDecrement(importAlias string, ctx context) (Statement, error) {
-	identifierToken := p.eat()
-
-	if identifierToken.Type() != lexer.IDENTIFIER {
-		return nil, p.expectedIdentifierError(identifierToken)
-	}
-	name := identifierToken.Value()
-	prefix, dotedName, err := p.createImportName(importAlias, name, ctx)
-
-	if err != nil {
-		return nil, err
-	}
-	namedValue, exists := ctx.findNamedValue(name, prefix)
-
-	if !exists {
-		return nil, p.variableNotDefinedError(dotedName, identifierToken)
-	} else if namedValue.IsConstant() {
-		return nil, p.constantError(dotedName, identifierToken)
-	}
-	variable := namedValue.(Variable)
-	valueType := variable.ValueType()
-
-	if !valueType.IsInt() {
-		return nil, p.expectedType(valueType, identifierToken, NewValueType(NewTypeInt(), false))
-	}
-	operationToken := p.eat()
-	increment := true
-
-	switch operationToken.Type() {
-	case lexer.INCREMENT_OPERATOR:
-		// Nothing to do.
-	case lexer.DECREMENT_OPERATOR:
-		increment = false
-	default:
-		return nil, p.expectedError(`"++" or "--"`, operationToken)
-	}
-	return incrementDecrementStatement(variable, increment), nil
-}
-
-func (p *Parser) evaluateLen(ctx context) (Expression, error) {
-	expr, err := p.evaluateBuiltInFunction(lexer.LEN, "len", 1, 1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
-		expr := args[0].expr
-		valueType := expr.ValueType()
-
-		if !valueType.IsSlice() && !valueType.IsString() {
-			return nil, p.expectedError(fmt.Sprintf("slice or string but got %s", valueType.String()), args[0].token)
-		}
-		return Len{
-			expression: expr,
-		}, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	return expr.(Len), nil
-}
-
-func (p *Parser) evaluateInput(ctx context) (Expression, error) {
-	expr, err := p.evaluateBuiltInFunction(lexer.INPUT, "input", 0, 1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
-		var expr Expression
-
-		if len(args) > 0 {
-			expr = args[0].expr
-		}
-		return Input{
-			prompt: expr,
-		}, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	return expr.(Input), nil
-}
-
-func (p *Parser) evaluatePrint(ctx context) (Statement, error) {
-	return p.evaluateBuiltInFunction(lexer.PRINT, "print", 0, -1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
-		expressions := []Expression{}
-
-		for _, arg := range args {
-			expressions = append(expressions, arg.expr)
-		}
-		return Print{
-			expressions,
-		}, nil
-	})
-}
-
-func (p *Parser) evaluatePanic(ctx context) (Statement, error) {
-	return p.evaluateBuiltInFunction(lexer.PANIC, "panic", 1, 1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
-		return Panic{
-			expression: args[0].expr,
-		}, nil
-	})
-}
-
-func (p *Parser) evaluateUnsafe(ctx context) (Statement, error) {
-	return p.evaluateBuiltInFunction(lexer.UNSAFE, "unsafe", 1, -1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
-		var literal StringLiteral
-		firstArg := args[0]
-
-		if casted, ok := firstArg.expr.(StringLiteral); !ok {
-			return nil, p.expectedError("string literal", firstArg.token)
-		} else {
-			literal = casted
-		}
-		expressions := []Expression{}
-
-		for i := 1; i < len(args); i++ {
-			expressions = append(expressions, args[i].expr)
-		}
-		literalValue := literal.Value()
-
-		for i, arg := range expressions {
-			argToken := args[i+1].token
-
-			if t := arg.ValueType(); !t.IsBool() && !t.IsInt() && !t.IsString() {
-				return nil, p.expectedType(t, argToken, NewValueType(NewTypeBool(), false), NewValueType(NewTypeInt(), false), NewValueType(NewTypeString(), false))
-			}
-
-			// If output-placeholders exist, the provided expression must be a variable evaluation.
-			if strings.Count(literalValue, fmt.Sprintf("{o:%d}", i)) > 0 {
-				_, ok := arg.(VariableEvaluation)
-
-				if !ok {
-					return nil, p.atError(fmt.Sprintf("argument %d must be a variable", i+1), argToken)
-				}
-			}
-		}
-		return Unsafe{
-			code: literal,
-			args: expressions,
-		}, nil
-	})
-}
-
-func (p *Parser) evaluateCopy(ctx context) (Expression, error) {
-	expr, err := p.evaluateBuiltInFunction(lexer.COPY, "copy", 2, 2, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
-		expressionsLen := len(args)
-
-		if expressionsLen < 1 {
-			return nil, p.expectedError("destination slice as first argument", keywordToken)
-		} else if expressionsLen < 2 {
-			return nil, p.expectedError("source slice as second argument", keywordToken)
-		}
-		dstArg := args[0]
-		srcArg := args[1]
-		dst := dstArg.expr
-		src := srcArg.expr
-		dstType := dst.ValueType()
-		srcType := src.ValueType()
-
-		if !dstType.IsSlice() || dst.StatementType() != STATEMENT_TYPE_VAR_EVALUATION {
-			return nil, p.expectedError("slice variable as first argument", dstArg.token)
-		} else if !srcType.IsSlice() {
-			return nil, p.expectedError("slice as second argument", srcArg.token)
-		} else if !dstType.Equals(srcType) {
-			return nil, p.atError(fmt.Sprintf("got %s as destination but %s as source", dstType.String(), srcType.String()), keywordToken)
-		}
-		dstSlice := dst.(VariableEvaluation)
-
-		// To copy a slice, just create a for-loop.
-		return Copy{
-			destination: dstSlice.Variable,
-			source:      src,
-		}, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	return expr.(Copy), nil
-}
-
-func (p *Parser) evaluateItoa(ctx context) (Expression, error) {
-	expr, err := p.evaluateBuiltInFunction(lexer.ITOA, "itoa", 1, 1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
-		firstArg := args[0]
-		value := firstArg.expr
-
-		if !value.ValueType().IsInt() {
-			return nil, p.expectedError("integer", firstArg.token)
-		}
-		return Itoa{
-			value: value,
-		}, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	return expr.(Itoa), nil
-}
-
-func (p *Parser) evaluateExists(ctx context) (Expression, error) {
-	expr, err := p.evaluateBuiltInFunction(lexer.EXISTS, "exists", 1, 1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
-		firstArg := args[0]
-		path := firstArg.expr
-
-		if !path.ValueType().IsString() {
-			return nil, p.expectedError("path string", firstArg.token)
-		}
-		return Exists{
-			path: path,
-		}, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	return expr.(Exists), nil
-}
-
-func (p *Parser) evaluateRead(ctx context) (Expression, error) {
-	expr, err := p.evaluateBuiltInFunction(lexer.READ, "read", 1, 1, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
-		firstArg := args[0]
-		path := firstArg.expr
-
-		if !path.ValueType().IsString() {
-			return nil, p.expectedError("file path string as first parameter", firstArg.token)
-		}
-		return Read{
-			path: path,
-		}, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	return expr.(Read), nil
-}
-
-func (p *Parser) evaluateWrite(ctx context) (Expression, error) {
-	expr, err := p.evaluateBuiltInFunction(lexer.WRITE, "write", 2, 3, ctx, func(keywordToken lexer.Token, args []builtinArg) (Statement, error) {
-		pathArg := args[0]
-		path := pathArg.expr
-
-		if !path.ValueType().IsString() {
-			return nil, p.expectedError("file path string as first parameter", pathArg.token)
-		}
-		dataArg := args[1]
-		data := dataArg.expr
-
-		if !data.ValueType().IsString() {
-			return nil, p.expectedError("data string as second parameter", dataArg.token)
-		}
-		var append Expression = BooleanLiteral{false}
-
-		if len(args) > 2 {
-			appendArg := args[2]
-			append = appendArg.expr
-
-			if !append.ValueType().IsBool() {
-				return nil, p.expectedError("append boolean as third parameter", appendArg.token)
-			}
-		}
-		return Write{
-			path:   path,
-			data:   data,
-			append: append,
-		}, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	return expr.(Write), nil
-}
+// func (p *Parser) evaluateIncrementDecrement(importAlias string, ctx context) (Statement, error) {
+// }
