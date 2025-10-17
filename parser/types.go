@@ -263,6 +263,7 @@ func (vt ValueType) isNonSliceType(t Type) bool {
 
 const (
 	STATEMENT_TYPE_NOP                             StatementType = "nop"
+	STATEMENT_TYPE_BLOCK                           StatementType = "block"
 	STATEMENT_TYPE_PROGRAM                         StatementType = "program"
 	STATEMENT_TYPE_TYPE_DECLARATION                StatementType = "type declaration"
 	STATEMENT_TYPE_TYPE_DEFINITION                 StatementType = "type definition"

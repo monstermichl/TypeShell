@@ -83,6 +83,10 @@ func (t Token) Column() int {
 	return t.column
 }
 
+func (t Token) IsKeyword(keyword Keyword) bool {
+	return slices.Contains([]TokenType{KEYWORD, SECTION_KEYWORD}, t.Type()) && t.Value() == keyword
+}
+
 type tokenMapping struct {
 	value     string
 	tokenType TokenType

@@ -459,7 +459,7 @@ func (p *Parser) evaluateBlockContent(ctx context, scope scope) ([]Statement, bo
 	return statements, ok
 }
 
-func (p *Parser) evaluateBlock(callback blockCallback, ctx context, scope scope) (Block, bool) {
+func (p *Parser) evaluateBlock(ctx context, scope scope) (Block, bool) {
 	openingBracketToken := p.peek()
 	block := Block{}
 
@@ -474,7 +474,6 @@ func (p *Parser) evaluateBlock(callback blockCallback, ctx context, scope scope)
 
 	if openingBracketToken.Type() != lexer.OPENING_CURLY_BRACKET {
 		p.expectedError(`"{"`, openingBracketToken)
-		return block, false
 	} else {
 		p.eat()
 		block.OpeningBracket = &openingBracketToken
@@ -541,9 +540,51 @@ func (p *Parser) evaluateBlock(callback blockCallback, ctx context, scope scope)
 
 // }
 
-// func (p *Parser) evaluateIf(ctx context) (Statement, bool) {
+func (p *Parser) evaluateIf(ctx context) (Statement, bool) {
+	keywordToken := p.peek()
+	ifStatement := If{}
+	ok := true
 
-// }
+	if !keywordToken.IsKeyword(lexer.KeywordIf) {
+		p.expectedKeywordError("if", keywordToken)
+	} else {
+		p.eat()
+	}
+	nextToken := p.peek()
+
+	if nextToken.Type() == lexer.OPENING_CURLY_BRACKET {
+		p.expectedError("expression", nextToken)
+		ok = false
+	} else {
+		expr, okTemp := p.evaluateExpression(ctx)
+		ok = ok && okTemp
+		ifStatement.Condition = expr
+
+		if !ok {
+			p.skipUntil(lexer.OPENING_CURLY_BRACKET, lexer.NEWLINE)
+		}
+	}
+	block, okTemp := p.evaluateBlock(ctx, SCOPE_IF)
+	ok = ok && okTemp
+	ifStatement.Body = block
+	nextToken = p.peek()
+
+	if nextToken.IsKeyword(lexer.KeywordElse) {
+		p.eat()
+		nextToken := p.peek()
+		var stmt Statement
+
+		// If another if-keyword follows, evaluate if, otherwise evaluate else.
+		if nextToken.IsKeyword(lexer.KeywordIf) {
+			stmt, okTemp = p.evaluateIf(ctx)
+		} else {
+			stmt, okTemp = p.evaluateBlock(ctx, SCOPE_IF)
+		}
+		ok = ok && okTemp
+		ifStatement.Else = stmt
+	}
+	return ifStatement, ok
+}
 
 // func (p *Parser) evaluateSwitch(ctx context) (Statement, bool) {
 
@@ -748,25 +789,25 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, bool) {
 		// 	stmt, ok = p.evaluateFunctionDefinition(ctx)
 		// case lexer.KeywordReturn:
 		// 	stmt, ok = p.evaluateReturn(ctx)
-		// case lexer.KeywordIf:
-		// 	stmt, ok = p.evaluateIf(ctx)
-		// case lexer.KeywordSwitch:
-		// 	stmt, ok = p.evaluateSwitch(ctx)
-		// case lexer.KeywordFor:
-		// 	stmt, ok = p.evaluateFor(ctx)
-		// case lexer.KeywordBreak:
-		// 	stmt, ok = p.evaluateBreak(ctx)
-		// case lexer.KeywordContinue:
-		// 	stmt, ok = p.evaluateContinue(ctx)
-		// TODO: Handle in type checker or somewhere else.
-		// case lexer.KeywordPrint:
-		// 	stmt, err = p.evaluatePrint(ctx)
-		// case lexer.KeywordWrite:
-		// 	stmt, err = p.evaluateWrite(ctx)
-		// case lexer.KeywordPanic:
-		// 	stmt, err = p.evaluatePanic(ctx)
-		// case lexer.KeywordUnsafe:
-		// 	stmt, err = p.evaluateUnsafe(ctx)
+		case lexer.KeywordIf:
+			stmt, ok = p.evaluateIf(ctx)
+			// case lexer.KeywordSwitch:
+			// 	stmt, ok = p.evaluateSwitch(ctx)
+			// case lexer.KeywordFor:
+			// 	stmt, ok = p.evaluateFor(ctx)
+			// case lexer.KeywordBreak:
+			// 	stmt, ok = p.evaluateBreak(ctx)
+			// case lexer.KeywordContinue:
+			// 	stmt, ok = p.evaluateContinue(ctx)
+			// TODO: Handle in type checker or somewhere else.
+			// case lexer.KeywordPrint:
+			// 	stmt, err = p.evaluatePrint(ctx)
+			// case lexer.KeywordWrite:
+			// 	stmt, err = p.evaluateWrite(ctx)
+			// case lexer.KeywordPanic:
+			// 	stmt, err = p.evaluatePanic(ctx)
+			// case lexer.KeywordUnsafe:
+			// 	stmt, err = p.evaluateUnsafe(ctx)
 		}
 	default:
 		// Assume it's an expression.

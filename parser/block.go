@@ -7,3 +7,7 @@ type Block struct {
 	OpeningBracket *lexer.Token
 	ClosingBracket *lexer.Token
 }
+
+func (b Block) StatementType() StatementType {
+	return STATEMENT_TYPE_BLOCK
+}
