@@ -417,6 +417,17 @@ func (p *Parser) eat() lexer.Token {
 	return token
 }
 
+func (p *Parser) evaluateKeyword(keyword lexer.Keyword) bool {
+	keywordToken := p.peek()
+
+	if !keywordToken.IsKeyword(keyword) {
+		p.expectedKeywordError(fmt.Sprintf(`"%s"`, keyword), keywordToken)
+		return false
+	}
+	p.eat()
+	return true
+}
+
 // func (p *Parser) evaluateNames() ([]lexer.Token, error) {
 // }
 
@@ -541,15 +552,8 @@ func (p *Parser) evaluateBlock(ctx context, scope scope) (Block, bool) {
 // }
 
 func (p *Parser) evaluateIf(ctx context) (Statement, bool) {
-	keywordToken := p.peek()
 	ifStatement := If{}
-	ok := true
-
-	if !keywordToken.IsKeyword(lexer.KeywordIf) {
-		p.expectedKeywordError("if", keywordToken)
-	} else {
-		p.eat()
-	}
+	ok := p.evaluateKeyword(lexer.KeywordIf)
 	nextToken := p.peek()
 
 	if nextToken.Type() == lexer.OPENING_CURLY_BRACKET {
