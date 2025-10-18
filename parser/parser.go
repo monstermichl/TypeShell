@@ -195,7 +195,7 @@ func (ev evaluatedValues) isMultiReturnCall() (bool, Call) {
 	return multi, call
 }
 
-type blockCallback func(statements []Statement, last bool) error
+type blockCheckCallout func(stmt Statement) bool
 
 type parserError struct {
 	Err   error
@@ -373,6 +373,14 @@ func (p *Parser) skipNewlines() {
 	p.skipWhile(lexer.NEWLINE)
 }
 
+func (p *Parser) defaultBlockCheckCallout(stmt Statement) bool {
+	if stmt.StatementType() == STATEMENT_TYPE_CASE_CLAUSE {
+		p.atError("case clause is not permitted in this context", stmt.Token())
+		return false
+	}
+	return true
+}
+
 func (p Parser) findAllowed(searchTokenType lexer.TokenType, allowed ...lexer.TokenType) (lexer.Token, error) {
 	tokens := p.tokens
 
@@ -466,7 +474,7 @@ func (p *Parser) evaluateExpressions(ctx context) ([]Expression, bool) {
 
 func (p *Parser) evaluateProgram() (Program, bool) {
 	ctx := newContext(p.prefix)
-	statements, ok := p.evaluateBlockContent(ctx, SCOPE_PROGRAM)
+	statements, ok := p.evaluateBlockContent(ctx, SCOPE_PROGRAM, nil)
 
 	return Program{statements}, ok
 }
@@ -479,19 +487,32 @@ func (p *Parser) evaluateProgram() (Program, bool) {
 
 // }
 
-func (p *Parser) evaluateBlockContent(ctx context, scope scope) ([]Statement, bool) {
+func (p *Parser) evaluateBlockContent(ctx context, scope scope, checkCallout blockCheckCallout, stopKeywords ...lexer.Keyword) ([]Statement, bool) {
 	statements := []Statement{}
 	ok := true
 
 	p.skipNewlines()
 
-	for !slices.Contains([]lexer.TokenType{lexer.EOF, lexer.CLOSING_CURLY_BRACKET}, p.peek().Type()) {
+	if checkCallout == nil {
+		checkCallout = p.defaultBlockCheckCallout
+	}
+
+	for {
+		nextToken := p.peek()
+		nextTokenType := nextToken.Type()
+
+		if slices.Contains([]lexer.TokenType{lexer.EOF, lexer.CLOSING_CURLY_BRACKET}, nextTokenType) || (nextTokenType == lexer.KEYWORD && slices.Contains(stopKeywords, nextToken.Value())) {
+			break
+		}
 		stmt, okTemp := p.evaluateStatement(ctx)
 		ok = ok && okTemp
 
 		if !okTemp {
 			p.skipUntilNewline() // RECOVER: Move to end of line.
+		} else {
+			ok = ok && checkCallout(stmt)
 		}
+
 		if stmt != nil {
 			statements = append(statements, stmt)
 		}
@@ -500,9 +521,9 @@ func (p *Parser) evaluateBlockContent(ctx context, scope scope) ([]Statement, bo
 	return statements, ok
 }
 
-func (p *Parser) evaluateBlock(ctx context, scope scope) (Block, bool) {
+func (p *Parser) evaluateBlock(ctx context, scope scope, checkCallout blockCheckCallout, stopKeywords ...lexer.Keyword) (Block, bool) {
 	openingBracketToken := p.peek()
-	block := Block{}
+	block := Block{token: openingBracketToken}
 
 	defer (func() {
 		// RECOVER: Skip to closing curly bracket or next section keyword.
@@ -519,7 +540,7 @@ func (p *Parser) evaluateBlock(ctx context, scope scope) (Block, bool) {
 		p.eat()
 		block.OpeningBracket = &openingBracketToken
 	}
-	statements, ok := p.evaluateBlockContent(ctx, scope)
+	statements, ok := p.evaluateBlockContent(ctx, scope, checkCallout, stopKeywords...)
 	block.Statements = statements
 	closingBracketToken := p.peek()
 
@@ -671,8 +692,8 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, bool) {
 // }
 
 func (p *Parser) evaluateIf(ctx context) (Statement, bool) {
-	ifStatement := If{}
-	_, ok := p.evaluateKeyword(lexer.KeywordIf)
+	keywordToken, ok := p.evaluateKeyword(lexer.KeywordIf)
+	ifStatement := If{token: keywordToken}
 	nextToken := p.peek()
 
 	if nextToken.Type() == lexer.OPENING_CURLY_BRACKET {
@@ -687,7 +708,7 @@ func (p *Parser) evaluateIf(ctx context) (Statement, bool) {
 			p.skipUntil(lexer.OPENING_CURLY_BRACKET, lexer.NEWLINE)
 		}
 	}
-	block, okTemp := p.evaluateBlock(ctx, SCOPE_IF)
+	block, okTemp := p.evaluateBlock(ctx, SCOPE_IF, nil)
 	ok = ok && okTemp
 	ifStatement.Body = block
 	nextToken = p.peek()
@@ -701,7 +722,7 @@ func (p *Parser) evaluateIf(ctx context) (Statement, bool) {
 		if nextToken.IsKeyword(lexer.KeywordIf) {
 			stmt, okTemp = p.evaluateIf(ctx)
 		} else {
-			stmt, okTemp = p.evaluateBlock(ctx, SCOPE_IF)
+			stmt, okTemp = p.evaluateBlock(ctx, SCOPE_IF, nil)
 		}
 		ok = ok && okTemp
 		ifStatement.Else = stmt
@@ -709,14 +730,89 @@ func (p *Parser) evaluateIf(ctx context) (Statement, bool) {
 	return ifStatement, ok
 }
 
-// func (p *Parser) evaluateSwitch(ctx context) (Statement, bool) {
+func (p *Parser) evaluateSwitch(ctx context) (Statement, bool) {
+	keywordToken, ok := p.evaluateKeyword(lexer.KeywordSwitch)
+	switchStatement := Switch{token: keywordToken}
+	okTemp := true
+	nextToken := p.peek()
 
-// }
+	var tag Expression
+
+	if nextToken.Type() == lexer.OPENING_CURLY_BRACKET {
+		tag = NewBooleanLiteral(true, nextToken)
+	} else {
+		tag, okTemp = p.evaluateExpression(ctx)
+
+		if !okTemp {
+			p.skipUntil(lexer.OPENING_CURLY_BRACKET, lexer.NEWLINE)
+		}
+	}
+	ok = ok && okTemp
+
+	switchStatement.Tag = tag
+	body, okTemp := p.evaluateBlock(ctx, SCOPE_SWITCH, func(stmt Statement) bool {
+		if stmt.StatementType() != STATEMENT_TYPE_CASE_CLAUSE {
+			p.expectedError("case clause", stmt.Token())
+			return false
+		}
+		return true
+	})
+	switchStatement.Body = body
+	defaultCases := []CaseClause{}
+
+	for _, stmt := range body.Statements {
+		if clause, ok := stmt.(CaseClause); ok {
+			defaultCases = append(defaultCases, clause)
+		}
+	}
+	defaultCasesLength := len(defaultCases)
+
+	if defaultCasesLength > 1 {
+		for i := 1; i < defaultCasesLength; i++ {
+			p.atError("only one default case is permitted", defaultCases[i].Token())
+		}
+	}
+	return switchStatement, ok && okTemp
+}
+
+func (p *Parser) evaluateCaseClause(ctx context) (Statement, bool) {
+	keywordToken, ok := p.evaluateKeyword(lexer.KeywordCase, lexer.KeywordDefault)
+	defaultClause := keywordToken.Type() == lexer.KEYWORD && keywordToken.Value() == lexer.KeywordDefault
+	clause := CaseClause{token: keywordToken}
+	list := []Expression{}
+	okTemp := true
+
+	if !defaultClause {
+		list, okTemp = p.evaluateExpressions(ctx)
+
+		if !okTemp {
+			p.skipUntil(lexer.COLON, lexer.NEWLINE)
+		}
+	}
+	ok = ok && okTemp
+	clause.List = list
+	nextToken := p.peek()
+
+	if nextToken.Type() != lexer.COLON {
+		p.expectedError(`":"`, nextToken)
+		ok = false
+	} else {
+		p.eat()
+	}
+	nextToken = p.peek()
+	statements, okTemp := p.evaluateBlockContent(ctx, SCOPE_SWITCH, nil, lexer.KeywordCase, lexer.KeywordDefault)
+
+	clause.Body = Block{
+		token:      nextToken,
+		Statements: statements,
+	}
+	return clause, ok && okTemp
+}
 
 func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 	var stmt Statement
 
-	_, ok := p.evaluateKeyword(lexer.KeywordFor)
+	keywordToken, ok := p.evaluateKeyword(lexer.KeywordFor)
 	isRange := false
 
 	// Try to find range-keyword.
@@ -744,7 +840,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 
 	if isRange {
 		names, okTemp := p.evaluateExpressions(ctx)
-		rangeStatement := ForRange{}
+		rangeStatement := ForRange{token: keywordToken}
 
 		if !okTemp {
 			p.skipUntil(lexer.KEYWORD)
@@ -775,12 +871,12 @@ func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 		if !okTemp {
 			skipUntilBlock()
 		}
-		rangeStatement.Body, okTemp = p.evaluateBlock(ctx, SCOPE_FOR)
+		rangeStatement.Body, okTemp = p.evaluateBlock(ctx, SCOPE_FOR, nil)
 		ok = ok && okTemp
 		stmt = rangeStatement
 	} else {
 		var condition Expression
-		forStatement := For{}
+		forStatement := For{token: keywordToken}
 		_, err := p.findBefore(lexer.SEMICOLON, lexer.OPENING_CURLY_BRACKET, lexer.NEWLINE)
 		foundSemicolon := err == nil
 		okTemp := true
@@ -837,7 +933,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 		if !okTemp {
 			skipUntilBlock()
 		}
-		forStatement.Body, okTemp = p.evaluateBlock(ctx, SCOPE_FOR)
+		forStatement.Body, okTemp = p.evaluateBlock(ctx, SCOPE_FOR, nil)
 		ok = ok && okTemp
 		stmt = forStatement
 	}
@@ -925,7 +1021,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 			expr = NewGroup(child, openingBracket, closingBracket)
 		}
 	default:
-		p.atError(fmt.Sprintf("unknown token type %d (%s)", nextTokenType, value), nextToken)
+		p.atError(fmt.Sprintf("unknown expression token type %d (%s)", nextTokenType, value), nextToken)
 	}
 	ok := expr != nil
 
@@ -1027,10 +1123,12 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, bool) {
 	var ok bool
 
 	token := p.peek()
+	value := token.Value()
+	tokenType := token.Type()
 
-	switch token.Type() {
+	switch tokenType {
 	case lexer.KEYWORD, lexer.SECTION_KEYWORD:
-		switch token.Value() {
+		switch value {
 		// case lexer.KeywordType:
 		// 	stmt, ok = p.evaluateTypeDeclaration(ctx)
 		case lexer.KeywordVar, lexer.KeywordConst:
@@ -1041,23 +1139,27 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, bool) {
 		// 	stmt, ok = p.evaluateReturn(ctx)
 		case lexer.KeywordIf:
 			stmt, ok = p.evaluateIf(ctx)
-		// case lexer.KeywordSwitch:
-		// 	stmt, ok = p.evaluateSwitch(ctx)
+		case lexer.KeywordSwitch:
+			stmt, ok = p.evaluateSwitch(ctx)
+		case lexer.KeywordCase, lexer.KeywordDefault:
+			stmt, ok = p.evaluateCaseClause(ctx)
 		case lexer.KeywordFor:
 			stmt, ok = p.evaluateFor(ctx)
-			// case lexer.KeywordBreak:
-			// 	stmt, ok = p.evaluateBreak(ctx)
-			// case lexer.KeywordContinue:
-			// 	stmt, ok = p.evaluateContinue(ctx)
-			// TODO: Handle in type checker or somewhere else.
-			// case lexer.KeywordPrint:
-			// 	stmt, err = p.evaluatePrint(ctx)
-			// case lexer.KeywordWrite:
-			// 	stmt, err = p.evaluateWrite(ctx)
-			// case lexer.KeywordPanic:
-			// 	stmt, err = p.evaluatePanic(ctx)
-			// case lexer.KeywordUnsafe:
-			// 	stmt, err = p.evaluateUnsafe(ctx)
+		// case lexer.KeywordBreak:
+		// 	stmt, ok = p.evaluateBreak(ctx)
+		// case lexer.KeywordContinue:
+		// 	stmt, ok = p.evaluateContinue(ctx)
+		// TODO: Handle in type checker or somewhere else.
+		// case lexer.KeywordPrint:
+		// 	stmt, err = p.evaluatePrint(ctx)
+		// case lexer.KeywordWrite:
+		// 	stmt, err = p.evaluateWrite(ctx)
+		// case lexer.KeywordPanic:
+		// 	stmt, err = p.evaluatePanic(ctx)
+		// case lexer.KeywordUnsafe:
+		// 	stmt, err = p.evaluateUnsafe(ctx)
+		default:
+			p.atError(fmt.Sprintf("unknown statement token type %d (%s)", tokenType, value), token)
 		}
 	default:
 		// Assume it's an expression.

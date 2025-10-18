@@ -1,6 +1,9 @@
 package parser
 
+import "github.com/monstermichl/typeshell/lexer"
+
 type If struct {
+	token     lexer.Token
 	Condition Expression
 	Body      Block
 	Else      Statement
@@ -8,4 +11,8 @@ type If struct {
 
 func (i If) StatementType() StatementType {
 	return STATEMENT_TYPE_IF
+}
+
+func (i If) Token() lexer.Token {
+	return i.token
 }

@@ -23,6 +23,10 @@ func (d VariableDeclaration) StatementType() StatementType {
 	return STATEMENT_TYPE_VAR_DECLARATION
 }
 
+func (d VariableDeclaration) Token() lexer.Token {
+	return d.Keyword
+}
+
 // TODO: Just keep this for now to be able to compile but remove later.
 type Variable struct {
 	ImportableBase

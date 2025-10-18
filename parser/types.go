@@ -299,6 +299,8 @@ const (
 	STATEMENT_TYPE_APP_CALL                        StatementType = "app call"
 	STATEMENT_TYPE_RETURN                          StatementType = "return"
 	STATEMENT_TYPE_IF                              StatementType = "if"
+	STATEMENT_TYPE_SWITCH                          StatementType = "switch"
+	STATEMENT_TYPE_CASE_CLAUSE                     StatementType = "case clause"
 	STATEMENT_TYPE_FOR                             StatementType = "for"
 	STATEMENT_TYPE_FOR_RANGE                       StatementType = "for range"
 	STATEMENT_TYPE_BREAK                           StatementType = "break"
