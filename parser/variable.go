@@ -1,7 +1,29 @@
 package parser
 
-import "fmt"
+import (
+	"fmt"
 
+	"github.com/monstermichl/typeshell/lexer"
+)
+
+type ValueSpec struct {
+	Names  []Expression
+	Type   Expression
+	Values []Expression
+}
+
+type VariableDeclaration struct {
+	Keyword        lexer.Token
+	Specs          []ValueSpec
+	OpeningBracket *lexer.Token
+	ClosingBracket *lexer.Token
+}
+
+func (d VariableDeclaration) StatementType() StatementType {
+	return STATEMENT_TYPE_VAR_DECLARATION
+}
+
+// TODO: Just keep this for now to be able to compile but remove later.
 type Variable struct {
 	ImportableBase
 	valueType ValueType
@@ -34,125 +56,4 @@ func (v Variable) IsConstant() bool {
 
 func (v *Variable) SetValueType(valueType ValueType) {
 	v.valueType = valueType
-}
-
-type VariableDefinitionValueAssignment struct {
-	variables []Variable
-	values    []Expression
-}
-
-func NewVariableDefinition(variables []Variable, values []Expression) VariableDefinitionValueAssignment {
-	return VariableDefinitionValueAssignment{
-		variables,
-		values,
-	}
-}
-
-func (v VariableDefinitionValueAssignment) StatementType() StatementType {
-	return STATEMENT_TYPE_VAR_DEFINITION_VALUE_ASSIGNMENT
-}
-
-func (v VariableDefinitionValueAssignment) AssignmentType() AssignmentType {
-	return ASSIGNMENT_TYPE_VALUE
-}
-
-func (v VariableDefinitionValueAssignment) Variables() []Variable {
-	return v.variables
-}
-
-func (v VariableDefinitionValueAssignment) Values() []Expression {
-	return v.values
-}
-
-type VariableDefinitionCallAssignment struct {
-	variables []Variable
-	call      Call
-}
-
-func (v VariableDefinitionCallAssignment) StatementType() StatementType {
-	return STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT
-}
-
-func (v VariableDefinitionCallAssignment) AssignmentType() AssignmentType {
-	return ASSIGNMENT_TYPE_CALL
-}
-
-func (v VariableDefinitionCallAssignment) Variables() []Variable {
-	return v.variables
-}
-
-func (v VariableDefinitionCallAssignment) Call() Call {
-	return v.call
-}
-
-type VariableAssignment struct {
-	assignments []Assignment
-}
-
-func (v VariableAssignment) StatementType() StatementType {
-	return STATEMENT_TYPE_VAR_ASSIGNMENT
-}
-
-func (v *VariableAssignment) AddAssignment(assignment Assignment) {
-	v.assignments = append(v.assignments, assignment)
-}
-
-func (v VariableAssignment) Assignments() []Assignment {
-	return v.assignments
-}
-
-type VariableAssignmentValueAssignment struct {
-	variables []Variable
-	values    []Expression
-}
-
-func (v VariableAssignmentValueAssignment) StatementType() StatementType {
-	return STATEMENT_TYPE_VAR_ASSIGNMENT_VALUE_ASSIGNMENT
-}
-
-func (v VariableAssignmentValueAssignment) AssignmentType() AssignmentType {
-	return ASSIGNMENT_TYPE_VALUE
-}
-
-func (v VariableAssignmentValueAssignment) Variables() []Variable {
-	return v.variables
-}
-
-func (v VariableAssignmentValueAssignment) Values() []Expression {
-	return v.values
-}
-
-type VariableAssignmentCallAssignment struct {
-	variables []Variable
-	call      Call
-}
-
-func (v VariableAssignmentCallAssignment) StatementType() StatementType {
-	return STATEMENT_TYPE_VAR_ASSIGNMENT_CALL_ASSIGNMENT
-}
-
-func (v VariableAssignmentCallAssignment) AssignmentType() AssignmentType {
-	return ASSIGNMENT_TYPE_CALL
-}
-
-func (v VariableAssignmentCallAssignment) Variables() []Variable {
-	return v.variables
-}
-
-func (v VariableAssignmentCallAssignment) Call() Call {
-	return v.call
-}
-
-type VariableEvaluation struct {
-	Variable
-}
-
-func NewVariableEvaluation(name string, prefix string, valueType ValueType, layer int) VariableEvaluation {
-	return VariableEvaluation{
-		NewVariable(name, prefix, valueType, layer),
-	}
-}
-
-func (e VariableEvaluation) StatementType() StatementType {
-	return STATEMENT_TYPE_VAR_EVALUATION
 }

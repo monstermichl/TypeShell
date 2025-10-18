@@ -286,6 +286,7 @@ const (
 	STATEMENT_TYPE_CONST_DEFINITION                StatementType = "constant definition"
 	STATEMENT_TYPE_CONST_EVALUATION                StatementType = "constant evaluation"
 	STATEMENT_TYPE_NAMED_VALUES_DEFINITION         StatementType = "named values definition"
+	STATEMENT_TYPE_VAR_DECLARATION                 StatementType = "variable declaration"
 	STATEMENT_TYPE_VAR_DEFINITION_VALUE_ASSIGNMENT StatementType = "variable definition value assignment"
 	STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT  StatementType = "variable definition call assignment"
 	STATEMENT_TYPE_VAR_ASSIGNMENT                  StatementType = "variable assignment"
