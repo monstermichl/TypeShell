@@ -399,24 +399,21 @@ func (p Parser) findAllowed(searchTokenType lexer.TokenType, allowed ...lexer.To
 	return lexer.Token{}, fmt.Errorf(`token type "%d" not found`, searchTokenType)
 }
 
-func (p Parser) findBefore(searchTokenType lexer.TokenType, before ...lexer.TokenType) (lexer.Token, error) {
+func (p Parser) findBefore(searchTokenType lexer.TokenType, before ...lexer.TokenType) (lexer.Token, bool) {
 	tokens := p.tokens
+	before = append(before, lexer.EOF)
 
 	for i := p.index; i < len(tokens); i++ {
 		token := tokens[i]
 		tokenType := token.Type()
 
 		if tokenType == searchTokenType {
-			return token, nil
-		}
-
-		for _, tokenTypeTemp := range before {
-			if tokenTypeTemp == tokenType {
-				return lexer.Token{}, fmt.Errorf(`found "%d" before "%d"`, tokenTypeTemp, tokenType)
-			}
+			return token, true
+		} else if slices.Contains(before, tokenType) {
+			return lexer.Token{}, false
 		}
 	}
-	return lexer.Token{}, fmt.Errorf(`token type "%d" not found`, searchTokenType)
+	return lexer.Token{}, false
 }
 
 func (p *Parser) eat() lexer.Token {
@@ -568,7 +565,7 @@ func (p *Parser) evaluateBlock(ctx context, scope scope, checkCallout blockCheck
 
 func (p *Parser) evaluateVarDefinition(ctx context) (Statement, bool) {
 	keywordToken, ok := p.evaluateKeyword(lexer.KeywordVar, lexer.KeywordConst)
-	varStatement := VariableDeclaration{Keyword: keywordToken}
+	varStatement := Declaration{Keyword: keywordToken}
 	grouped := false
 	nextToken := p.peek()
 	grouped = nextToken.Type() == lexer.OPENING_ROUND_BRACKET
@@ -663,9 +660,39 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, bool) {
 
 // }
 
-// func (p *Parser) evaluateVarAssignment(importAlias string, ctx context) (Statement, error) {
+func (p *Parser) evaluateVarAssignment(ctx context) (Statement, bool) {
+	names, ok := p.evaluateExpressions(ctx)
+	okTemp := ok
+	assignment := Assignment{Left: names}
 
-// }
+	if !okTemp {
+		p.skipUntil(lexer.ASSIGN_OPERATOR, lexer.NEWLINE)
+
+		// If an assign operator was found, reset okTemp.
+		if p.peek().Type() == lexer.ASSIGN_OPERATOR {
+			okTemp = true
+		}
+	}
+
+	if okTemp {
+		operatorToken := p.peek()
+		assignment.OperatorToken = operatorToken
+
+		if operatorToken.Type() != lexer.ASSIGN_OPERATOR {
+			p.expectedError(fmt.Sprintf(`"%s" or "%s"`, lexer.OperatorAssign, lexer.OperatorShortAssign), operatorToken)
+			okTemp = false
+		} else {
+			p.eat()
+			assignment.Right, okTemp = p.evaluateExpressions(ctx)
+		}
+	}
+	ok = ok && okTemp
+
+	if !ok {
+		p.skipUntilNewline()
+	}
+	return assignment, ok
+}
 
 // func (p *Parser) evaluateParams(ctx context) ([]Param, error) {
 
@@ -877,8 +904,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 	} else {
 		var condition Expression
 		forStatement := For{token: keywordToken}
-		_, err := p.findBefore(lexer.SEMICOLON, lexer.OPENING_CURLY_BRACKET, lexer.NEWLINE)
-		foundSemicolon := err == nil
+		_, foundSemicolon := p.findBefore(lexer.SEMICOLON, lexer.OPENING_CURLY_BRACKET, lexer.NEWLINE)
 		okTemp := true
 
 		if foundSemicolon {
@@ -1162,8 +1188,14 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, bool) {
 			p.atError(fmt.Sprintf("unknown statement token type %d (%s)", tokenType, value), token)
 		}
 	default:
-		// Assume it's an expression.
-		stmt, ok = p.evaluateExpression(ctx)
+		_, isAssignemnt := p.findBefore(lexer.ASSIGN_OPERATOR, lexer.NEWLINE)
+
+		if isAssignemnt {
+			stmt, ok = p.evaluateVarAssignment(ctx)
+		} else {
+			// Assume it's an expression.
+			stmt, ok = p.evaluateExpression(ctx)
+		}
 	}
 	return stmt, ok
 }

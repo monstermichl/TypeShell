@@ -126,6 +126,9 @@ const (
 
 	OperatorAnd nonAlphabeticToken = "&&"
 	OperatorOr  nonAlphabeticToken = "||"
+
+	OperatorAssign      nonAlphabeticToken = "="
+	OperatorShortAssign nonAlphabeticToken = ":="
 )
 
 var nonAlphabeticTokens = tokenMappings{
@@ -152,8 +155,8 @@ var nonAlphabeticTokens = tokenMappings{
 	{"/=", COMPOUND_ASSIGN_OPERATOR},
 	{"%=", COMPOUND_ASSIGN_OPERATOR},
 
-	{":=", ASSIGN_OPERATOR},
-	{"=", ASSIGN_OPERATOR},
+	{OperatorShortAssign, ASSIGN_OPERATOR},
+	{OperatorAssign, ASSIGN_OPERATOR},
 
 	{UnaryOperatorNegate, UNARY_OPERATOR},
 

@@ -289,7 +289,7 @@ const (
 	STATEMENT_TYPE_VAR_DECLARATION                 StatementType = "variable declaration"
 	STATEMENT_TYPE_VAR_DEFINITION_VALUE_ASSIGNMENT StatementType = "variable definition value assignment"
 	STATEMENT_TYPE_VAR_DEFINITION_CALL_ASSIGNMENT  StatementType = "variable definition call assignment"
-	STATEMENT_TYPE_VAR_ASSIGNMENT                  StatementType = "variable assignment"
+	STATEMENT_TYPE_ASSIGNMENT                      StatementType = "assignment"
 	STATEMENT_TYPE_VAR_ASSIGNMENT_VALUE_ASSIGNMENT StatementType = "variable assignment value assignment"
 	STATEMENT_TYPE_VAR_ASSIGNMENT_CALL_ASSIGNMENT  StatementType = "variable assignment call assignment"
 	STATEMENT_TYPE_VAR_EVALUATION                  StatementType = "variable evaluation"
