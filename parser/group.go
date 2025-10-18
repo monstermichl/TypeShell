@@ -4,11 +4,11 @@ import "github.com/monstermichl/typeshell/lexer"
 
 type Group struct {
 	X              Expression
-	OpeningBracket *lexer.Token
+	OpeningBracket lexer.Token
 	ClosingBracket *lexer.Token
 }
 
-func NewGroup(x Expression, openingBracket *lexer.Token, closingBracket *lexer.Token) Group {
+func NewGroup(x Expression, openingBracket lexer.Token, closingBracket *lexer.Token) Group {
 	return Group{x, openingBracket, closingBracket}
 }
 
@@ -18,6 +18,10 @@ func (e Group) StatementType() StatementType {
 
 func (e Group) ValueType() ValueType {
 	return e.X.ValueType()
+}
+
+func (e Group) Token() lexer.Token {
+	return e.OpeningBracket
 }
 
 func (e Group) IsConstant() bool {

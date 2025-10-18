@@ -4,7 +4,7 @@ import "github.com/monstermichl/typeshell/lexer"
 
 type BooleanLiteral struct {
 	Value bool
-	Token lexer.Token
+	token lexer.Token
 }
 
 func NewBooleanLiteral(value bool, token lexer.Token) BooleanLiteral {
@@ -19,13 +19,17 @@ func (l BooleanLiteral) ValueType() ValueType {
 	return NewValueType(NewTypeBool(), false)
 }
 
+func (l BooleanLiteral) Token() lexer.Token {
+	return l.token
+}
+
 func (l BooleanLiteral) IsConstant() bool {
 	return true
 }
 
 type IntegerLiteral struct {
 	Value int
-	Token lexer.Token
+	token lexer.Token
 }
 
 func NewIntegerLiteral(value int, token lexer.Token) IntegerLiteral {
@@ -40,13 +44,17 @@ func (l IntegerLiteral) ValueType() ValueType {
 	return NewValueType(NewTypeInt(), false)
 }
 
+func (l IntegerLiteral) Token() lexer.Token {
+	return l.token
+}
+
 func (l IntegerLiteral) IsConstant() bool {
 	return true
 }
 
 type StringLiteral struct {
 	Value string
-	Token lexer.Token
+	token lexer.Token
 }
 
 func NewStringLiteral(value string, token lexer.Token) StringLiteral {
@@ -59,6 +67,10 @@ func (l StringLiteral) StatementType() StatementType {
 
 func (l StringLiteral) ValueType() ValueType {
 	return NewValueType(NewTypeString(), false)
+}
+
+func (l StringLiteral) Token() lexer.Token {
+	return l.token
 }
 
 func (l StringLiteral) IsConstant() bool {

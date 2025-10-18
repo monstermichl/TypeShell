@@ -4,7 +4,7 @@ import "github.com/monstermichl/typeshell/lexer"
 
 type Identifier struct {
 	Name  string
-	Token lexer.Token
+	token lexer.Token
 }
 
 func NewIdentifier(name string, token lexer.Token) Identifier {
@@ -17,6 +17,10 @@ func (i Identifier) StatementType() StatementType {
 
 func (i Identifier) ValueType() ValueType {
 	return NewValueType(NewTypeUnknown(), false) // TODO: Remove. Type is not relevant in parser.
+}
+
+func (i Identifier) Token() lexer.Token {
+	return i.token
 }
 
 func (i Identifier) IsConstant() bool {

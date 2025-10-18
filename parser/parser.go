@@ -713,9 +713,136 @@ func (p *Parser) evaluateIf(ctx context) (Statement, bool) {
 
 // }
 
-// func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
+func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
+	var stmt Statement
 
-// }
+	_, ok := p.evaluateKeyword(lexer.KeywordFor)
+	isRange := false
+
+	// Try to find range-keyword.
+	for i := 0; ; i++ {
+		nextToken := p.peekAt(uint(i))
+		leave := false
+
+		switch nextToken.Type() {
+		case lexer.KEYWORD:
+			if nextToken.Value() == lexer.KeywordRange {
+				isRange = true
+				leave = true
+			}
+		case lexer.NEWLINE, lexer.EOF:
+			leave = true
+		}
+
+		if leave {
+			break
+		}
+	}
+	skipUntilBlock := func() {
+		p.skipUntil(lexer.OPENING_CURLY_BRACKET, lexer.NEWLINE)
+	}
+
+	if isRange {
+		names, okTemp := p.evaluateExpressions(ctx)
+		rangeStatement := ForRange{}
+
+		if !okTemp {
+			p.skipUntil(lexer.KEYWORD)
+		} else {
+			lenNames := len(names)
+			rangeStatement.Key = names[0]
+
+			if lenNames > 1 {
+				rangeStatement.Value = names[1]
+			}
+
+			if lenNames > 2 {
+				p.expectedError("at most 2 expressions", names[2].Token())
+				okTemp = false
+			}
+		}
+		ok = ok && okTemp
+		rangeToken := p.peek()
+
+		if rangeToken.Value() != lexer.KeywordRange {
+			p.expectedKeywordError(lexer.KeywordRange, rangeToken)
+			okTemp = false
+		} else {
+			p.eat() // Eat range keyword.
+			rangeStatement.X, okTemp = p.evaluateExpression(ctx)
+		}
+
+		if !okTemp {
+			skipUntilBlock()
+		}
+		rangeStatement.Body, okTemp = p.evaluateBlock(ctx, SCOPE_FOR)
+		ok = ok && okTemp
+		stmt = rangeStatement
+	} else {
+		var condition Expression
+		forStatement := For{}
+		_, err := p.findBefore(lexer.SEMICOLON, lexer.OPENING_CURLY_BRACKET, lexer.NEWLINE)
+		foundSemicolon := err == nil
+		okTemp := true
+
+		if foundSemicolon {
+			nextToken := p.peek()
+
+			if nextToken.Type() != lexer.SEMICOLON {
+				forStatement.Init, okTemp = p.evaluateStatement(ctx)
+
+				if !okTemp {
+					p.skipUntil(lexer.SEMICOLON) // Skip until semicolon. This works for sure because otherwise foundSemicolon would not be true.
+				}
+			}
+			ok = ok && okTemp
+			okTemp = true // Reset.
+			p.eat()       // Eat semicolon.
+			nextToken = p.peek()
+
+			if nextToken.Type() == lexer.SEMICOLON {
+				condition = NewBooleanLiteral(true, nextToken)
+			} else {
+				condition, okTemp = p.evaluateExpression(ctx)
+			}
+
+			if okTemp {
+				nextToken = p.peek()
+				okTemp = nextToken.Type() == lexer.SEMICOLON
+
+				if !okTemp {
+					p.expectedError(`";"`, nextToken)
+				} else {
+					p.eat() // Eat semicolon.
+					nextToken = p.peek()
+
+					if !slices.Contains([]lexer.TokenType{lexer.OPENING_CURLY_BRACKET, lexer.NEWLINE}, nextToken.Type()) {
+						forStatement.Post, okTemp = p.evaluateExpression(ctx)
+					}
+				}
+			}
+			ok = ok && okTemp
+		} else {
+			nextToken := p.peek()
+
+			if nextToken.Type() == lexer.OPENING_CURLY_BRACKET {
+				condition = NewBooleanLiteral(true, nextToken)
+			} else {
+				condition, okTemp = p.evaluateExpression(ctx)
+			}
+		}
+		ok = ok && okTemp
+		forStatement.Condition = condition
+
+		if !okTemp {
+			skipUntilBlock()
+		}
+		forStatement.Body, okTemp = p.evaluateBlock(ctx, SCOPE_FOR)
+		ok = ok && okTemp
+		stmt = forStatement
+	}
+	return stmt, ok
+}
 
 // func (p *Parser) evaluateTypeDefinition(importAlias string, ctx context) (Expression, error) {
 
@@ -795,7 +922,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 				p.eat()
 				closingBracket = &nextToken
 			}
-			expr = NewGroup(child, &openingBracket, closingBracket)
+			expr = NewGroup(child, openingBracket, closingBracket)
 		}
 	default:
 		p.atError(fmt.Sprintf("unknown token type %d (%s)", nextTokenType, value), nextToken)
@@ -908,17 +1035,16 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, bool) {
 		// 	stmt, ok = p.evaluateTypeDeclaration(ctx)
 		case lexer.KeywordVar, lexer.KeywordConst:
 			stmt, ok = p.evaluateVarDefinition(ctx)
-			fmt.Println("----xx", ok)
 		// case lexer.KeywordFunc:
 		// 	stmt, ok = p.evaluateFunctionDefinition(ctx)
 		// case lexer.KeywordReturn:
 		// 	stmt, ok = p.evaluateReturn(ctx)
 		case lexer.KeywordIf:
 			stmt, ok = p.evaluateIf(ctx)
-			// case lexer.KeywordSwitch:
-			// 	stmt, ok = p.evaluateSwitch(ctx)
-			// case lexer.KeywordFor:
-			// 	stmt, ok = p.evaluateFor(ctx)
+		// case lexer.KeywordSwitch:
+		// 	stmt, ok = p.evaluateSwitch(ctx)
+		case lexer.KeywordFor:
+			stmt, ok = p.evaluateFor(ctx)
 			// case lexer.KeywordBreak:
 			// 	stmt, ok = p.evaluateBreak(ctx)
 			// case lexer.KeywordContinue:

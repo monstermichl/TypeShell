@@ -21,6 +21,10 @@ func (i Index) ValueType() ValueType {
 	return NewValueType(NewTypeUnknown(), false) // TODO: Remove. Type is not relevant in parser.
 }
 
+func (i Index) Token() lexer.Token {
+	return i.X.Token()
+}
+
 func (i Index) IsConstant() bool {
 	return false
 }

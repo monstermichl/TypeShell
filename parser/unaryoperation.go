@@ -19,6 +19,10 @@ func (b UnaryOperation) ValueType() ValueType {
 	return NewValueType(NewTypeUnknown(), false) // TODO: Remove. Type is not relevant in parser.
 }
 
+func (b UnaryOperation) Token() lexer.Token {
+	return b.OperatorToken
+}
+
 func (b UnaryOperation) IsConstant() bool {
 	return b.X.IsConstant()
 }

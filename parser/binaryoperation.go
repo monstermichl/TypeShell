@@ -20,6 +20,10 @@ func (b BinaryOperation) ValueType() ValueType {
 	return NewValueType(NewTypeUnknown(), false) // TODO: Remove. Type is not relevant in parser.
 }
 
+func (b BinaryOperation) Token() lexer.Token {
+	return b.OperatorToken
+}
+
 func (b BinaryOperation) IsConstant() bool {
 	return b.Left.IsConstant() && b.Right.IsConstant()
 }
