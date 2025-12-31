@@ -9,10 +9,6 @@ type CaseClause struct {
 	Default bool
 }
 
-func (c CaseClause) StatementType() StatementType {
-	return STATEMENT_TYPE_CASE_CLAUSE
-}
-
 func (c CaseClause) Token() lexer.Token {
 	return c.token
 }
@@ -21,10 +17,6 @@ type Switch struct {
 	token lexer.Token
 	Tag   Expression
 	Body  Block
-}
-
-func (s Switch) StatementType() StatementType {
-	return STATEMENT_TYPE_SWITCH
 }
 
 func (s Switch) Token() lexer.Token {

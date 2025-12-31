@@ -1,40 +1,25 @@
 package parser
 
+import "github.com/monstermichl/typeshell/lexer"
+
+type Type interface {
+	Statement
+	TypeFn()
+}
+
 type TypeDeclaration struct {
-	ImportableBase
-	valueType ValueType
+	token         lexer.Token
+	Name          Expression
+	AssignOpToken *lexer.Token
+	Type          Type
 }
 
-func NewTypeDeclaration(name string, prefix string, valueType ValueType, global bool) TypeDeclaration {
-	return TypeDeclaration{
-		ImportableBase: NewImportableBase(name, prefix, global),
-		valueType:      valueType,
-	}
-}
-
-func (t TypeDeclaration) StatementType() StatementType {
-	return STATEMENT_TYPE_TYPE_DECLARATION
-}
-
-func (t TypeDeclaration) ValueType() ValueType {
-	return t.valueType
+func (t TypeDeclaration) Token() lexer.Token {
+	return t.token
 }
 
 type TypeDefinition struct {
-	value     Expression
-	valueType ValueType
-}
-
-func (t TypeDefinition) StatementType() StatementType {
-	return STATEMENT_TYPE_TYPE_DEFINITION
-}
-
-func (t TypeDefinition) ValueType() ValueType {
-	return t.valueType
-}
-
-func (t TypeDefinition) IsConstant() bool {
-	return t.Value().IsConstant()
+	value Expression
 }
 
 func (t TypeDefinition) Value() Expression {

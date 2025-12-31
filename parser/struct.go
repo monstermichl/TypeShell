@@ -1,93 +1,26 @@
 package parser
 
-import "fmt"
+import "github.com/monstermichl/typeshell/lexer"
 
 type StructField struct {
-	name      string
-	valueType ValueType
+	Names []Expression
+	Type  Type
 }
 
-func (f StructField) Name() string {
-	return f.name
+type StructDeclaration struct {
+	keywordToken lexer.Token
+	Fields       []StructField
 }
 
-func (f StructField) ValueType() ValueType {
-	return f.valueType
+func (d StructDeclaration) Token() lexer.Token {
+	return d.keywordToken
 }
 
-func (f StructField) Public() bool {
-	return isPublic(f.Name())
-}
-
-type StructDefinition struct {
-	TypeBase
-	fields []StructField
-}
-
-func NewStructDefinition(name string, prefix string, fields []StructField, global bool) StructDefinition {
-	return StructDefinition{
-		TypeBase: NewTypeBase(name, prefix, false, TypeKindStruct, nil, global),
-		fields:   fields,
-	}
-}
-
-func (d StructDefinition) Base() Type           { return d.base }
-func (d StructDefinition) ElementaryType() Type { return elementaryType(d) }
-func (d StructDefinition) AliasedType() Type    { return aliasedType(d) }
-
-func (d StructDefinition) Fields() []StructField {
-	return d.fields
-}
-
-func (d StructDefinition) Equals(c Type) bool {
-	compareType, isDeclaration := c.(StructDefinition)
-
-	if !isDeclaration {
-		return false
-	}
-	fieldsD1 := d.Fields()
-	fieldsD2 := compareType.Fields()
-
-	if len(fieldsD1) != len(fieldsD2) {
-		return false
-	}
-
-	for i, fieldD1 := range fieldsD1 {
-		fieldD2 := fieldsD2[i]
-
-		if fieldD1.Name() != fieldD2.Name() || !fieldD1.ValueType().Equals(fieldD2.ValueType()) {
-			return false
-		}
-	}
-	return true
-}
-
-func (d StructDefinition) FindField(name string, currentPrefix string) (StructField, error) {
-	for _, field := range d.Fields() {
-		if field.Name() == name && (field.Public() || d.Prefix() == currentPrefix) {
-			return field, nil
-		}
-	}
-	return StructField{}, fmt.Errorf(`struct field %s doesn't exist`, name)
-}
+func (d StructDeclaration) TypeFn() {}
 
 type StructValue struct {
 	StructField
 	value Expression
-}
-
-func NewStructValue(name string, value Expression) StructValue {
-	return StructValue{
-		StructField: StructField{
-			name,
-			value.ValueType(),
-		},
-		value: value,
-	}
-}
-
-func (v StructValue) Value() Expression {
-	return v.value
 }
 
 type StructInitialization struct {
@@ -95,75 +28,12 @@ type StructInitialization struct {
 	values []StructValue
 }
 
-func NewStructInitialization(t Type, values ...StructValue) StructInitialization {
-	return StructInitialization{
-		t,
-		values,
-	}
-}
-
-func (d StructInitialization) StatementType() StatementType {
-	return STATEMENT_TYPE_STRUCT_DEFINITION
-}
-
-func (d StructInitialization) ValueType() ValueType {
-	return NewValueType(d.t, false)
-}
-
-func (d StructInitialization) IsConstant() bool {
-	return false
-}
-
-func (d StructInitialization) Values() []StructValue {
-	return d.values
-}
-
 type StructAssignment struct {
 	value      Expression
 	assignment StructValue
 }
 
-func (a StructAssignment) StatementType() StatementType {
-	return STATEMENT_TYPE_STRUCT_ASSIGNMENT
-}
-
-func (a StructAssignment) ValueType() ValueType {
-	return a.assignment.ValueType()
-}
-
-func (a StructAssignment) IsConstant() bool {
-	return false
-}
-
-func (a StructAssignment) Value() Expression {
-	return a.value
-}
-
-func (a StructAssignment) Assignment() StructValue {
-	return a.assignment
-}
-
 type StructEvaluation struct {
 	value Expression
 	field StructField
-}
-
-func (e StructEvaluation) StatementType() StatementType {
-	return STATEMENT_TYPE_STRUCT_EVALUATION
-}
-
-func (e StructEvaluation) Value() Expression {
-	return e.value
-}
-
-func (e StructEvaluation) ValueType() ValueType {
-	return e.field.ValueType()
-}
-
-func (e StructEvaluation) IsConstant() bool {
-	return false
-}
-
-func (e StructEvaluation) Field() StructField {
-	return e.field
 }

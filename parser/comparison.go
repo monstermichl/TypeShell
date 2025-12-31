@@ -14,18 +14,6 @@ func NewComparison(left Expression, operator CompareOperator, right Expression) 
 	}
 }
 
-func (c Comparison) StatementType() StatementType {
-	return STATEMENT_TYPE_COMPARISON
-}
-
-func (c Comparison) ValueType() ValueType {
-	return NewValueType(NewTypeBool(), false)
-}
-
-func (c Comparison) IsConstant() bool {
-	return c.Left().IsConstant() && c.Right().IsConstant()
-}
-
 func (c Comparison) Left() Expression {
 	return c.left
 }

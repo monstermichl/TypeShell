@@ -9,10 +9,6 @@ type If struct {
 	Else      Statement
 }
 
-func (i If) StatementType() StatementType {
-	return STATEMENT_TYPE_IF
-}
-
 func (i If) Token() lexer.Token {
 	return i.token
 }

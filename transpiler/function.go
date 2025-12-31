@@ -5,8 +5,8 @@ import "github.com/monstermichl/typeshell/parser"
 type function struct {
 	name      string
 	valueType valueType
-	params    []parser.Variable
-	body      []parser.Statement
+	// params    []parser.Variable
+	body []parser.Statement
 }
 
 func (e function) Name() string {

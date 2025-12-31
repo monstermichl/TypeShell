@@ -1,26 +1,16 @@
 package parser
 
 type Copy struct {
-	destination Variable
+	destination Expression
 	source      Expression
 }
 
-func (c Copy) StatementType() StatementType {
-	return STATEMENT_TYPE_COPY
-}
-
-func (c Copy) ValueType() ValueType {
-	return NewValueType(NewTypeInt(), false)
-}
-
-func (c Copy) IsConstant() bool {
-	return false
-}
+func (c Copy) ExprFn() {}
 
 func (c Copy) Source() Expression {
 	return c.source
 }
 
-func (c Copy) Destination() Variable {
+func (c Copy) Destination() Expression {
 	return c.destination
 }

@@ -6,17 +6,7 @@ type StringSubscript struct {
 	endIndex   Expression
 }
 
-func (s StringSubscript) StatementType() StatementType {
-	return STATEMENT_TYPE_STRING_SUBSCRIPT
-}
-
-func (s StringSubscript) ValueType() ValueType {
-	return NewValueType(NewTypeString(), false)
-}
-
-func (s StringSubscript) IsConstant() bool {
-	return false
-}
+func (s StringSubscript) ExprFn() {}
 
 func (s StringSubscript) Value() Expression {
 	return s.value

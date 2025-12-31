@@ -2,7 +2,6 @@ package parser
 
 import (
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -48,11 +47,8 @@ type builtinArg struct {
 }
 
 type context struct {
-	imports     map[string]string               // Maps import aliases to file hashes.
-	types       Importables[Type]               // Stores the declared types.
-	namedValues Importables[NamedValue]         // Stores the variable/constant name to variable/constant relation.
-	functions   Importables[FunctionDefinition] // Stores the function name to function relation.
-	scopeStack  []scope                         // Stores the current scopes.
+	imports     map[string]string // Maps import aliases to file hashes.
+	scopeStack  []scope           // Stores the current scopes.
 	layer       int
 	iotaCounter int
 }
@@ -63,13 +59,6 @@ func newContext(prefix string) context {
 		layer:       -1, // Init at -1 since program increases it right away.
 		iotaCounter: 0,
 	}
-
-	// Add elementary types.
-	c.addType(NewValueType(NewTypeBool(), false))
-	c.addType(NewValueType(NewTypeInt(), false))
-	c.addType(NewValueType(NewTypeString(), false))
-	c.addType(NewValueType(NewTypeError(), false))
-
 	return c
 }
 
@@ -115,54 +104,14 @@ func (c context) addImport(alias string, hash string) error {
 	return nil
 }
 
-func (c *context) addType(valueType ValueType) error {
-	t := valueType.Type()
-	name := t.Name()
-	_, exists := c.types.find(name, t.Prefix())
-
-	if exists {
-		return fmt.Errorf("type %s has already been defined", name) // TODO: Find out if this should be connected to the layer.
-	}
-	if valueType.IsSlice() {
-		// TODO: Add support.
-		return errors.New("slices are not allowed yet in type declarations")
-	}
-	c.types.add(t)
-	return nil
-}
-
-func (c *context) addNamedValues(namedValues ...NamedValue) error {
-	c.namedValues.add(namedValues...)
-	return nil
-}
-
-func (c *context) addFunctions(functions ...FunctionDefinition) {
-	c.functions.add(functions...)
-}
-
 func (c context) findImport(alias string) (string, bool) {
 	hash, exists := c.imports[alias]
 	return hash, exists
 }
 
-func (c context) findType(typeName string, prefix string) (Type, bool) {
-	return c.types.find(typeName, prefix)
-}
-
-func (c context) findNamedValue(name string, prefix string) (NamedValue, bool) {
-	return c.namedValues.find(name, prefix)
-}
-
-func (c context) findFunction(name string, prefix string) (FunctionDefinition, bool) {
-	return c.functions.find(name, prefix)
-}
-
 func (c context) clone() context {
 	return context{
 		imports:     maps.Clone(c.imports),
-		types:       c.types.clone(),
-		namedValues: c.namedValues.clone(), // TODO: Make sure this is appropriate cloning because each entry contains a slice.
-		functions:   c.functions.clone(),
 		scopeStack:  slices.Clone(c.scopeStack),
 		layer:       c.layer,
 		iotaCounter: c.iotaCounter,
@@ -177,22 +126,6 @@ type evaluatedImport struct {
 type evaluatedValues struct {
 	values []Expression
 	tokens []lexer.Token
-}
-
-func (ev evaluatedValues) isMultiReturnCall() (bool, Call) {
-	var call Call
-	values := ev.values
-	multi := false
-
-	if len(values) == 1 {
-		callTemp, ok := values[0].(Call)
-
-		if ok && len(callTemp.ReturnTypes()) > 1 {
-			multi = true
-			call = callTemp
-		}
-	}
-	return multi, call
 }
 
 type blockCheckCallout func(stmt Statement) bool
@@ -298,7 +231,7 @@ func (p *Parser) parse(path string, imported bool) (Program, error) {
 // }
 
 func (p *Parser) atError(what string, token lexer.Token) error {
-	err := fmt.Errorf("%s at row %d, column %d: %s", what, token.Row(), token.Column(), p.path)
+	err := fmt.Errorf("%s at row %d, column %d: %s", what, token.Row, token.Column, p.path)
 	p.errors = append(p.errors, parserError{err, token})
 
 	return err
@@ -310,6 +243,10 @@ func (p *Parser) expectedError(what string, token lexer.Token) error {
 
 func (p *Parser) expectedKeywordError(keyword string, token lexer.Token) error {
 	return p.expectedError(fmt.Sprintf("%s-keyword", keyword), token)
+}
+
+func (p *Parser) expectedAssignOperatorError(token lexer.Token) error {
+	return p.expectedError(fmt.Sprintf(`"%s" or "%s"`, lexer.OperatorAssign, lexer.OperatorShortAssign), token)
 }
 
 func (p *Parser) expectedIdentifierError(token lexer.Token) error {
@@ -354,7 +291,7 @@ func (p Parser) peekAt(add uint) lexer.Token {
 func (p *Parser) skipUntil(t ...lexer.TokenType) {
 	t = append(t, lexer.EOF) // Make sure skipping stops eventually.
 
-	for !slices.Contains(t, p.peek().Type()) {
+	for !slices.Contains(t, p.peek().Type) {
 		p.eat()
 	}
 }
@@ -364,7 +301,7 @@ func (p *Parser) skipUntilNewline() {
 }
 
 func (p *Parser) skipWhile(t ...lexer.TokenType) {
-	for slices.Contains(t, p.peek().Type()) {
+	for slices.Contains(t, p.peek().Type) {
 		p.eat()
 	}
 }
@@ -374,10 +311,10 @@ func (p *Parser) skipNewlines() {
 }
 
 func (p *Parser) defaultBlockCheckCallout(stmt Statement) bool {
-	if stmt.StatementType() == STATEMENT_TYPE_CASE_CLAUSE {
-		p.atError("case clause is not permitted in this context", stmt.Token())
-		return false
-	}
+	// if stmt.StatementType == STATEMENT_TYPE_CASE_CLAUSE {
+	// 	p.atError("case clause is not permitted in this context", stmt.Token())
+	// 	return false
+	// }
 	return true
 }
 
@@ -386,7 +323,7 @@ func (p Parser) findAllowed(searchTokenType lexer.TokenType, allowed ...lexer.To
 
 	for i := p.index; i < len(tokens); i++ {
 		token := tokens[i]
-		tokenType := token.Type()
+		tokenType := token.Type
 
 		if tokenType == searchTokenType {
 			return token, nil
@@ -405,7 +342,7 @@ func (p Parser) findBefore(searchTokenType lexer.TokenType, before ...lexer.Toke
 
 	for i := p.index; i < len(tokens); i++ {
 		token := tokens[i]
-		tokenType := token.Type()
+		tokenType := token.Type
 
 		if tokenType == searchTokenType {
 			return token, true
@@ -446,24 +383,24 @@ func (p *Parser) evaluateKeyword(keywords ...lexer.Keyword) (lexer.Token, bool) 
 }
 
 func (p *Parser) evaluateExpressions(ctx context) ([]Expression, bool) {
-	names := []Expression{}
+	expressions := []Expression{}
 
 	for {
 		expr, ok := p.evaluateExpression(ctx)
 
 		if !ok {
-			return names, false
+			return expressions, false
 		}
-		names = append(names, expr)
+		expressions = append(expressions, expr)
 		nextToken := p.peek()
 
-		if nextToken.Type() == lexer.COMMA {
+		if nextToken.Type == lexer.COMMA {
 			p.eat()
 		} else {
 			break
 		}
 	}
-	return names, true
+	return expressions, true
 }
 
 // func (p *Parser) evaluateValues(ctx context) (evaluatedValues, error) {
@@ -496,9 +433,9 @@ func (p *Parser) evaluateBlockContent(ctx context, scope scope, checkCallout blo
 
 	for {
 		nextToken := p.peek()
-		nextTokenType := nextToken.Type()
+		nextTokenType := nextToken.Type
 
-		if slices.Contains([]lexer.TokenType{lexer.EOF, lexer.CLOSING_CURLY_BRACKET}, nextTokenType) || (nextTokenType == lexer.KEYWORD && slices.Contains(stopKeywords, nextToken.Value())) {
+		if slices.Contains([]lexer.TokenType{lexer.EOF, lexer.CLOSING_CURLY_BRACKET}, nextTokenType) || (nextTokenType == lexer.KEYWORD && slices.Contains(stopKeywords, nextToken.Value)) {
 			break
 		}
 		stmt, okTemp := p.evaluateStatement(ctx)
@@ -526,12 +463,12 @@ func (p *Parser) evaluateBlock(ctx context, scope scope, checkCallout blockCheck
 		// RECOVER: Skip to closing curly bracket or next section keyword.
 		p.skipUntil(lexer.CLOSING_CURLY_BRACKET, lexer.SECTION_KEYWORD)
 
-		if p.peek().Type() == lexer.CLOSING_CURLY_BRACKET {
+		if p.peek().Type == lexer.CLOSING_CURLY_BRACKET {
 			p.eat()
 		}
 	})()
 
-	if openingBracketToken.Type() != lexer.OPENING_CURLY_BRACKET {
+	if openingBracketToken.Type != lexer.OPENING_CURLY_BRACKET {
 		p.expectedError(`"{"`, openingBracketToken)
 	} else {
 		p.eat()
@@ -541,7 +478,7 @@ func (p *Parser) evaluateBlock(ctx context, scope scope, checkCallout blockCheck
 	block.Statements = statements
 	closingBracketToken := p.peek()
 
-	if closingBracketToken.Type() != lexer.CLOSING_CURLY_BRACKET {
+	if closingBracketToken.Type != lexer.CLOSING_CURLY_BRACKET {
 		p.expectedError(`"}"`, closingBracketToken)
 		ok = false
 	} else {
@@ -551,24 +488,178 @@ func (p *Parser) evaluateBlock(ctx context, scope scope, checkCallout blockCheck
 	return block, ok
 }
 
-// func (p *Parser) evaluateValueType(ctx context, importAliases ...string) (ValueType, error) {
+func (p *Parser) evaluateType(ctx context) (Type, bool) {
+	ok := true
+	slice := false
+	nextToken := p.peek()
 
-// }
+	// Evaluate if value type is a slice type.
+	if nextToken.Type == lexer.OPENING_SQUARE_BRACKET {
+		p.eat() // Eat opening square bracket.
+		nextToken = p.peek()
 
-// func (p *Parser) evaluateStructDefinition(name string, ctx context) (StructDefinition, error) {
+		if nextToken.Type != lexer.CLOSING_SQUARE_BRACKET {
+			p.expectedError(`"]"`, nextToken)
+			ok = false
+		} else {
+			p.eat()
+		}
+		nextToken = p.peek()
+		slice = true
+	}
+	var t Type
 
-// }
+	// Evaluate data type.
+	switch nextToken.Type {
+	case lexer.IDENTIFIER:
+		t, _ = p.evaluateIdentifier(ctx)
+	case lexer.KEYWORD:
+		if !nextToken.IsKeyword(lexer.KeywordStruct) {
+			p.expectedKeywordError(lexer.KeywordStruct, nextToken)
+			ok = false
+		} else {
+			t, ok = p.evaluateStructDeclaration(ctx)
+		}
+	default:
+		// If still ok, now is the time to invalidate the ok-state.
+		if ok {
+			p.expectedIdentifierError(nextToken)
+			ok = false
+		}
+	}
 
-// func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, bool) {
+	if slice {
+		t = SliceType{Type: t}
+	}
+	return t, ok
+}
 
-// }
+func (p *Parser) evaluateStructDeclaration(ctx context) (StructDeclaration, bool) {
+	declaration := StructDeclaration{}
+	keywordToken, ok := p.evaluateKeyword(lexer.KeywordStruct)
+
+	if !ok {
+		p.expectedKeywordError(lexer.KeywordStruct, keywordToken)
+	} else {
+		declaration.keywordToken = keywordToken
+	}
+	hasOpeningBracket := false
+
+	if ok {
+		openingBracketToken := p.peek()
+		hasOpeningBracket = openingBracketToken.Type == lexer.OPENING_CURLY_BRACKET
+
+		if !hasOpeningBracket {
+			p.expectedError(`"{`, openingBracketToken)
+			ok = false
+		} else {
+			p.eat()
+		}
+	}
+
+	if !ok {
+		p.skipUntil(lexer.OPENING_CURLY_BRACKET, lexer.NEWLINE)
+
+		if p.peek().Type == lexer.OPENING_CURLY_BRACKET {
+			hasOpeningBracket = true
+		}
+	}
+
+	if hasOpeningBracket {
+		for {
+			p.skipNewlines()
+
+			names, okTemp := p.evaluateExpressions(ctx)
+			field := StructField{}
+
+			if okTemp {
+				field.Names = names
+				field.Type, okTemp = p.evaluateType(ctx)
+			}
+			ok = ok && okTemp
+
+			if !okTemp {
+				p.skipUntil(lexer.CLOSING_CURLY_BRACKET, lexer.NEWLINE)
+			} else {
+				declaration.Fields = append(declaration.Fields, field)
+			}
+			p.skipNewlines()
+
+			if slices.Contains([]lexer.TokenType{lexer.CLOSING_CURLY_BRACKET, lexer.SECTION_KEYWORD}, p.peek().Type) {
+				break
+			}
+		}
+	}
+
+	if !ok {
+		// If opening curly bracket exists, look for closing bracket or section keyword. Otherwise, just look for newline.
+		if hasOpeningBracket {
+			p.skipUntil(lexer.CLOSING_ROUND_BRACKET, lexer.SECTION_KEYWORD)
+		} else {
+			p.skipUntil(lexer.NEWLINE)
+		}
+	}
+	closingBracketToken := p.peek()
+
+	if closingBracketToken.Type == lexer.CLOSING_CURLY_BRACKET {
+		p.eat()
+	} else if ok {
+		p.expectedError(`"}"`, closingBracketToken)
+	}
+	return declaration, ok
+}
+
+func (p *Parser) evaluateTypeDeclaration(ctx context) (Statement, bool) {
+	keywordToken, ok := p.evaluateKeyword(lexer.KeywordType)
+	declaration := TypeDeclaration{}
+
+	if !ok {
+		p.expectedKeywordError(lexer.KeywordType, keywordToken)
+	} else {
+		declaration.token = keywordToken
+	}
+	nameToken := p.peek()
+
+	if ok {
+		// Make sure, name token is an identifier.
+		if nameToken.Type != lexer.IDENTIFIER {
+			p.expectedIdentifierError(nameToken)
+			ok = false
+		} else {
+			nameExpr, okTemp := p.evaluateIdentifier(ctx)
+			ok = ok && okTemp
+
+			if okTemp {
+				declaration.Name = nameExpr
+			}
+		}
+	}
+
+	if ok {
+		assignOpToken := p.peek()
+
+		if assignOpToken.Type == lexer.ASSIGN_OPERATOR && assignOpToken.Value == lexer.OperatorAssign {
+			p.eat()
+			declaration.AssignOpToken = &assignOpToken
+		}
+	}
+
+	if ok {
+		declaration.Type, ok = p.evaluateType(ctx)
+	}
+
+	if !ok {
+		p.skipUntil(lexer.NEWLINE)
+	}
+	return declaration, ok
+}
 
 func (p *Parser) evaluateVarDefinition(ctx context) (Statement, bool) {
 	keywordToken, ok := p.evaluateKeyword(lexer.KeywordVar, lexer.KeywordConst)
 	varStatement := Declaration{Keyword: keywordToken}
 	grouped := false
 	nextToken := p.peek()
-	grouped = nextToken.Type() == lexer.OPENING_ROUND_BRACKET
+	grouped = nextToken.Type == lexer.OPENING_ROUND_BRACKET
 
 	if grouped {
 		varStatement.OpeningBracket = &nextToken
@@ -591,13 +682,12 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, bool) {
 		if okTemp {
 			nextToken := p.peek()
 
-			if nextToken.Type() == lexer.IDENTIFIER {
-				t, _ := p.evaluateExpression(ctx)
-				spec.Type = t
+			if slices.Contains([]lexer.TokenType{lexer.OPENING_SQUARE_BRACKET, lexer.IDENTIFIER}, nextToken.Type) {
+				spec.Type, okTemp = p.evaluateType(ctx)
 			}
 			nextToken = p.peek()
 
-			if nextToken.Type() != lexer.ASSIGN_OPERATOR {
+			if !okTemp || nextToken.Type != lexer.ASSIGN_OPERATOR {
 				p.expectedError(lexer.OperatorAssign, nextToken)
 				skipUntilClosingOrNewline()
 				okTemp = false
@@ -624,17 +714,17 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, bool) {
 		nextToken := p.peek()
 		noError := false
 
-		if nextToken.Type() == lexer.NEWLINE {
+		if nextToken.Type == lexer.NEWLINE {
 			p.skipNewlines()
 			noError = true
 		}
 		escape := false
 		nextToken = p.peek()
 
-		if nextToken.Type() == lexer.CLOSING_ROUND_BRACKET {
+		if nextToken.Type == lexer.CLOSING_ROUND_BRACKET {
 			escape = true
 		} else if !noError {
-			p.expectedError(fmt.Sprintf(`newline or ")" but got "%s"`, nextToken.Value()), nextToken)
+			p.expectedError(fmt.Sprintf(`newline or ")" but got "%s"`, nextToken.Value), nextToken)
 		}
 
 		if escape {
@@ -646,7 +736,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, bool) {
 		p.skipUntil(lexer.CLOSING_ROUND_BRACKET, lexer.SECTION_KEYWORD)
 		nextToken = p.peek()
 
-		if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
+		if nextToken.Type != lexer.CLOSING_ROUND_BRACKET {
 			p.expectedError(`")"`, nextToken)
 		} else {
 			varStatement.ClosingBracket = &nextToken
@@ -660,7 +750,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, bool) {
 
 // }
 
-func (p *Parser) evaluateVarAssignment(ctx context) (Statement, bool) {
+func (p *Parser) evaluateVarAssignment(ctx context, params ...string) (Statement, bool) {
 	names, ok := p.evaluateExpressions(ctx)
 	okTemp := ok
 	assignment := Assignment{Left: names}
@@ -669,7 +759,7 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Statement, bool) {
 		p.skipUntil(lexer.ASSIGN_OPERATOR, lexer.NEWLINE)
 
 		// If an assign operator was found, reset okTemp.
-		if p.peek().Type() == lexer.ASSIGN_OPERATOR {
+		if p.peek().Type == lexer.ASSIGN_OPERATOR {
 			okTemp = true
 		}
 	}
@@ -678,8 +768,8 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Statement, bool) {
 		operatorToken := p.peek()
 		assignment.OperatorToken = operatorToken
 
-		if operatorToken.Type() != lexer.ASSIGN_OPERATOR {
-			p.expectedError(fmt.Sprintf(`"%s" or "%s"`, lexer.OperatorAssign, lexer.OperatorShortAssign), operatorToken)
+		if operatorToken.Type != lexer.ASSIGN_OPERATOR {
+			p.expectedAssignOperatorError(operatorToken)
 			okTemp = false
 		} else {
 			p.eat()
@@ -694,13 +784,129 @@ func (p *Parser) evaluateVarAssignment(ctx context) (Statement, bool) {
 	return assignment, ok
 }
 
-// func (p *Parser) evaluateParams(ctx context) ([]Param, error) {
+func (p *Parser) evaluateFieldList(bracketsRequired bool, ctx context) (FieldList, bool) {
+	openingBracketToken := p.peek()
+	params := FieldList{token: openingBracketToken}
+	ok := true
+	oneType := false
 
-// }
+	if openingBracketToken.Type != lexer.OPENING_ROUND_BRACKET {
+		if bracketsRequired {
+			p.expectedError(`"("`, openingBracketToken)
+			ok = false
+		}
+		oneType = true // If no brackets exist, it's only allowed to specify one type.
+	} else {
+		p.eat()
+		params.OpeningBracket = &openingBracketToken
+	}
+	onlyTypes := oneType
+	var nextToken lexer.Token
 
-// func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, bool) {
+	for {
+		nextToken := p.peek()
 
-// }
+		if nextToken.Type != lexer.IDENTIFIER {
+			break
+		} else {
+			p.eat()
+		}
+		var name Expression
+		var paramType Expression
+
+		okTemp := true
+		expr, _ := p.evaluateExpression(ctx)
+
+		if onlyTypes {
+			paramType = expr
+		} else {
+			nextToken := p.peek()
+
+			if nextToken.Type != lexer.IDENTIFIER {
+				paramType = expr
+				onlyTypes = true
+			} else {
+				name = expr
+				paramType, okTemp = p.evaluateExpression(ctx)
+			}
+		}
+		ok = ok && okTemp
+		param := Field{token: nextToken, Name: name, Type: paramType}
+		params.Fields = append(params.Fields, param)
+		nextToken = p.peek()
+
+		if !okTemp || nextToken.Type != lexer.COMMA {
+			break
+		}
+	}
+
+	if nextToken.Type != lexer.CLOSING_ROUND_BRACKET {
+		_, closingBracketExists := p.findBefore(lexer.CLOSING_ROUND_BRACKET, lexer.IDENTIFIER, lexer.OPENING_ROUND_BRACKET, lexer.OPENING_CURLY_BRACKET, lexer.NEWLINE)
+
+		if closingBracketExists {
+			p.skipUntil(lexer.CLOSING_ROUND_BRACKET)
+		}
+		nextToken = p.peek()
+	}
+
+	if nextToken.Type == lexer.CLOSING_ROUND_BRACKET {
+		p.eat()
+		params.ClosingBracket = &nextToken
+	}
+	return params, ok
+}
+
+func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, bool) {
+	keywordToken, ok := p.evaluateKeyword(lexer.KeywordFunc)
+	funcDef := FunctionDefinition{token: keywordToken}
+	nextToken := p.peek()
+
+	// Check for receiver.
+	if nextToken.Type == lexer.OPENING_ROUND_BRACKET {
+		var receiverParams FieldList
+
+		receiverParams, ok = p.evaluateFieldList(true, ctx)
+		params := receiverParams.Fields
+		paramsLength := len(params)
+
+		if paramsLength > 0 {
+			funcDef.Receiver = &params[0]
+		}
+
+		if paramsLength > 0 {
+			p.atError(fmt.Sprintf("only one receiver is permitted but got %d", paramsLength), params[paramsLength-1].Token())
+			ok = false
+		}
+	}
+
+	if ok {
+		nameToken := p.peek()
+
+		if nameToken.Type != lexer.IDENTIFIER {
+			p.expectedIdentifierError(nameToken)
+			ok = false
+		} else {
+			funcDef.Name, _ = p.evaluateExpression(ctx)
+		}
+	}
+
+	if ok {
+		funcDef.Params, ok = p.evaluateFieldList(true, ctx)
+	}
+
+	if ok {
+		nextToken := p.peek()
+
+		if slices.Contains([]lexer.TokenType{lexer.IDENTIFIER, lexer.OPENING_ROUND_BRACKET}, nextToken.Type) {
+
+		}
+	}
+
+	if !ok {
+		p.skipUntil(lexer.OPENING_CURLY_BRACKET, lexer.NEWLINE)
+	}
+	return funcDef, ok
+}
 
 // func (p *Parser) evaluateReturn(ctx context) (Statement, bool) {
 
@@ -723,7 +929,7 @@ func (p *Parser) evaluateIf(ctx context) (Statement, bool) {
 	ifStatement := If{token: keywordToken}
 	nextToken := p.peek()
 
-	if nextToken.Type() == lexer.OPENING_CURLY_BRACKET {
+	if nextToken.Type == lexer.OPENING_CURLY_BRACKET {
 		p.expectedError("expression", nextToken)
 		ok = false
 	} else {
@@ -765,7 +971,7 @@ func (p *Parser) evaluateSwitch(ctx context) (Statement, bool) {
 
 	var tag Expression
 
-	if nextToken.Type() == lexer.OPENING_CURLY_BRACKET {
+	if nextToken.Type == lexer.OPENING_CURLY_BRACKET {
 		tag = NewBooleanLiteral(true, nextToken)
 	} else {
 		tag, okTemp = p.evaluateExpression(ctx)
@@ -778,7 +984,7 @@ func (p *Parser) evaluateSwitch(ctx context) (Statement, bool) {
 
 	switchStatement.Tag = tag
 	body, okTemp := p.evaluateBlock(ctx, SCOPE_SWITCH, func(stmt Statement) bool {
-		if stmt.StatementType() != STATEMENT_TYPE_CASE_CLAUSE {
+		if _, isCaseClause := stmt.(CaseClause); isCaseClause {
 			p.expectedError("case clause", stmt.Token())
 			return false
 		}
@@ -804,7 +1010,7 @@ func (p *Parser) evaluateSwitch(ctx context) (Statement, bool) {
 
 func (p *Parser) evaluateCaseClause(ctx context) (Statement, bool) {
 	keywordToken, ok := p.evaluateKeyword(lexer.KeywordCase, lexer.KeywordDefault)
-	defaultClause := keywordToken.Type() == lexer.KEYWORD && keywordToken.Value() == lexer.KeywordDefault
+	defaultClause := keywordToken.Type == lexer.KEYWORD && keywordToken.Value == lexer.KeywordDefault
 	clause := CaseClause{token: keywordToken}
 	list := []Expression{}
 	okTemp := true
@@ -820,7 +1026,7 @@ func (p *Parser) evaluateCaseClause(ctx context) (Statement, bool) {
 	clause.List = list
 	nextToken := p.peek()
 
-	if nextToken.Type() != lexer.COLON {
+	if nextToken.Type != lexer.COLON {
 		p.expectedError(`":"`, nextToken)
 		ok = false
 	} else {
@@ -847,9 +1053,9 @@ func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 		nextToken := p.peekAt(uint(i))
 		leave := false
 
-		switch nextToken.Type() {
+		switch nextToken.Type {
 		case lexer.KEYWORD:
-			if nextToken.Value() == lexer.KeywordRange {
+			if nextToken.Value == lexer.KeywordRange {
 				isRange = true
 				leave = true
 			}
@@ -866,33 +1072,45 @@ func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 	}
 
 	if isRange {
-		names, okTemp := p.evaluateExpressions(ctx)
+		identifiers, okTemp := p.evaluateExpressions(ctx)
 		rangeStatement := ForRange{token: keywordToken}
 
 		if !okTemp {
 			p.skipUntil(lexer.KEYWORD)
 		} else {
-			lenNames := len(names)
-			rangeStatement.Key = names[0]
+			lenNames := len(identifiers)
+			rangeStatement.Key = identifiers[0]
 
 			if lenNames > 1 {
-				rangeStatement.Value = names[1]
+				rangeStatement.Value = identifiers[1]
 			}
 
 			if lenNames > 2 {
-				p.expectedError("at most 2 expressions", names[2].Token())
+				p.expectedError("at most 2 identifiers", identifiers[2].Token())
 				okTemp = false
 			}
 		}
 		ok = ok && okTemp
-		rangeToken := p.peek()
+		assignOperatorToken := p.peek()
 
-		if rangeToken.Value() != lexer.KeywordRange {
-			p.expectedKeywordError(lexer.KeywordRange, rangeToken)
+		if assignOperatorToken.Type != lexer.ASSIGN_OPERATOR {
+			p.expectedAssignOperatorError(assignOperatorToken)
 			okTemp = false
 		} else {
-			p.eat() // Eat range keyword.
-			rangeStatement.X, okTemp = p.evaluateExpression(ctx)
+			p.eat() // Eat assign-operator token.
+			rangeStatement.AssignOpToken = assignOperatorToken
+		}
+
+		if okTemp {
+			rangeToken := p.peek()
+
+			if rangeToken.Value != lexer.KeywordRange {
+				p.expectedKeywordError(lexer.KeywordRange, rangeToken)
+				okTemp = false
+			} else {
+				p.eat() // Eat range token.
+				rangeStatement.X, okTemp = p.evaluateExpression(ctx)
+			}
 		}
 
 		if !okTemp {
@@ -910,7 +1128,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 		if foundSemicolon {
 			nextToken := p.peek()
 
-			if nextToken.Type() != lexer.SEMICOLON {
+			if nextToken.Type != lexer.SEMICOLON {
 				forStatement.Init, okTemp = p.evaluateStatement(ctx)
 
 				if !okTemp {
@@ -922,7 +1140,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 			p.eat()       // Eat semicolon.
 			nextToken = p.peek()
 
-			if nextToken.Type() == lexer.SEMICOLON {
+			if nextToken.Type == lexer.SEMICOLON {
 				condition = NewBooleanLiteral(true, nextToken)
 			} else {
 				condition, okTemp = p.evaluateExpression(ctx)
@@ -930,7 +1148,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 
 			if okTemp {
 				nextToken = p.peek()
-				okTemp = nextToken.Type() == lexer.SEMICOLON
+				okTemp = nextToken.Type == lexer.SEMICOLON
 
 				if !okTemp {
 					p.expectedError(`";"`, nextToken)
@@ -938,7 +1156,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 					p.eat() // Eat semicolon.
 					nextToken = p.peek()
 
-					if !slices.Contains([]lexer.TokenType{lexer.OPENING_CURLY_BRACKET, lexer.NEWLINE}, nextToken.Type()) {
+					if !slices.Contains([]lexer.TokenType{lexer.OPENING_CURLY_BRACKET, lexer.NEWLINE}, nextToken.Type) {
 						forStatement.Post, okTemp = p.evaluateExpression(ctx)
 					}
 				}
@@ -947,7 +1165,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 		} else {
 			nextToken := p.peek()
 
-			if nextToken.Type() == lexer.OPENING_CURLY_BRACKET {
+			if nextToken.Type == lexer.OPENING_CURLY_BRACKET {
 				condition = NewBooleanLiteral(true, nextToken)
 			} else {
 				condition, okTemp = p.evaluateExpression(ctx)
@@ -990,12 +1208,28 @@ func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 
 // }
 
+func (p *Parser) evaluateIdentifier(ctx context) (Identifier, bool) {
+	identifierToken := p.peek()
+	identifier := Identifier{}
+	ok := false
+
+	if identifierToken.Type == lexer.IDENTIFIER {
+		p.eat()
+
+		identifier.token = identifierToken
+		identifier.Name = identifierToken.Value
+
+		ok = true
+	}
+	return identifier, ok
+}
+
 func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
-	var expr Expression
+	var expr Expression = nil
 
 	nextToken := p.peek()
-	nextTokenType := nextToken.Type()
-	value := nextToken.Value()
+	nextTokenType := nextToken.Type
+	value := nextToken.Value
 
 	switch nextTokenType {
 	// String literal.
@@ -1024,8 +1258,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 		expr = NewStringLiteral(value, nextToken)
 	// Identifier.
 	case lexer.IDENTIFIER:
-		p.eat()
-		expr = NewIdentifier(value, nextToken)
+		expr, _ = p.evaluateIdentifier(ctx)
 	// Group.
 	case lexer.OPENING_ROUND_BRACKET:
 		var child Expression
@@ -1038,7 +1271,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 			var closingBracket *lexer.Token
 			nextToken := p.peek()
 
-			if nextToken.Type() != lexer.CLOSING_ROUND_BRACKET {
+			if nextToken.Type != lexer.CLOSING_ROUND_BRACKET {
 				p.expectedError(`")"`, nextToken)
 			} else {
 				p.eat()
@@ -1055,17 +1288,17 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 	if ok {
 		nextToken = p.peek()
 
-		switch nextToken.Type() {
+		switch nextToken.Type {
 		case lexer.DOT:
 			p.eat()
 			selectorToken := p.peek()
 
-			if selectorToken.Type() != lexer.IDENTIFIER {
+			if selectorToken.Type != lexer.IDENTIFIER {
 				p.expectedIdentifierError(selectorToken)
 				ok = false
 			} else {
 				p.eat()
-				expr = NewSelector(expr, selectorToken.Value())
+				expr = NewSelector(expr, selectorToken.Value)
 			}
 		case lexer.OPENING_SQUARE_BRACKET:
 			leftBracket := p.eat()
@@ -1073,7 +1306,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 			nextToken = p.peek()
 			ok = ok && okTemp
 
-			if nextToken.Type() != lexer.CLOSING_SQUARE_BRACKET {
+			if nextToken.Type != lexer.CLOSING_SQUARE_BRACKET {
 				p.expectedError(`"]"`, nextToken)
 				ok = false
 			} else {
@@ -1095,9 +1328,9 @@ func (p *Parser) evaluateUnaryOperation(ctx context) (Expression, bool) {
 	negate := false
 	ok := true
 
-	if unaryOperatorToken.Type() == lexer.UNARY_OPERATOR {
+	if unaryOperatorToken.Type == lexer.UNARY_OPERATOR {
 		p.eat()
-		value := unaryOperatorToken.Value()
+		value := unaryOperatorToken.Value
 
 		switch value {
 		case lexer.UnaryOperatorNegate:
@@ -1149,18 +1382,18 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, bool) {
 	var ok bool
 
 	token := p.peek()
-	value := token.Value()
-	tokenType := token.Type()
+	value := token.Value
+	tokenType := token.Type
 
 	switch tokenType {
 	case lexer.KEYWORD, lexer.SECTION_KEYWORD:
 		switch value {
-		// case lexer.KeywordType:
-		// 	stmt, ok = p.evaluateTypeDeclaration(ctx)
+		case lexer.KeywordType:
+			stmt, ok = p.evaluateTypeDeclaration(ctx)
 		case lexer.KeywordVar, lexer.KeywordConst:
 			stmt, ok = p.evaluateVarDefinition(ctx)
-		// case lexer.KeywordFunc:
-		// 	stmt, ok = p.evaluateFunctionDefinition(ctx)
+		case lexer.KeywordFunc:
+			stmt, ok = p.evaluateFunctionDefinition(ctx)
 		// case lexer.KeywordReturn:
 		// 	stmt, ok = p.evaluateReturn(ctx)
 		case lexer.KeywordIf:
@@ -1215,7 +1448,7 @@ func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperators []BinaryO
 		operatorToken := p.peek()
 		operator := ""
 
-		if operatorToken.Type() == lexer.NUMBER_LITERAL {
+		if operatorToken.Type == lexer.NUMBER_LITERAL {
 			rightExpression, ok = p.evaluateSingleExpression(ctx)
 
 			if ok {
@@ -1226,7 +1459,7 @@ func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperators []BinaryO
 				}
 			}
 		} else {
-			operator = operatorToken.Value()
+			operator = operatorToken.Value
 		}
 
 		// If operator found, process it.

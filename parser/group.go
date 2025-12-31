@@ -12,18 +12,8 @@ func NewGroup(x Expression, openingBracket lexer.Token, closingBracket *lexer.To
 	return Group{x, openingBracket, closingBracket}
 }
 
-func (e Group) StatementType() StatementType {
-	return STATEMENT_TYPE_GROUP
-}
-
-func (e Group) ValueType() ValueType {
-	return e.X.ValueType()
-}
-
 func (e Group) Token() lexer.Token {
 	return e.OpeningBracket
 }
 
-func (e Group) IsConstant() bool {
-	return e.X.IsConstant()
-}
+func (e Group) ExprFn() { e.X.ExprFn() }

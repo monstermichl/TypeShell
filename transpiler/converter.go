@@ -1,6 +1,9 @@
 package transpiler
 
-import "github.com/monstermichl/typeshell/parser"
+import (
+	"github.com/monstermichl/typeshell/parser"
+	"github.com/monstermichl/typeshell/typechecker"
+)
 
 type AppCall struct {
 	name string
@@ -35,14 +38,14 @@ func (c Condition) Next() *Condition {
 
 type ReturnValue struct {
 	value     string
-	valueType parser.ValueType
+	valueType typechecker.Type
 }
 
 func (rv ReturnValue) Value() string {
 	return rv.value
 }
 
-func (rv ReturnValue) ValueType() parser.ValueType {
+func (rv ReturnValue) ValueType() typechecker.Type {
 	return rv.valueType
 }
 
@@ -73,7 +76,7 @@ type Converter interface {
 	VarAssignment(name string, value string, global bool) error
 	SliceAssignment(name string, index string, value string, defaultValue string, global bool) error
 	StructAssignment(name string, field string, value string, global bool) error
-	FuncStart(name string, params []string, returnTypes []parser.ValueType) error
+	FuncStart(name string, params []string, returnTypes []typechecker.Type) error
 	FuncEnd() error
 	Return(values []ReturnValue) error
 	IfStart(condition string) error
@@ -96,10 +99,10 @@ type Converter interface {
 	Nop() error
 
 	// Expression methods
-	UnaryOperation(expr string, operator parser.UnaryOperator, valueType parser.ValueType, valueUsed bool) (string, error)
-	BinaryOperation(left string, operator parser.BinaryOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error)
-	Comparison(left string, operator parser.CompareOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error)
-	LogicalOperation(left string, operator parser.LogicalOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error)
+	UnaryOperation(expr string, operator parser.UnaryOperator, valueType typechecker.Type, valueUsed bool) (string, error)
+	BinaryOperation(left string, operator parser.BinaryOperator, right string, valueType typechecker.Type, valueUsed bool) (string, error)
+	Comparison(left string, operator parser.CompareOperator, right string, valueType typechecker.Type, valueUsed bool) (string, error)
+	LogicalOperation(left string, operator parser.LogicalOperator, right string, valueType typechecker.Type, valueUsed bool) (string, error)
 	VarEvaluation(name string, valueUsed bool, global bool) (string, error)
 	SliceInstantiation(values []string, valueUsed bool) (string, error)
 	SliceEvaluation(name string, index string, valueUsed bool) (string, error)
@@ -109,7 +112,7 @@ type Converter interface {
 	StringSubscript(value string, startIndex string, endIndex string, valueUsed bool) (string, error)
 	StringLen(value string, valueUsed bool) (string, error)
 	Group(value string, valueUsed bool) (string, error)
-	FuncCall(name string, args []string, returnTypes []parser.ValueType, valueUsed bool) ([]string, error)
+	FuncCall(name string, args []string, returnTypes []typechecker.Type, valueUsed bool) ([]string, error)
 	AppCall(calls []AppCall, valueUsed bool) ([]string, error)
 	Input(prompt string, valueUsed bool) (string, error)
 	Copy(destination string, source string, valueUsed bool, global bool) (string, error)

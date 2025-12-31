@@ -4,17 +4,7 @@ type Exists struct {
 	path Expression
 }
 
-func (e Exists) StatementType() StatementType {
-	return STATEMENT_TYPE_EXISTS
-}
-
-func (e Exists) ValueType() ValueType {
-	return NewValueType(NewTypeBool(), false)
-}
-
-func (e Exists) IsConstant() bool {
-	return false
-}
+func (e Exists) ExprFn() {}
 
 func (e Exists) Path() Expression {
 	return e.path

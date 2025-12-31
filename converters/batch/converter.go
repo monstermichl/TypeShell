@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstermichl/typeshell/parser"
 	"github.com/monstermichl/typeshell/transpiler"
+	"github.com/monstermichl/typeshell/typechecker"
 )
 
 type helperName = string
@@ -297,7 +298,7 @@ func (c *converter) StructAssignment(name string, field string, value string, gl
 	return nil
 }
 
-func (c *converter) FuncStart(name string, params []string, returnTypes []parser.ValueType) error {
+func (c *converter) FuncStart(name string, params []string, returnTypes []typechecker.Type) error {
 	c.funcCounter++
 	c.funcs = append(c.funcs, funcInfo{
 		name: name,
@@ -458,7 +459,7 @@ func (c *converter) Nop() error {
 	return nil
 }
 
-func (c *converter) UnaryOperation(expr string, operator parser.UnaryOperator, valueType parser.ValueType, valueUsed bool) (string, error) {
+func (c *converter) UnaryOperation(expr string, operator parser.UnaryOperator, valueType typechecker.Type, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 
 	switch operator {
@@ -477,7 +478,7 @@ func (c *converter) UnaryOperation(expr string, operator parser.UnaryOperator, v
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
-func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
+func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator, right string, valueType typechecker.Type, valueUsed bool) (string, error) {
 	helper := c.nextHelperVar()
 	notAllowedError := func() (string, error) {
 		return "", fmt.Errorf("binary operation %s is not allowed on type %s", operator, valueType.String())
@@ -487,74 +488,74 @@ func (c *converter) BinaryOperation(left string, operator parser.BinaryOperator,
 		return notAllowedError()
 	}
 
-	switch valueType.Type().ElementaryType().Kind() {
-	case parser.TypeKindInt:
-		switch operator {
-		case parser.BINARY_OPERATOR_MULTIPLICATION,
-			parser.BINARY_OPERATOR_DIVISION,
-			parser.BINARY_OPERATOR_ADDITION,
-			parser.BINARY_OPERATOR_SUBTRACTION:
-			// These operations are fine.
-		case parser.BINARY_OPERATOR_MODULO:
-			operator = fmt.Sprintf("%%%s", operator) // Modulo needs to be escaped as "%" is used to dereference variables in Batch.
-		default:
-			return notAllowedError()
-		}
-		c.addLine(fmt.Sprintf(`set /A "%s=%s%s%s"`, c.VarName(helper, false), left, operator, right))
-	case parser.TypeKindString:
-		switch operator {
-		case parser.BINARY_OPERATOR_ADDITION:
-			c.VarAssignment(helper, fmt.Sprintf("%s%s", left, right), false)
-		default:
-			return notAllowedError()
-		}
-	default:
-		return notAllowedError()
-	}
+	// switch valueType.Type().ElementaryType().Kind() {
+	// case parser.TypeKindInt:
+	// 	switch operator {
+	// 	case parser.BINARY_OPERATOR_MULTIPLICATION,
+	// 		parser.BINARY_OPERATOR_DIVISION,
+	// 		parser.BINARY_OPERATOR_ADDITION,
+	// 		parser.BINARY_OPERATOR_SUBTRACTION:
+	// 		// These operations are fine.
+	// 	case parser.BINARY_OPERATOR_MODULO:
+	// 		operator = fmt.Sprintf("%%%s", operator) // Modulo needs to be escaped as "%" is used to dereference variables in Batch.
+	// 	default:
+	// 		return notAllowedError()
+	// 	}
+	// 	c.addLine(fmt.Sprintf(`set /A "%s=%s%s%s"`, c.VarName(helper, false), left, operator, right))
+	// case parser.TypeKindString:
+	// 	switch operator {
+	// 	case parser.BINARY_OPERATOR_ADDITION:
+	// 		c.VarAssignment(helper, fmt.Sprintf("%s%s", left, right), false)
+	// 	default:
+	// 		return notAllowedError()
+	// 	}
+	// default:
+	// 	return notAllowedError()
+	// }
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
-func (c *converter) Comparison(left string, operator parser.CompareOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
-	EQUAL_OPERATOR := "equ"
-	NOT_EQUAL_OPERATOR := "neq"
+func (c *converter) Comparison(left string, operator parser.CompareOperator, right string, valueType typechecker.Type, valueUsed bool) (string, error) {
+	// EQUAL_OPERATOR := "equ"
+	// NOT_EQUAL_OPERATOR := "neq"
 
 	var operatorString string
 	quote := ""
 
-	if !valueType.IsSlice() {
-		switch valueType.Type().ElementaryType().Kind() {
-		case parser.TypeKindBool:
-			switch operator {
-			case parser.COMPARE_OPERATOR_EQUAL:
-				operatorString = EQUAL_OPERATOR
-			case parser.COMPARE_OPERATOR_NOT_EQUAL:
-				operatorString = NOT_EQUAL_OPERATOR
-			}
-		case parser.TypeKindInt:
-			switch operator {
-			case parser.COMPARE_OPERATOR_EQUAL:
-				operatorString = EQUAL_OPERATOR
-			case parser.COMPARE_OPERATOR_NOT_EQUAL:
-				operatorString = NOT_EQUAL_OPERATOR
-			case parser.COMPARE_OPERATOR_GREATER:
-				operatorString = "gtr"
-			case parser.COMPARE_OPERATOR_GREATER_OR_EQUAL:
-				operatorString = "geq"
-			case parser.COMPARE_OPERATOR_LESS:
-				operatorString = "lss"
-			case parser.COMPARE_OPERATOR_LESS_OR_EQUAL:
-				operatorString = "leq"
-			}
-		case parser.TypeKindString:
-			switch operator {
-			case parser.COMPARE_OPERATOR_EQUAL:
-				operatorString = EQUAL_OPERATOR
-			case parser.COMPARE_OPERATOR_NOT_EQUAL:
-				operatorString = NOT_EQUAL_OPERATOR
-			}
-			quote = `"` // Strings shall be quoted.
-		}
-	}
+	// if !valueType.IsSlice() {
+	// 	switch valueType.Type().ElementaryType().Kind() {
+	// 	case parser.TypeKindBool:
+	// 		switch operator {
+	// 		case parser.COMPARE_OPERATOR_EQUAL:
+	// 			operatorString = EQUAL_OPERATOR
+	// 		case parser.COMPARE_OPERATOR_NOT_EQUAL:
+	// 			operatorString = NOT_EQUAL_OPERATOR
+	// 		}
+	// 	case parser.TypeKindInt:
+	// 		switch operator {
+	// 		case parser.COMPARE_OPERATOR_EQUAL:
+	// 			operatorString = EQUAL_OPERATOR
+	// 		case parser.COMPARE_OPERATOR_NOT_EQUAL:
+	// 			operatorString = NOT_EQUAL_OPERATOR
+	// 		case parser.COMPARE_OPERATOR_GREATER:
+	// 			operatorString = "gtr"
+	// 		case parser.COMPARE_OPERATOR_GREATER_OR_EQUAL:
+	// 			operatorString = "geq"
+	// 		case parser.COMPARE_OPERATOR_LESS:
+	// 			operatorString = "lss"
+	// 		case parser.COMPARE_OPERATOR_LESS_OR_EQUAL:
+	// 			operatorString = "leq"
+	// 		}
+	// 	case parser.TypeKindString:
+	// 		switch operator {
+	// 		case parser.COMPARE_OPERATOR_EQUAL:
+	// 			operatorString = EQUAL_OPERATOR
+	// 		case parser.COMPARE_OPERATOR_NOT_EQUAL:
+	// 			operatorString = NOT_EQUAL_OPERATOR
+	// 		}
+	// 		quote = `"` // Strings shall be quoted.
+	// 	}
+	// }
 
 	if len(operatorString) == 0 {
 		return "", fmt.Errorf("comparison %s is not allowed on type %s", operator, valueType.String())
@@ -576,7 +577,7 @@ func (c *converter) Comparison(left string, operator parser.CompareOperator, rig
 	return c.VarEvaluation(helper, valueUsed, false)
 }
 
-func (c *converter) LogicalOperation(left string, operator parser.LogicalOperator, right string, valueType parser.ValueType, valueUsed bool) (string, error) {
+func (c *converter) LogicalOperation(left string, operator parser.LogicalOperator, right string, valueType typechecker.Type, valueUsed bool) (string, error) {
 	var line string
 	trueString := transpiler.BoolToString(true)
 	falseString := transpiler.BoolToString(false)
@@ -712,7 +713,7 @@ func (c *converter) Group(value string, valueUsed bool) (string, error) {
 	return fmt.Sprintf("(%s)", value), nil
 }
 
-func (c *converter) FuncCall(name string, args []string, returnTypes []parser.ValueType, valueUsed bool) ([]string, error) {
+func (c *converter) FuncCall(name string, args []string, returnTypes []typechecker.Type, valueUsed bool) ([]string, error) {
 	returnValues := []string{}
 	c.callFunc(name, args)
 

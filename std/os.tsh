@@ -39,8 +39,9 @@ func ReadDir(name string) ([]fs.DirEntry, error) {
 	var code int
 
 	entries := []fs.DirEntry{}
+	isBatch := shell.Get() == shell.ShellTypeBatch
 
-	if shell.Get() == shell.ShellTypeBatch {
+	if isBatch {
 		stdout, stderr, code = @dir("/b")
 	} else {
 		stdout, stderr, code = @ls("-1A")
@@ -52,7 +53,25 @@ func ReadDir(name string) ([]fs.DirEntry, error) {
 	list := strings.Split(stdout, "\n")
 
 	for i, entry := range list {
-		entries[i] = fs.DirEntry{name: entry}
+		var sizeString, date, attributes string
+		var isDir bool
+
+		if isBatch {
+			unsafe(`for %%U in ({0}) do (
+				set "{o:1}=%%~zU"
+				set "{o:2}=%%~tU"
+				set "{o:3}=%%~aU"
+			)`, entry, sizeString, date, attributes)
+
+            if len(sizeString) == 0 {
+				continue
+			}
+			isDir = attributes[0] == "d"
+		} else {
+			stdout, stderr, code = @ls("-la", entry) | @tr("-s", " ") | @cut("-d", " ", "-f1,5,6,7,8,9")
+			print("----->", stdout)
+		}
+		entries[i] = fs.NewDirEntry(entry, isDir) 
 	}
 	return entries, nil
 }

@@ -3,6 +3,7 @@ package transpiler
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/monstermichl/typeshell/parser"
@@ -59,6 +60,7 @@ func (t *transpiler) Transpile(path string, converter Converter) (string, error)
 		fmt.Println("---->", err)
 	}
 	json, _ := json.Marshal(ast)
+	os.WriteFile("output.json", json, 0777)
 	// fmt.Println(err)
 	fmt.Println(string(json))
 	// if err != nil {

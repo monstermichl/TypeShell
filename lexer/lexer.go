@@ -61,30 +61,14 @@ const (
 )
 
 type Token struct {
-	tokenType TokenType
-	value     string
-	row       int
-	column    int
-}
-
-func (t Token) Type() TokenType {
-	return t.tokenType
-}
-
-func (t Token) Value() string {
-	return t.value
-}
-
-func (t Token) Row() int {
-	return t.row
-}
-
-func (t Token) Column() int {
-	return t.column
+	Type   TokenType
+	Value  string
+	Row    int
+	Column int
 }
 
 func (t Token) IsKeyword(keyword Keyword) bool {
-	return slices.Contains([]TokenType{KEYWORD, SECTION_KEYWORD}, t.Type()) && t.Value() == keyword
+	return slices.Contains([]TokenType{KEYWORD, SECTION_KEYWORD}, t.Type) && t.Value == keyword
 }
 
 type tokenMapping struct {
@@ -254,10 +238,10 @@ var keywords = tokenMappings{
 
 func newToken(value string, tokenType TokenType, row int, column int) Token {
 	return Token{
-		value:     value,
-		tokenType: tokenType,
-		row:       row,
-		column:    column,
+		Value:  value,
+		Type:   tokenType,
+		Row:    row,
+		Column: column,
 	}
 }
 
@@ -324,7 +308,7 @@ func Tokenize(source string) ([]Token, error) {
 				}
 			}
 
-			if token.tokenType == UNKNOWN {
+			if token.Type == UNKNOWN {
 				err = fmt.Errorf("string at row %d, column %d has not been terminated", ogRow, ogColumn)
 				break
 			}
@@ -378,7 +362,7 @@ func Tokenize(source string) ([]Token, error) {
 		}
 
 		// If no complex token has been found, try to find simple tokens.
-		if token.tokenType == UNKNOWN {
+		if token.Type == UNKNOWN {
 
 			// Try to find non-alphabetic token.
 			for _, mapping := range nonAlphabeticTokens {
@@ -394,7 +378,7 @@ func Tokenize(source string) ([]Token, error) {
 			}
 		}
 
-		if token.tokenType == NEWLINE {
+		if token.Type == NEWLINE {
 			row++
 			column = startIndex
 		} else {
@@ -402,10 +386,10 @@ func Tokenize(source string) ([]Token, error) {
 		}
 
 		// If still no token has been found, exit with error.
-		if token.tokenType == UNKNOWN {
+		if token.Type == UNKNOWN {
 			err = fmt.Errorf(`unknown token "%s" at position %d`, c0, i)
 			break
-		} else if slices.Contains([]TokenType{SPACE, COMMENT}, token.tokenType) {
+		} else if slices.Contains([]TokenType{SPACE, COMMENT}, token.Type) {
 			// Ignore spaces and comments for now.
 		} else {
 			tokens = append(tokens, token)

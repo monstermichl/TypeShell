@@ -8,10 +8,6 @@ type Assignment struct {
 	Right         []Expression
 }
 
-func (a Assignment) StatementType() StatementType {
-	return STATEMENT_TYPE_ASSIGNMENT
-}
-
 func (a Assignment) Token() lexer.Token {
 	return a.OperatorToken
 }

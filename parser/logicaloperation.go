@@ -6,18 +6,6 @@ type LogicalOperation struct {
 	right    Expression
 }
 
-func (l LogicalOperation) StatementType() StatementType {
-	return STATEMENT_TYPE_LOGICAL_OPERATION
-}
-
-func (l LogicalOperation) ValueType() ValueType {
-	return NewValueType(NewTypeBool(), false)
-}
-
-func (l LogicalOperation) IsConstant() bool {
-	return l.Left().IsConstant() && l.Right().IsConstant()
-}
-
 func (l LogicalOperation) Left() Expression {
 	return l.left
 }

@@ -6,17 +6,7 @@ type Write struct {
 	append Expression
 }
 
-func (w Write) StatementType() StatementType {
-	return STATEMENT_TYPE_WRITE
-}
-
-func (w Write) ValueType() ValueType {
-	return NewValueType(TypeError{}, false)
-}
-
-func (w Write) IsConstant() bool {
-	return false
-}
+func (w Write) ExprFn() {}
 
 func (w Write) Path() Expression {
 	return w.path

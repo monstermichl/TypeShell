@@ -4,17 +4,7 @@ type Itoa struct {
 	value Expression
 }
 
-func (e Itoa) StatementType() StatementType {
-	return STATEMENT_TYPE_ITOA
-}
-
-func (e Itoa) ValueType() ValueType {
-	return NewValueType(NewTypeString(), false)
-}
-
-func (o Itoa) IsConstant() bool {
-	return false
-}
+func (o Itoa) ExprFn() {}
 
 func (e Itoa) Value() Expression {
 	return e.value

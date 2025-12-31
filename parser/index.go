@@ -13,18 +13,8 @@ func NewIndex(x Expression, index Expression, leftBracket *lexer.Token, rightBra
 	return Index{x, index, leftBracket, rightBracket}
 }
 
-func (i Index) StatementType() StatementType {
-	return STATEMENT_TYPE_INDEX
-}
-
-func (i Index) ValueType() ValueType {
-	return NewValueType(NewTypeUnknown(), false) // TODO: Remove. Type is not relevant in parser.
-}
-
 func (i Index) Token() lexer.Token {
 	return i.X.Token()
 }
 
-func (i Index) IsConstant() bool {
-	return false
-}
+func (i Index) ExprFn() {}

@@ -1,34 +1,31 @@
 package parser
 
+import "github.com/monstermichl/typeshell/lexer"
+
+type SliceType struct {
+	Type Type
+}
+
+func (s SliceType) Token() lexer.Token {
+	return s.Type.Token()
+}
+
+func (s SliceType) TypeFn() {}
+
 type SliceInstantiation struct {
 	t      Type
 	values []Expression
 }
 
-func (s SliceInstantiation) StatementType() StatementType {
-	return STATEMENT_TYPE_SLICE_INSTANTIATION
-}
-
-func (s SliceInstantiation) ValueType() ValueType {
-	return ValueType{t: s.t, isSlice: true}
-}
-
-func (s SliceInstantiation) IsConstant() bool {
-	return false
-}
+func (s SliceInstantiation) ExprFn() {}
 
 func (s SliceInstantiation) Values() []Expression {
 	return s.values
 }
 
 type SliceEvaluation struct {
-	value     Expression
-	index     Expression
-	valueType ValueType
-}
-
-func (s SliceEvaluation) StatementType() StatementType {
-	return STATEMENT_TYPE_SLICE_EVALUATION
+	value Expression
+	index Expression
 }
 
 func (s SliceEvaluation) Value() Expression {
@@ -39,22 +36,12 @@ func (s SliceEvaluation) Index() Expression {
 	return s.index
 }
 
-func (s SliceEvaluation) ValueType() ValueType {
-	return s.valueType
-}
-
-func (s SliceEvaluation) IsConstant() bool {
-	return false
-}
+func (s SliceEvaluation) ExprFn() {}
 
 type SliceAssignment struct {
 	value      Expression
 	index      Expression
 	assignment Expression
-}
-
-func (s SliceAssignment) StatementType() StatementType {
-	return STATEMENT_TYPE_SLICE_ASSIGNMENT
 }
 
 func (s SliceAssignment) Value() Expression {

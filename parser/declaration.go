@@ -4,7 +4,7 @@ import "github.com/monstermichl/typeshell/lexer"
 
 type ValueSpec struct {
 	Names  []Expression
-	Type   Expression
+	Type   Type
 	Values []Expression
 }
 
@@ -13,10 +13,6 @@ type Declaration struct {
 	Specs          []ValueSpec
 	OpeningBracket *lexer.Token
 	ClosingBracket *lexer.Token
-}
-
-func (d Declaration) StatementType() StatementType {
-	return STATEMENT_TYPE_VAR_DECLARATION
 }
 
 func (d Declaration) Token() lexer.Token {

@@ -14,6 +14,13 @@ type DirEntry struct {
 	info FileInfo
 }
 
+func NewDirEntry(name string, isDir bool) DirEntry {
+	return DirEntry{
+		name: name,
+		isDir: isDir,
+	}
+}
+
 func (de DirEntry) Name() string {
 	return de.name
 }
