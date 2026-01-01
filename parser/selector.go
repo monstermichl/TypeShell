@@ -4,11 +4,11 @@ import "github.com/monstermichl/typeshell/lexer"
 
 type Selector struct {
 	X        Expression
-	Selector string
+	Selector Expression
 }
 
-func NewSelector(x Expression, name string) Selector {
-	return Selector{x, name}
+func NewSelector(x Expression, selector Expression) Selector {
+	return Selector{x, selector}
 }
 
 func (s Selector) Token() lexer.Token {

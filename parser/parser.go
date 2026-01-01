@@ -1230,6 +1230,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 	nextToken := p.peek()
 	nextTokenType := nextToken.Type
 	value := nextToken.Value
+	okTemp := true
 
 	switch nextTokenType {
 	// String literal.
@@ -1282,38 +1283,85 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 	default:
 		p.atError(fmt.Sprintf("unknown expression token type %d (%s)", nextTokenType, value), nextToken)
 	}
-	ok := expr != nil
+	ok := (expr != nil) && okTemp
 
 	// If the expression has been evaluated correctly, see if it's followed by something usable.
 	if ok {
-		nextToken = p.peek()
-
-		switch nextToken.Type {
-		case lexer.DOT:
-			p.eat()
-			selectorToken := p.peek()
-
-			if selectorToken.Type != lexer.IDENTIFIER {
-				p.expectedIdentifierError(selectorToken)
-				ok = false
-			} else {
-				p.eat()
-				expr = NewSelector(expr, selectorToken.Value)
-			}
-		case lexer.OPENING_SQUARE_BRACKET:
-			leftBracket := p.eat()
-			indexExpr, okTemp := p.evaluateExpression(ctx)
+		for {
 			nextToken = p.peek()
-			ok = ok && okTemp
+			breakFor := false
 
-			if nextToken.Type != lexer.CLOSING_SQUARE_BRACKET {
-				p.expectedError(`"]"`, nextToken)
-				ok = false
-			} else {
+			switch nextToken.Type {
+			case lexer.DOT:
 				p.eat()
-				expr = NewIndex(expr, indexExpr, &leftBracket, &nextToken)
+				selectorToken := p.peek()
+
+				if selectorToken.Type != lexer.IDENTIFIER {
+					p.expectedIdentifierError(selectorToken)
+					ok = false
+				} else {
+					selector, _ := p.evaluateIdentifier(ctx)
+					expr = NewSelector(expr, selector)
+				}
+			case lexer.OPENING_SQUARE_BRACKET:
+				leftBracket := p.eat()
+				indexExpr, okTemp := p.evaluateExpression(ctx)
+				nextToken = p.peek()
+				ok = ok && okTemp
+
+				if nextToken.Type != lexer.CLOSING_SQUARE_BRACKET {
+					p.expectedError(`"]"`, nextToken)
+					ok = false
+				} else {
+					p.eat()
+					expr = NewIndex(expr, indexExpr, &leftBracket, &nextToken)
+				}
+			default:
+				breakFor = true
+			}
+
+			if !ok {
+				breakFor = true
+			}
+
+			if breakFor {
+				break
 			}
 		}
+	}
+
+	// If next token is an opening round bracket, it's a function call.
+	if ok && p.peek().Type == lexer.OPENING_ROUND_BRACKET {
+		call := FunctionCall{Func: expr}
+
+		if ok {
+			openingBracketToken := p.peek()
+
+			if openingBracketToken.Type != lexer.OPENING_ROUND_BRACKET {
+				p.expectedError(`"("`, openingBracketToken)
+				ok = false
+			} else {
+				p.eat()
+				call.openingBracketToken = openingBracketToken
+			}
+		}
+
+		if ok && p.peek().Type != lexer.CLOSING_ROUND_BRACKET {
+			call.Args, ok = p.evaluateExpressions(ctx)
+		}
+
+		if ok {
+			closingBracketToken := p.peek()
+
+			if closingBracketToken.Type != lexer.CLOSING_ROUND_BRACKET {
+				p.expectedError(`")"`, closingBracketToken)
+				ok = false
+			} else {
+				p.eat()
+				call.closingBracketToken = closingBracketToken
+			}
+		}
+		expr = call
 	}
 	return expr, ok
 }
