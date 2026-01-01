@@ -1381,6 +1381,28 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 			}
 		}
 		expr = call
+		nextToken = p.peek()
+
+		if ok && nextToken.Type == lexer.PIPE {
+			p.eat()
+
+			if appCall, castOk := expr.(*AppCall); !castOk {
+				p.atError("pipe can only be used on program-calls", nextToken)
+			} else {
+				var nextCall Expression
+
+				nextToken = p.peek()
+				nextCall, ok = p.evaluateSingleExpression(ctx)
+
+				if ok {
+					if nextAppCall, castOk := nextCall.(*AppCall); !castOk {
+						p.atError("output can only be piped into program-calls", nextToken)
+					} else {
+						appCall.Next = nextAppCall
+					}
+				}
+			}
+		}
 	}
 	return expr, ok
 }
