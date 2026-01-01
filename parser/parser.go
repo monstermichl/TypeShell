@@ -128,6 +128,15 @@ type evaluatedValues struct {
 	tokens []lexer.Token
 }
 
+type varAssignmentType int
+
+const (
+	varAssignmentTypeNone = iota
+	varAssignmentTypeSimple
+	varAssignmentTypeCompound
+	varAssignmentTypeUnary
+)
+
 type blockCheckCallout func(stmt Statement) bool
 
 type parserError struct {
@@ -241,36 +250,39 @@ func (p *Parser) expectedError(what string, token lexer.Token) error {
 	return p.atError(fmt.Sprintf("expected %s", what), token)
 }
 
+func (p *Parser) expectedValuesError(what []string, postfix string, quote bool, token lexer.Token) error {
+	expectedString := ""
+
+	for i, entry := range what {
+		if i == len(what)-1 {
+			expectedString += " or "
+		} else if i > 0 {
+			expectedString += ", "
+		}
+
+		if quote {
+			entry = fmt.Sprintf(`"%s"`, entry)
+		}
+		expectedString += entry
+	}
+	postfix = strings.TrimSpace(postfix)
+
+	if len(postfix) > 0 {
+		postfix = fmt.Sprintf(" %s", postfix)
+	}
+	return p.atError(expectedString+postfix, token)
+}
+
 func (p *Parser) expectedKeywordError(keyword string, token lexer.Token) error {
 	return p.expectedError(fmt.Sprintf("%s-keyword", keyword), token)
 }
 
 func (p *Parser) expectedAssignOperatorError(token lexer.Token) error {
-	return p.expectedError(fmt.Sprintf(`"%s" or "%s"`, lexer.OperatorAssign, lexer.OperatorShortAssign), token)
+	return p.expectedValuesError([]string{lexer.OperatorAssign, lexer.OperatorShortAssign}, "", true, token)
 }
 
 func (p *Parser) expectedIdentifierError(token lexer.Token) error {
 	return p.expectedError("identifier", token)
-}
-
-func (p *Parser) expectedNewlineError(token lexer.Token) error {
-	return p.expectedError("newline", token)
-}
-
-func (p *Parser) constantError(constant string, token lexer.Token) error {
-	return p.atError(fmt.Sprintf("cannot assign a value to constant %s", constant), token)
-}
-
-func (p *Parser) notDefinedError(what string, name string, token lexer.Token) error {
-	return p.atError(fmt.Sprintf("%s %s has not been defined", what, name), token)
-}
-
-func (p *Parser) variableNotDefinedError(variable string, token lexer.Token) error {
-	return p.notDefinedError("variable", variable, token)
-}
-
-func (p *Parser) typeNotDefinedError(t string, token lexer.Token) error {
-	return p.notDefinedError("type", t, token)
 }
 
 func (p Parser) peek() lexer.Token {
@@ -374,10 +386,7 @@ func (p *Parser) evaluateKeyword(keywords ...lexer.Keyword) (lexer.Token, bool) 
 	if found {
 		p.eat()
 	} else {
-		for i, keyword := range keywords {
-			keywords[i] = fmt.Sprintf(`"%s"`, keyword)
-		}
-		p.expectedKeywordError(strings.Join(keywords, " or "), keywordToken)
+		p.expectedValuesError(keywords, "-keyword", true, keywordToken)
 	}
 	return keywordToken, found
 }
@@ -402,9 +411,6 @@ func (p *Parser) evaluateExpressions(ctx context) ([]Expression, bool) {
 	}
 	return expressions, true
 }
-
-// func (p *Parser) evaluateValues(ctx context) (evaluatedValues, error) {
-// }
 
 func (p *Parser) evaluateProgram() (Program, bool) {
 	var stmts []Statement
@@ -817,7 +823,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, bool) {
 		if nextToken.Type == lexer.CLOSING_ROUND_BRACKET {
 			escape = true
 		} else if !noError {
-			p.expectedError(fmt.Sprintf(`newline or ")" but got "%s"`, nextToken.Value), nextToken)
+			p.expectedValuesError([]string{"newline", `")"`}, fmt.Sprintf(` but got "%s"`, nextToken.Value), false, nextToken)
 		}
 
 		if escape {
@@ -839,11 +845,7 @@ func (p *Parser) evaluateVarDefinition(ctx context) (Statement, bool) {
 	return varStatement, ok
 }
 
-// func (p *Parser) evaluateCompoundAssignment(importAlias string, ctx context) (Statement, error) {
-
-// }
-
-func (p *Parser) evaluateVarAssignment(ctx context, params ...string) (Statement, bool) {
+func (p *Parser) evaluateVarAssignment(ctx context) (Statement, bool) {
 	names, ok := p.evaluateExpressions(ctx)
 	okTemp := ok
 	assignment := Assignment{Left: names}
@@ -867,6 +869,93 @@ func (p *Parser) evaluateVarAssignment(ctx context, params ...string) (Statement
 		} else {
 			p.eat()
 			assignment.Right, okTemp = p.evaluateExpressions(ctx)
+		}
+	}
+	ok = ok && okTemp
+
+	if !ok {
+		p.skipUntilNewline()
+	}
+	return assignment, ok
+}
+
+func (p *Parser) evaluateCompoundAssignment(ctx context) (Statement, bool) {
+	namesToken := p.peek()
+	names, ok := p.evaluateExpressions(ctx)
+	namesLen := len(names)
+
+	if ok && namesLen > 1 {
+		p.expectedError(fmt.Sprintf("1 target on the left side but got %d", namesLen), namesToken)
+		ok = false
+	}
+	okTemp := ok
+	assignment := Assignment{Left: names}
+
+	if !okTemp {
+		p.skipUntil(lexer.COMPOUND_ASSIGN_OPERATOR, lexer.NEWLINE)
+
+		// If an assign operator was found, reset okTemp.
+		if p.peek().Type == lexer.COMPOUND_ASSIGN_OPERATOR {
+			okTemp = true
+		}
+	}
+
+	if okTemp {
+		operatorToken := p.peek()
+		assignment.OperatorToken = operatorToken
+
+		if operatorToken.Type != lexer.COMPOUND_ASSIGN_OPERATOR {
+			operators := []string{
+				lexer.OperatorCompoundAssignAddition,
+				lexer.OperatorCompoundAssignSubtraction,
+				lexer.OperatorCompoundAssignMultiplication,
+				lexer.OperatorCompoundAssignDivision,
+				lexer.OperatorCompoundAssignModulo,
+			}
+			p.expectedValuesError(operators, "operator", true, operatorToken)
+			okTemp = false
+		} else {
+			var rightExpression Expression
+
+			p.eat()
+			rightExpression, okTemp = p.evaluateExpression(ctx)
+
+			if okTemp {
+				assignment.Right = []Expression{NewBinaryOperation(names[0], operatorToken, rightExpression)}
+			}
+		}
+	}
+	ok = ok && okTemp
+
+	if !ok {
+		p.skipUntilNewline()
+	}
+	return assignment, ok
+}
+
+func (p *Parser) evaluateUnaryArithmeticOperation(ctx context) (Statement, bool) {
+	namesToken := p.peek()
+	names, ok := p.evaluateExpressions(ctx)
+	namesLen := len(names)
+
+	if ok && namesLen > 1 {
+		p.expectedError(fmt.Sprintf("1 target on the left side but got %d", namesLen), namesToken)
+		ok = false
+	}
+	okTemp := ok
+	assignment := Assignment{Left: names}
+
+	if okTemp {
+		operatorToken := p.peek()
+		assignment.OperatorToken = operatorToken
+		validOperators := []string{lexer.UnaryOperatorIncrement, lexer.UnaryOperatorDecrement}
+
+		if operatorToken.Type != lexer.UNARY_OPERATOR && !slices.Contains(validOperators, operatorToken.Value) {
+			p.expectedValuesError(validOperators, "operator", true, operatorToken)
+			okTemp = false
+		} else {
+			p.eat()
+			assignment.Right = []Expression{NewBinaryOperation(names[0], operatorToken, NewIntegerLiteral(1, operatorToken))}
 		}
 	}
 	ok = ok && okTemp
@@ -1001,21 +1090,27 @@ func (p *Parser) evaluateFunctionDefinition(ctx context) (Statement, bool) {
 	return funcDef, ok
 }
 
-// func (p *Parser) evaluateReturn(ctx context) (Statement, bool) {
+func (p *Parser) evaluateReturn(ctx context) (Statement, bool) {
+	token, ok := p.evaluateKeyword(lexer.KeywordReturn)
+	expressions, exprOk := p.evaluateExpressions(ctx)
 
-// }
+	return Return{
+		token:  token,
+		Values: expressions,
+	}, ok && exprOk
+}
 
-// func (p *Parser) evaluateBreak(ctx context) (Statement, bool) {
+func (p *Parser) evaluateBreak(ctx context) (Statement, bool) {
+	token, ok := p.evaluateKeyword(lexer.KeywordBreak)
 
-// }
+	return Break{token}, ok
+}
 
-// func (p *Parser) evaluateIota(ctx context) (Expression, error) {
+func (p *Parser) evaluateContinue(ctx context) (Statement, bool) {
+	token, ok := p.evaluateKeyword(lexer.KeywordContinue)
 
-// }
-
-// func (p *Parser) evaluateContinue(ctx context) (Statement, bool) {
-
-// }
+	return Continue{token}, ok
+}
 
 func (p *Parser) evaluateIf(ctx context) (Statement, bool) {
 	keywordToken, ok := p.evaluateKeyword(lexer.KeywordIf)
@@ -1277,30 +1372,6 @@ func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 	return stmt, ok
 }
 
-// func (p *Parser) evaluateTypeDefinition(importAlias string, ctx context) (Expression, error) {
-
-// }
-
-// func (p *Parser) evaluateStructFields(importAlias string, stopOnLastStruct bool, ctx context) (Expression, StructField, error) {
-
-// }
-
-// func (p *Parser) evaluateStructFieldsFromExpression(importAlias string, structExpression Expression, structExpressionToken lexer.Token, stopOnLastStruct bool, ctx context) (Expression, StructField, error) {
-
-// }
-
-// func (p *Parser) evaluateStructEvaluation(importAlias string, ctx context) (Expression, error) {
-
-// }
-
-// func (p *Parser) evaluateVarEvaluation(importAlias string, ctx context) (Expression, error) {
-
-// }
-
-// func (p *Parser) evaluateImportAlias(ctx context) (string, lexer.Token, error) {
-
-// }
-
 func (p *Parser) evaluateIdentifier(ctx context) (Identifier, bool) {
 	identifierToken := p.peek()
 	identifier := Identifier{}
@@ -1380,7 +1451,7 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 		nextToken = p.peek()
 
 		if !slices.Contains([]lexer.TokenType{lexer.IDENTIFIER, lexer.STRING_LITERAL}, nextToken.Type) {
-			p.expectedError("program identifier or string literal", nextToken)
+			p.expectedValuesError([]string{"program identifier", "string literal"}, "", false, nextToken)
 			okTemp = false
 		} else {
 			p.eat()
@@ -1576,8 +1647,6 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, bool) {
 			stmt, ok = p.evaluateVarDefinition(ctx)
 		case lexer.KeywordFunc:
 			stmt, ok = p.evaluateFunctionDefinition(ctx)
-		// case lexer.KeywordReturn:
-		// 	stmt, ok = p.evaluateReturn(ctx)
 		case lexer.KeywordIf:
 			stmt, ok = p.evaluateIf(ctx)
 		case lexer.KeywordSwitch:
@@ -1586,28 +1655,24 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, bool) {
 			stmt, ok = p.evaluateCaseClause(ctx)
 		case lexer.KeywordFor:
 			stmt, ok = p.evaluateFor(ctx)
-		// case lexer.KeywordBreak:
-		// 	stmt, ok = p.evaluateBreak(ctx)
-		// case lexer.KeywordContinue:
-		// 	stmt, ok = p.evaluateContinue(ctx)
-		// TODO: Handle in type checker or somewhere else.
-		// case lexer.KeywordPrint:
-		// 	stmt, err = p.evaluatePrint(ctx)
-		// case lexer.KeywordWrite:
-		// 	stmt, err = p.evaluateWrite(ctx)
-		// case lexer.KeywordPanic:
-		// 	stmt, err = p.evaluatePanic(ctx)
-		// case lexer.KeywordUnsafe:
-		// 	stmt, err = p.evaluateUnsafe(ctx)
+		case lexer.KeywordReturn:
+			stmt, ok = p.evaluateReturn(ctx)
+		case lexer.KeywordBreak:
+			stmt, ok = p.evaluateBreak(ctx)
+		case lexer.KeywordContinue:
+			stmt, ok = p.evaluateContinue(ctx)
 		default:
 			p.atError(fmt.Sprintf("unknown statement token type %d (%s)", tokenType, value), token)
 		}
 	default:
-		_, isAssignemnt := p.findBefore(lexer.ASSIGN_OPERATOR, lexer.NEWLINE)
-
-		if isAssignemnt {
+		switch p.evaluateVarAssignmentType() {
+		case varAssignmentTypeSimple:
 			stmt, ok = p.evaluateVarAssignment(ctx)
-		} else {
+		case varAssignmentTypeCompound:
+			stmt, ok = p.evaluateCompoundAssignment(ctx)
+		case varAssignmentTypeUnary:
+			stmt, ok = p.evaluateUnaryArithmeticOperation(ctx)
+		default:
 			// Assume it's an expression.
 			stmt, ok = p.evaluateExpression(ctx)
 		}
@@ -1656,42 +1721,13 @@ func (p *Parser) evaluateBinaryOperation(ctx context, allowedOperators []BinaryO
 	return leftExpression, ok
 }
 
-// func (p *Parser) evaluateArguments(typeName string, name string, params []Param, receiver Expression, ctx context) ([]Expression, []Expression, error) {
-
-// }
-
-// func (p *Parser) evaluateFunctionCall(importAlias string, receiver Expression, ctx context) (Call, error) {
-
-// }
-
-// func (p *Parser) evaluateAppCall(ctx context) (Call, error) {
-
-// }
-
-// func (p *Parser) evaluateInitializationValues(checkCallout func(initValue initValue) error, ctx context) ([]initValue, error) {
-// }
-
-// func (p *Parser) evaluateSliceInitialization(ctx context) (Expression, error) {
-// }
-
-// func (p *Parser) evaluateStructInitialization(importAlias string, ctx context) (Expression, error) {
-
-// }
-
-// func (p *Parser) evaluateChaining(expr Expression, ctx context) (Expression, bool, error) {
-// }
-
-// func (p *Parser) evaluateSubscript(importAlias string, ctx context) (Expression, error) {
-// }
-
-// func (p *Parser) evaluateSubscriptFromExpression(value Expression, valueToken lexer.Token, ctx context) (Expression, error) {
-// }
-
-// func (p *Parser) evaluateSliceAssignment(importAlias string, ctx context) (Statement, error) {
-// }
-
-// func (p *Parser) evaluateStructAssignment(importAlias string, ctx context) (Statement, error) {
-// }
-
-// func (p *Parser) evaluateIncrementDecrement(importAlias string, ctx context) (Statement, error) {
-// }
+func (p *Parser) evaluateVarAssignmentType() varAssignmentType {
+	if _, isAssignment := p.findBefore(lexer.ASSIGN_OPERATOR, lexer.NEWLINE); isAssignment {
+		return varAssignmentTypeSimple
+	} else if _, isCompoundAssignment := p.findBefore(lexer.COMPOUND_ASSIGN_OPERATOR, lexer.NEWLINE); isCompoundAssignment {
+		return varAssignmentTypeCompound
+	} else if unaryOperator, isUnaryOperation := p.findBefore(lexer.UNARY_OPERATOR, lexer.NEWLINE); isUnaryOperation && slices.Contains([]string{lexer.UnaryOperatorIncrement, lexer.UnaryOperatorDecrement}, unaryOperator.Value) {
+		return varAssignmentTypeUnary
+	}
+	return varAssignmentTypeNone
+}

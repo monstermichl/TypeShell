@@ -1,9 +1,12 @@
 package parser
 
+import "github.com/monstermichl/typeshell/lexer"
+
 type Return struct {
-	values []Expression
+	token  lexer.Token
+	Values []Expression
 }
 
-func (r Return) Values() []Expression {
-	return r.values
+func (r Return) Token() lexer.Token {
+	return r.token
 }

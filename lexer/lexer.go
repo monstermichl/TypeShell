@@ -91,7 +91,9 @@ type nonAlphabeticToken = string
 
 const (
 	// Operators highest to lowest priority (top to bottom).
-	UnaryOperatorNegate nonAlphabeticToken = "!"
+	UnaryOperatorNegate    nonAlphabeticToken = "!"
+	UnaryOperatorIncrement nonAlphabeticToken = "++"
+	UnaryOperatorDecrement nonAlphabeticToken = "--"
 
 	OperatorMultiplication nonAlphabeticToken = "*"
 	OperatorDivision       nonAlphabeticToken = "/"
@@ -107,6 +109,12 @@ const (
 
 	ComparisonEqual    nonAlphabeticToken = "=="
 	ComparisonNotEqual nonAlphabeticToken = "!="
+
+	OperatorCompoundAssignAddition       nonAlphabeticToken = "+="
+	OperatorCompoundAssignSubtraction    nonAlphabeticToken = "-="
+	OperatorCompoundAssignMultiplication nonAlphabeticToken = "*="
+	OperatorCompoundAssignDivision       nonAlphabeticToken = "/="
+	OperatorCompoundAssignModulo         nonAlphabeticToken = "%="
 
 	OperatorAnd nonAlphabeticToken = "&&"
 	OperatorOr  nonAlphabeticToken = "||"
@@ -133,19 +141,18 @@ var nonAlphabeticTokens = tokenMappings{
 	{OperatorAnd, BINARY_OPERATOR},
 	{OperatorOr, BINARY_OPERATOR},
 
-	{"+=", COMPOUND_ASSIGN_OPERATOR},
-	{"-=", COMPOUND_ASSIGN_OPERATOR},
-	{"*=", COMPOUND_ASSIGN_OPERATOR},
-	{"/=", COMPOUND_ASSIGN_OPERATOR},
-	{"%=", COMPOUND_ASSIGN_OPERATOR},
+	{OperatorCompoundAssignAddition, COMPOUND_ASSIGN_OPERATOR},
+	{OperatorCompoundAssignSubtraction, COMPOUND_ASSIGN_OPERATOR},
+	{OperatorCompoundAssignMultiplication, COMPOUND_ASSIGN_OPERATOR},
+	{OperatorCompoundAssignDivision, COMPOUND_ASSIGN_OPERATOR},
+	{OperatorCompoundAssignModulo, COMPOUND_ASSIGN_OPERATOR},
 
 	{OperatorShortAssign, ASSIGN_OPERATOR},
 	{OperatorAssign, ASSIGN_OPERATOR},
 
 	{UnaryOperatorNegate, UNARY_OPERATOR},
-
-	{"++", UNARY_OPERATOR},
-	{"--", UNARY_OPERATOR},
+	{UnaryOperatorIncrement, UNARY_OPERATOR},
+	{UnaryOperatorDecrement, UNARY_OPERATOR},
 
 	{OperatorAddition, BINARY_OPERATOR},
 	{OperatorSubtraction, BINARY_OPERATOR},
