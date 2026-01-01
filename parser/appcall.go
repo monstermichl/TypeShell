@@ -1,21 +1,28 @@
 package parser
 
+import "github.com/monstermichl/typeshell/lexer"
+
 type AppCall struct {
-	name string
-	args []Expression
-	next *AppCall
+	token     lexer.Token
+	Name      Expression
+	Arguments []Expression
+	Next      *AppCall
 }
 
-func (a AppCall) ExprFn() {}
+func (a AppCall) Token() lexer.Token {
+	return a.token
+}
 
-func (a AppCall) Name() string {
-	return a.name
+func (a AppCall) Call() Expression {
+	return a.Name
 }
 
 func (a AppCall) Args() []Expression {
-	return a.args
+	return a.Arguments
 }
 
-func (a AppCall) Next() *AppCall {
-	return a.next
+func (a *AppCall) SetArgs(args []Expression) {
+	a.Arguments = args
 }
+
+func (a AppCall) ExprFn() {}

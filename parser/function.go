@@ -19,11 +19,23 @@ type FunctionCall struct {
 	openingBracketToken lexer.Token
 	closingBracketToken lexer.Token
 	Func                Expression
-	Args                []Expression
+	Arguments           []Expression
 }
 
 func (f FunctionCall) Token() lexer.Token {
 	return f.token
+}
+
+func (f FunctionCall) Call() Expression {
+	return f.Func
+}
+
+func (f FunctionCall) Args() []Expression {
+	return f.Arguments
+}
+
+func (f *FunctionCall) SetArgs(args []Expression) {
+	f.Arguments = args
 }
 
 func (f FunctionCall) ExprFn() {}

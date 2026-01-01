@@ -2,6 +2,7 @@ package parser
 
 type Call interface {
 	Expression
-	Name() string
+	Call() Expression
 	Args() []Expression
+	SetArgs([]Expression)
 }

@@ -1280,6 +1280,20 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 			}
 			expr = NewGroup(child, openingBracket, closingBracket)
 		}
+	// App call.
+	case lexer.AT:
+		p.eat()
+		appCall := AppCall{}
+		nextToken = p.peek()
+
+		if !slices.Contains([]lexer.TokenType{lexer.IDENTIFIER, lexer.STRING_LITERAL}, nextToken.Type) {
+			p.expectedError("program identifier or string literal", nextToken)
+			okTemp = false
+		} else {
+			p.eat()
+			appCall.Name = NewStringLiteral(nextToken.Value, nextToken)
+		}
+		expr = appCall
 	default:
 		p.atError(fmt.Sprintf("unknown expression token type %d (%s)", nextTokenType, value), nextToken)
 	}
@@ -1332,22 +1346,28 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 
 	// If next token is an opening round bracket, it's a function call.
 	if ok && p.peek().Type == lexer.OPENING_ROUND_BRACKET {
-		call := FunctionCall{Func: expr}
+		var call Call
 
-		if ok {
-			openingBracketToken := p.peek()
+		// If it's not an app call, make it a function call.
+		if appCall, castOk := expr.(AppCall); !castOk {
+			call = &FunctionCall{Func: expr}
+		} else {
+			call = &appCall
+		}
+		openingBracketToken := p.peek()
 
-			if openingBracketToken.Type != lexer.OPENING_ROUND_BRACKET {
-				p.expectedError(`"("`, openingBracketToken)
-				ok = false
-			} else {
-				p.eat()
-				call.openingBracketToken = openingBracketToken
-			}
+		if openingBracketToken.Type != lexer.OPENING_ROUND_BRACKET {
+			p.expectedError(`"("`, openingBracketToken)
+			ok = false
+		} else {
+			p.eat()
 		}
 
 		if ok && p.peek().Type != lexer.CLOSING_ROUND_BRACKET {
-			call.Args, ok = p.evaluateExpressions(ctx)
+			args, okTemp := p.evaluateExpressions(ctx)
+			ok = ok && okTemp
+
+			call.SetArgs(args)
 		}
 
 		if ok {
@@ -1358,7 +1378,6 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 				ok = false
 			} else {
 				p.eat()
-				call.closingBracketToken = closingBracketToken
 			}
 		}
 		expr = call
