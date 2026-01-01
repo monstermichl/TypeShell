@@ -407,19 +407,112 @@ func (p *Parser) evaluateExpressions(ctx context) ([]Expression, bool) {
 // }
 
 func (p *Parser) evaluateProgram() (Program, bool) {
-	ctx := newContext(p.prefix)
-	statements, ok := p.evaluateBlockContent(ctx, SCOPE_PROGRAM, nil)
+	var stmts []Statement
 
-	return Program{statements}, ok
+	ctx := newContext(p.prefix)
+	imports, importsOk := p.evaluateImports(ctx)
+
+	// Add imports to statements.
+	for _, imp := range imports {
+		stmts = append(stmts, imp)
+	}
+	programStmts, ok := p.evaluateBlockContent(ctx, SCOPE_PROGRAM, nil)
+
+	for _, stmt := range programStmts {
+		stmts = append(stmts, stmt)
+	}
+	return Program{stmts}, importsOk && ok
 }
 
-// func (p *Parser) evaluateImports(ctx *context) ([]Statement, error) {
+func (p *Parser) evaluateImports(ctx context) ([]Imports, bool) {
+	allImports := []Imports{}
+	ok := true
 
-// }
+	for {
+		p.skipNewlines()
+		imports, foundImport, okTemp := p.evaluateImport(ctx)
 
-// func (p *Parser) evaluateImport() (evaluatedImport, error) {
+		if !foundImport {
+			break
+		}
+		ok = ok && okTemp
+		allImports = append(allImports, imports)
+	}
+	return allImports, ok
+}
 
-// }
+func (p *Parser) evaluateImport(ctx context) (Imports, bool, bool) {
+	nextToken := p.peek()
+	imports := Imports{}
+	hasImport := nextToken.IsKeyword(lexer.KeywordImport)
+	ok := false
+
+	if hasImport {
+		p.eat()
+
+		ok = true
+		imports.token = nextToken
+		nextToken = p.peek()
+		grouped := nextToken.Type == lexer.OPENING_ROUND_BRACKET
+
+		if grouped {
+			p.eat()
+			p.skipNewlines()
+		}
+
+		for {
+			nextToken = p.peek()
+			imp := Import{}
+
+			if nextToken.Type == lexer.IDENTIFIER {
+				imp.Name, _ = p.evaluateIdentifier(ctx)
+			}
+			nextToken = p.peek()
+			okTemp := nextToken.Type == lexer.STRING_LITERAL
+
+			if !okTemp {
+				p.expectedError("import path", nextToken)
+				p.skipUntilNewline()
+			} else {
+				imp.Path, _ = p.evaluateSingleExpression(ctx)
+			}
+			ok = ok && okTemp
+			imports.Imports = append(imports.Imports, imp)
+
+			if grouped {
+				p.skipNewlines()
+			}
+			nextTokenType := p.peek().Type
+
+			if (grouped && slices.Contains([]lexer.TokenType{lexer.EOF, lexer.SECTION_KEYWORD, lexer.CLOSING_ROUND_BRACKET}, nextTokenType)) ||
+				(!grouped && nextTokenType == lexer.NEWLINE) {
+				break
+			}
+		}
+
+		if !ok {
+			if grouped {
+				p.skipUntil(lexer.CLOSING_ROUND_BRACKET, lexer.SECTION_KEYWORD)
+			} else {
+				p.skipUntilNewline()
+			}
+		}
+
+		if grouped {
+			nextToken = p.peek()
+
+			if nextToken.Type != lexer.CLOSING_ROUND_BRACKET {
+				// Only add error if no error has been set yet.
+				if ok {
+					p.expectedError(`")"`, nextToken)
+				}
+			} else {
+				p.eat()
+			}
+		}
+	}
+	return imports, hasImport, ok
+}
 
 func (p *Parser) evaluateBlockContent(ctx context, scope scope, checkCallout blockCheckCallout, stopKeywords ...lexer.Keyword) ([]Statement, bool) {
 	statements := []Statement{}
