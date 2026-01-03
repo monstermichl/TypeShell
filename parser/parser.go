@@ -325,50 +325,20 @@ func (p *Parser) evaluateExpressions(ctx context) ([]Expression, bool) {
 }
 
 func (p *Parser) evaluateProgram() (Program, bool) {
-	var stmts []Statement
-
 	ctx := newContext()
-	imports, importsOk := p.evaluateImports(ctx)
+	stmts, ok := p.evaluateBlockContent(ctx, nil)
 
-	// Add imports to statements.
-	for _, imp := range imports {
-		stmts = append(stmts, imp)
-	}
-	programStmts, ok := p.evaluateBlockContent(ctx, nil)
-
-	for _, stmt := range programStmts {
-		stmts = append(stmts, stmt)
-	}
-	return Program{stmts}, importsOk && ok
+	return Program{stmts}, ok
 }
 
-func (p *Parser) evaluateImports(ctx context) ([]Imports, bool) {
-	allImports := []Imports{}
-	ok := true
-
-	for {
-		p.skipNewlines()
-		imports, foundImport, okTemp := p.evaluateImport(ctx)
-
-		if !foundImport {
-			break
-		}
-		ok = ok && okTemp
-		allImports = append(allImports, imports)
-	}
-	return allImports, ok
-}
-
-func (p *Parser) evaluateImport(ctx context) (Imports, bool, bool) {
+func (p *Parser) evaluateImport(ctx context) (Imports, bool) {
 	nextToken := p.peek()
 	imports := Imports{}
-	hasImport := nextToken.IsKeyword(lexer.KeywordImport)
-	ok := false
+	ok := true
 
-	if hasImport {
+	if nextToken.IsKeyword(lexer.KeywordImport) {
 		p.eat()
 
-		ok = true
 		imports.token = nextToken
 		nextToken = p.peek()
 		grouped := nextToken.Type == lexer.OPENING_ROUND_BRACKET
@@ -429,7 +399,7 @@ func (p *Parser) evaluateImport(ctx context) (Imports, bool, bool) {
 			}
 		}
 	}
-	return imports, hasImport, ok
+	return imports, ok
 }
 
 func (p *Parser) evaluateBlockContent(ctx context, checkCallout blockCheckCallout, stopKeywords ...lexer.Keyword) ([]Statement, bool) {
@@ -1553,6 +1523,8 @@ func (p *Parser) evaluateStatement(ctx context) (Statement, bool) {
 	switch tokenType {
 	case lexer.KEYWORD, lexer.SECTION_KEYWORD:
 		switch value {
+		case lexer.KeywordImport:
+			stmt, ok = p.evaluateImport(ctx)
 		case lexer.KeywordType:
 			stmt, ok = p.evaluateTypeDeclaration(ctx)
 		case lexer.KeywordVar, lexer.KeywordConst:
