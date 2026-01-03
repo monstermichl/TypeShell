@@ -3,7 +3,6 @@ package parser
 import (
 	"crypto/sha256"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,26 +12,6 @@ import (
 
 	"github.com/monstermichl/typeshell/lexer"
 )
-
-type scope string
-
-const (
-	SCOPE_PROGRAM  scope = "program"
-	SCOPE_FUNCTION scope = "function"
-	SCOPE_IF       scope = "if"
-	SCOPE_FOR      scope = "for"
-	SCOPE_SWITCH   scope = "switch"
-	SCOPE_CONST    scope = "const"
-)
-
-func scopesToString(scopes []scope) []string {
-	strings := make([]string, len(scopes))
-
-	for i, scope := range scopes {
-		strings[i] = string(scope)
-	}
-	return strings
-}
 
 type initValue struct {
 	nameToken  lexer.Token
@@ -48,84 +27,17 @@ type builtinArg struct {
 
 type context struct {
 	imports     map[string]string // Maps import aliases to file hashes.
-	scopeStack  []scope           // Stores the current scopes.
 	layer       int
 	iotaCounter int
 }
 
-func newContext(prefix string) context {
+func newContext() context {
 	c := context{
 		imports:     map[string]string{},
 		layer:       -1, // Init at -1 since program increases it right away.
 		iotaCounter: 0,
 	}
 	return c
-}
-
-func (c *context) pushScope(scope scope) error {
-	c.scopeStack = append(c.scopeStack, scope)
-
-	// If new const scope is pushed, reset iota counter.
-	if scope == SCOPE_CONST {
-		c.iotaCounter = 0
-	}
-	return nil
-}
-
-func (c *context) popScope() error {
-	i := len(c.scopeStack) - 1
-	c.scopeStack = slices.Delete(c.scopeStack, i, i+1)
-	return nil
-}
-
-func (c context) currentScope() scope {
-	return c.scopeStack[len(c.scopeStack)-1]
-}
-
-func (c context) global() bool {
-	return c.currentScope() == SCOPE_PROGRAM
-}
-
-func (c context) findScope(s scope) bool {
-	for i := len(c.scopeStack) - 1; i >= 0; i-- {
-		if c.scopeStack[i] == s {
-			return true
-		}
-	}
-	return false
-}
-
-func (c *context) incrementIota() {
-	c.iotaCounter++
-}
-
-func (c context) addImport(alias string, hash string) error {
-	c.imports[alias] = hash
-	return nil
-}
-
-func (c context) findImport(alias string) (string, bool) {
-	hash, exists := c.imports[alias]
-	return hash, exists
-}
-
-func (c context) clone() context {
-	return context{
-		imports:     maps.Clone(c.imports),
-		scopeStack:  slices.Clone(c.scopeStack),
-		layer:       c.layer,
-		iotaCounter: c.iotaCounter,
-	}
-}
-
-type evaluatedImport struct {
-	alias string
-	path  string
-}
-
-type evaluatedValues struct {
-	values []Expression
-	tokens []lexer.Token
 }
 
 type varAssignmentType int
@@ -415,14 +327,14 @@ func (p *Parser) evaluateExpressions(ctx context) ([]Expression, bool) {
 func (p *Parser) evaluateProgram() (Program, bool) {
 	var stmts []Statement
 
-	ctx := newContext(p.prefix)
+	ctx := newContext()
 	imports, importsOk := p.evaluateImports(ctx)
 
 	// Add imports to statements.
 	for _, imp := range imports {
 		stmts = append(stmts, imp)
 	}
-	programStmts, ok := p.evaluateBlockContent(ctx, SCOPE_PROGRAM, nil)
+	programStmts, ok := p.evaluateBlockContent(ctx, nil)
 
 	for _, stmt := range programStmts {
 		stmts = append(stmts, stmt)
@@ -520,7 +432,7 @@ func (p *Parser) evaluateImport(ctx context) (Imports, bool, bool) {
 	return imports, hasImport, ok
 }
 
-func (p *Parser) evaluateBlockContent(ctx context, scope scope, checkCallout blockCheckCallout, stopKeywords ...lexer.Keyword) ([]Statement, bool) {
+func (p *Parser) evaluateBlockContent(ctx context, checkCallout blockCheckCallout, stopKeywords ...lexer.Keyword) ([]Statement, bool) {
 	statements := []Statement{}
 	ok := true
 
@@ -554,7 +466,7 @@ func (p *Parser) evaluateBlockContent(ctx context, scope scope, checkCallout blo
 	return statements, ok
 }
 
-func (p *Parser) evaluateBlock(ctx context, scope scope, checkCallout blockCheckCallout, stopKeywords ...lexer.Keyword) (Block, bool) {
+func (p *Parser) evaluateBlock(ctx context, checkCallout blockCheckCallout, stopKeywords ...lexer.Keyword) (Block, bool) {
 	openingBracketToken := p.peek()
 	block := Block{token: openingBracketToken}
 
@@ -573,7 +485,7 @@ func (p *Parser) evaluateBlock(ctx context, scope scope, checkCallout blockCheck
 		p.eat()
 		block.OpeningBracket = &openingBracketToken
 	}
-	statements, ok := p.evaluateBlockContent(ctx, scope, checkCallout, stopKeywords...)
+	statements, ok := p.evaluateBlockContent(ctx, checkCallout, stopKeywords...)
 	block.Statements = statements
 	closingBracketToken := p.peek()
 
@@ -1129,7 +1041,7 @@ func (p *Parser) evaluateIf(ctx context) (Statement, bool) {
 			p.skipUntil(lexer.OPENING_CURLY_BRACKET, lexer.NEWLINE)
 		}
 	}
-	block, okTemp := p.evaluateBlock(ctx, SCOPE_IF, nil)
+	block, okTemp := p.evaluateBlock(ctx, nil)
 	ok = ok && okTemp
 	ifStatement.Body = block
 	nextToken = p.peek()
@@ -1143,7 +1055,7 @@ func (p *Parser) evaluateIf(ctx context) (Statement, bool) {
 		if nextToken.IsKeyword(lexer.KeywordIf) {
 			stmt, okTemp = p.evaluateIf(ctx)
 		} else {
-			stmt, okTemp = p.evaluateBlock(ctx, SCOPE_IF, nil)
+			stmt, okTemp = p.evaluateBlock(ctx, nil)
 		}
 		ok = ok && okTemp
 		ifStatement.Else = stmt
@@ -1171,7 +1083,7 @@ func (p *Parser) evaluateSwitch(ctx context) (Statement, bool) {
 	ok = ok && okTemp
 
 	switchStatement.Tag = tag
-	body, okTemp := p.evaluateBlock(ctx, SCOPE_SWITCH, func(stmt Statement) bool {
+	body, okTemp := p.evaluateBlock(ctx, func(stmt Statement) bool {
 		if _, isCaseClause := stmt.(CaseClause); isCaseClause {
 			p.expectedError("case clause", stmt.Token())
 			return false
@@ -1221,7 +1133,7 @@ func (p *Parser) evaluateCaseClause(ctx context) (Statement, bool) {
 		p.eat()
 	}
 	nextToken = p.peek()
-	statements, okTemp := p.evaluateBlockContent(ctx, SCOPE_SWITCH, nil, lexer.KeywordCase, lexer.KeywordDefault)
+	statements, okTemp := p.evaluateBlockContent(ctx, nil, lexer.KeywordCase, lexer.KeywordDefault)
 
 	clause.Body = Block{
 		token:      nextToken,
@@ -1304,7 +1216,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 		if !okTemp {
 			skipUntilBlock()
 		}
-		rangeStatement.Body, okTemp = p.evaluateBlock(ctx, SCOPE_FOR, nil)
+		rangeStatement.Body, okTemp = p.evaluateBlock(ctx, nil)
 		ok = ok && okTemp
 		stmt = rangeStatement
 	} else {
@@ -1365,7 +1277,7 @@ func (p *Parser) evaluateFor(ctx context) (Statement, bool) {
 		if !okTemp {
 			skipUntilBlock()
 		}
-		forStatement.Body, okTemp = p.evaluateBlock(ctx, SCOPE_FOR, nil)
+		forStatement.Body, okTemp = p.evaluateBlock(ctx, nil)
 		ok = ok && okTemp
 		stmt = forStatement
 	}
