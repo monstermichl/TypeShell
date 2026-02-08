@@ -16,3 +16,4 @@ func (s Selector) Token() lexer.Token {
 }
 
 func (s Selector) ExprFn() {}
+func (s Selector) TypeFn() {}

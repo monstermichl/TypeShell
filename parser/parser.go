@@ -471,29 +471,43 @@ func (p *Parser) evaluateBlock(ctx context, checkCallout blockCheckCallout, stop
 
 func (p *Parser) evaluateType(ctx context) (Type, bool) {
 	ok := true
-	slice := false
+	sliceDimension := 0
 	nextToken := p.peek()
 
 	// Evaluate if value type is a slice type.
-	if nextToken.Type == lexer.OPENING_SQUARE_BRACKET {
+	for nextToken.Type == lexer.OPENING_SQUARE_BRACKET {
 		p.eat() // Eat opening square bracket.
 		nextToken = p.peek()
+		sliceDimension++
 
 		if nextToken.Type != lexer.CLOSING_SQUARE_BRACKET {
 			p.expectedError(`"]"`, nextToken)
 			ok = false
+			break
 		} else {
 			p.eat()
 		}
 		nextToken = p.peek()
-		slice = true
 	}
 	var t Type
 
 	// Evaluate data type.
 	switch nextToken.Type {
 	case lexer.IDENTIFIER:
-		t, _ = p.evaluateIdentifier(ctx)
+		var expr Expression
+		identifier, _ := p.evaluateIdentifier(ctx)
+		expr, ok = p.evaluateSelectionChain(identifier, true, false, ctx)
+
+		if ok {
+			switch typeExpr := expr.(type) {
+			case Identifier:
+				t = typeExpr
+			case Selector:
+				t = typeExpr
+			default:
+				ok = false
+			}
+		}
 	case lexer.KEYWORD:
 		if !nextToken.IsKeyword(lexer.KeywordStruct) {
 			p.expectedKeywordError(lexer.KeywordStruct, nextToken)
@@ -509,8 +523,8 @@ func (p *Parser) evaluateType(ctx context) (Type, bool) {
 		}
 	}
 
-	if slice {
-		t = SliceType{Type: t}
+	if sliceDimension > 0 {
+		t = SliceType{Type: t, Dimension: sliceDimension}
 	}
 	return t, ok
 }
@@ -1270,6 +1284,131 @@ func (p *Parser) evaluateIdentifier(ctx context) (Identifier, bool) {
 	return identifier, ok
 }
 
+func (p *Parser) evaluateSelectionChain(expr Expression, selectorAllowed bool, indexAllowed bool, ctx context) (Expression, bool) {
+	nextToken := p.peek()
+	ok := (expr != nil)
+
+	for {
+		nextToken = p.peek()
+		breakFor := false
+
+		switch nextToken.Type {
+		case lexer.DOT:
+			if selectorAllowed {
+				p.eat()
+				selectorToken := p.peek()
+
+				if selectorToken.Type != lexer.IDENTIFIER {
+					p.expectedIdentifierError(selectorToken)
+					ok = false
+				} else {
+					selector, _ := p.evaluateIdentifier(ctx)
+					expr = NewSelector(expr, selector)
+				}
+			}
+		case lexer.OPENING_SQUARE_BRACKET:
+			if indexAllowed {
+				leftBracket := p.eat()
+				indexExpr, okTemp := p.evaluateExpression(ctx)
+				nextToken = p.peek()
+				ok = ok && okTemp
+
+				if nextToken.Type != lexer.CLOSING_SQUARE_BRACKET {
+					p.expectedError(`"]"`, nextToken)
+					ok = false
+				} else {
+					p.eat()
+					expr = NewIndex(expr, indexExpr, &leftBracket, &nextToken)
+				}
+			}
+		default:
+			breakFor = true
+		}
+
+		if !ok {
+			breakFor = true
+		}
+
+		if breakFor {
+			break
+		}
+	}
+	return expr, ok
+}
+
+func (p *Parser) evaluateKeyValue(ctx context) (KeyValue, bool) {
+	nextToken := p.peek()
+	keyValue := KeyValue{}
+	ok := (nextToken.Type == lexer.IDENTIFIER)
+
+	// Check for Key-value expression.
+	if !ok {
+		p.expectedIdentifierError(nextToken)
+	} else {
+		keyValue.Key, _ = p.evaluateIdentifier(ctx)
+		keyValue.token = nextToken
+		nextToken = p.peek()
+		ok = (nextToken.Type == lexer.COLON)
+
+		if !ok {
+			p.expectedError(`":"`, nextToken)
+		} else {
+			p.eat()
+			keyValue.Value, ok = p.evaluateExpression(ctx)
+		}
+	}
+	return keyValue, ok
+}
+
+func (p *Parser) evaluateCompositeLiteralElements(ctx context) ([]Expression, bool) {
+	expressions := []Expression{}
+	nextToken := p.peek()
+	ok := true
+
+	if nextToken.Type != lexer.OPENING_CURLY_BRACKET {
+		p.expectedError(`"{"`, nextToken)
+		ok = false
+	} else {
+		p.eat()
+	}
+
+	for ok {
+		var expr Expression
+
+		p.skipNewlines()
+		nextToken := p.peek()
+
+		// Check for Key-value expression.
+		if nextToken.Type == lexer.IDENTIFIER && p.peekAt(1).Type == lexer.COLON {
+			expr, ok = p.evaluateKeyValue(ctx)
+		} else {
+			expr, ok = p.evaluateExpression(ctx)
+		}
+
+		if ok {
+			p.skipNewlines()
+
+			expressions = append(expressions, expr)
+			nextToken = p.peek()
+
+			if p.peek().Type == lexer.COMMA {
+				p.eat()
+			} else {
+				break
+			}
+		}
+	}
+	nextToken = p.peek()
+
+	if ok && nextToken.Type != lexer.CLOSING_CURLY_BRACKET {
+		p.expectedError(`"}"`, nextToken)
+		ok = false
+	} else {
+		p.eat()
+	}
+	return expressions, ok
+}
+
 func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 	var expr Expression = nil
 
@@ -1304,8 +1443,47 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 		p.eat()
 		expr = NewStringLiteral(value, nextToken)
 	// Identifier.
-	case lexer.IDENTIFIER:
-		expr, _ = p.evaluateIdentifier(ctx)
+	case lexer.IDENTIFIER, lexer.OPENING_SQUARE_BRACKET:
+		// Evaluate type here because further processing is easier.
+		if t, okTemp := p.evaluateType(ctx); okTemp {
+			originalType := t
+			sliceDimension := 0
+			escape := false
+
+			for !escape {
+				escape = true
+
+				switch tTemp := t.(type) {
+				case SliceType:
+					sliceDimension = tTemp.Dimension
+					escape = false
+					t = tTemp.Type
+				case Identifier:
+					expr = tTemp
+				case Selector:
+					expr = tTemp
+				}
+			}
+			nextToken = p.peek()
+			nextTokenType = nextToken.Type
+
+			// If slice dimension is greater 0, it must an instantiation of a type or slice.
+			if sliceDimension > 0 && nextTokenType != lexer.OPENING_CURLY_BRACKET {
+				p.expectedError(`"{"`, nextToken)
+				okTemp = false
+			}
+
+			// Check if it's a composite literal.
+			if expr != nil && okTemp && nextTokenType == lexer.OPENING_CURLY_BRACKET {
+				var elements []Expression
+				elements, okTemp = p.evaluateCompositeLiteralElements(ctx)
+				expr = CompositeLiteral{
+					token:    nextToken,
+					Elements: elements,
+					Type:     originalType,
+				}
+			}
+		}
 	// Group.
 	case lexer.OPENING_ROUND_BRACKET:
 		var child Expression
@@ -1346,105 +1524,111 @@ func (p *Parser) evaluateSingleExpression(ctx context) (Expression, bool) {
 	ok := (expr != nil) && okTemp
 
 	// If the expression has been evaluated correctly, see if it's followed by something usable.
+	// if ok {
+	// 	for {
+	// 		nextToken = p.peek()
+	// 		breakFor := false
+
+	// 		switch nextToken.Type {
+	// 		case lexer.DOT:
+	// 			p.eat()
+	// 			selectorToken := p.peek()
+
+	// 			if selectorToken.Type != lexer.IDENTIFIER {
+	// 				p.expectedIdentifierError(selectorToken)
+	// 				ok = false
+	// 			} else {
+	// 				selector, _ := p.evaluateIdentifier(ctx)
+	// 				expr = NewSelector(expr, selector)
+	// 			}
+	// 		case lexer.OPENING_SQUARE_BRACKET:
+	// 			leftBracket := p.eat()
+	// 			indexExpr, okTemp := p.evaluateExpression(ctx)
+	// 			nextToken = p.peek()
+	// 			ok = ok && okTemp
+
+	// 			if nextToken.Type != lexer.CLOSING_SQUARE_BRACKET {
+	// 				p.expectedError(`"]"`, nextToken)
+	// 				ok = false
+	// 			} else {
+	// 				p.eat()
+	// 				expr = NewIndex(expr, indexExpr, &leftBracket, &nextToken)
+	// 			}
+	// 		default:
+	// 			breakFor = true
+	// 		}
+
+	// 		if !ok {
+	// 			breakFor = true
+	// 		}
+
+	// 		if breakFor {
+	// 			break
+	// 		}
+	// 	}
+	// }
+
 	if ok {
-		for {
-			nextToken = p.peek()
-			breakFor := false
+		nextToken = p.peek()
 
-			switch nextToken.Type {
-			case lexer.DOT:
-				p.eat()
-				selectorToken := p.peek()
+		switch nextToken.Type {
 
-				if selectorToken.Type != lexer.IDENTIFIER {
-					p.expectedIdentifierError(selectorToken)
-					ok = false
-				} else {
-					selector, _ := p.evaluateIdentifier(ctx)
-					expr = NewSelector(expr, selector)
-				}
-			case lexer.OPENING_SQUARE_BRACKET:
-				leftBracket := p.eat()
-				indexExpr, okTemp := p.evaluateExpression(ctx)
-				nextToken = p.peek()
-				ok = ok && okTemp
+		// Function call.
+		case lexer.OPENING_ROUND_BRACKET:
+			var call Call
 
-				if nextToken.Type != lexer.CLOSING_SQUARE_BRACKET {
-					p.expectedError(`"]"`, nextToken)
-					ok = false
-				} else {
-					p.eat()
-					expr = NewIndex(expr, indexExpr, &leftBracket, &nextToken)
-				}
-			default:
-				breakFor = true
+			// If it's not an app call, make it a function call.
+			if appCall, castOk := expr.(AppCall); !castOk {
+				call = &FunctionCall{Func: expr}
+			} else {
+				call = &appCall
 			}
+			openingBracketToken := p.peek()
 
-			if !ok {
-				breakFor = true
-			}
-
-			if breakFor {
-				break
-			}
-		}
-	}
-
-	// If next token is an opening round bracket, it's a function call.
-	if ok && p.peek().Type == lexer.OPENING_ROUND_BRACKET {
-		var call Call
-
-		// If it's not an app call, make it a function call.
-		if appCall, castOk := expr.(AppCall); !castOk {
-			call = &FunctionCall{Func: expr}
-		} else {
-			call = &appCall
-		}
-		openingBracketToken := p.peek()
-
-		if openingBracketToken.Type != lexer.OPENING_ROUND_BRACKET {
-			p.expectedError(`"("`, openingBracketToken)
-			ok = false
-		} else {
-			p.eat()
-		}
-
-		if ok && p.peek().Type != lexer.CLOSING_ROUND_BRACKET {
-			args, okTemp := p.evaluateExpressions(ctx)
-			ok = ok && okTemp
-
-			call.SetArgs(args)
-		}
-
-		if ok {
-			closingBracketToken := p.peek()
-
-			if closingBracketToken.Type != lexer.CLOSING_ROUND_BRACKET {
-				p.expectedError(`")"`, closingBracketToken)
+			if openingBracketToken.Type != lexer.OPENING_ROUND_BRACKET {
+				p.expectedError(`"("`, openingBracketToken)
 				ok = false
 			} else {
 				p.eat()
 			}
-		}
-		expr = call
-		nextToken = p.peek()
 
-		if ok && nextToken.Type == lexer.PIPE {
-			p.eat()
+			if ok && p.peek().Type != lexer.CLOSING_ROUND_BRACKET {
+				args, okTemp := p.evaluateExpressions(ctx)
+				ok = ok && okTemp
 
-			if appCall, castOk := expr.(*AppCall); !castOk {
-				p.atError("pipe can only be used on program-calls", nextToken)
-			} else {
-				var nextCall Expression
+				call.SetArgs(args)
+			}
 
-				nextToken = p.peek()
-				nextCall, ok = p.evaluateSingleExpression(ctx)
+			if ok {
+				closingBracketToken := p.peek()
 
-				if ok {
-					if nextAppCall, castOk := nextCall.(*AppCall); !castOk {
-						p.atError("output can only be piped into program-calls", nextToken)
-					} else {
-						appCall.Next = nextAppCall
+				if closingBracketToken.Type != lexer.CLOSING_ROUND_BRACKET {
+					p.expectedError(`")"`, closingBracketToken)
+					ok = false
+				} else {
+					p.eat()
+				}
+			}
+			expr = call
+			nextToken = p.peek()
+
+			if ok && nextToken.Type == lexer.PIPE {
+				p.eat()
+
+				if appCall, castOk := expr.(*AppCall); !castOk {
+					p.atError("pipe can only be used on program-calls", nextToken)
+				} else {
+					var nextCall Expression
+
+					nextToken = p.peek()
+					nextCall, ok = p.evaluateSingleExpression(ctx)
+
+					if ok {
+						if nextAppCall, castOk := nextCall.(*AppCall); !castOk {
+							p.atError("output can only be piped into program-calls", nextToken)
+						} else {
+							appCall.Next = nextAppCall
+						}
 					}
 				}
 			}

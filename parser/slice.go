@@ -3,7 +3,8 @@ package parser
 import "github.com/monstermichl/typeshell/lexer"
 
 type SliceType struct {
-	Type Type
+	Dimension int
+	Type      Type
 }
 
 func (s SliceType) Token() lexer.Token {
